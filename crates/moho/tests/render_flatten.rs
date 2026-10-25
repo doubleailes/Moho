@@ -150,3 +150,27 @@ fn a_pass_and_its_source() {
         Some(Value::PathVec(vec![p("/Render/settings")]))
     );
 }
+
+#[test]
+fn removing_and_adding_a_product_dirties_its_settings() {
+    let (_dir, stage_index, flat) = setup();
+    let recorder = RecordingObserver::on(flat.as_ref());
+    let dirtied = |notices: &[Notice]| {
+        notices.iter().any(|n| matches!(n, Notice::Dirtied(d) if d.path == p("/Render/settings") && d.locators.contains(&Locator::parse("renderSettings"))))
+    };
+    let usd = stage_index.stage().unwrap();
+    usd.remove_prim("/Render/aovs").unwrap();
+    stage_index.apply_pending_updates();
+    let notices = recorder.take();
+    assert!(dirtied(&notices), "{notices:?}");
+    assert_eq!(
+        locate(&settings(&flat), &Locator::parse("renderProducts"))
+            .and_then(|d| d.as_vector().map(|v| v.len())),
+        Some(1)
+    );
+
+    usd.define_typed_prim("/Render/aovs", "RenderProduct").unwrap();
+    stage_index.apply_pending_updates();
+    let notices = recorder.take();
+    assert!(dirtied(&notices), "{notices:?}");
+}
