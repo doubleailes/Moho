@@ -192,6 +192,14 @@ the root edit target (`crates/moho-spike/tests/probe.rs` asserts all of it):
   `make_atom_reference(ExpressionReference::weaker())`, `compose_over`,
   `parse`; `PathPattern::nothing()` + `set_prefix` + `append_stretch_if_possible`.
 
+## Light schemas (S1)
+
+- Every UsdLux light type's prim definition includes `LightAPI` in
+  `Prim::api_schemas()`, so one API adapter covers all lights.
+  `Prim::attributes_in_namespace("inputs")` lists declared inputs too (the
+  LightAPI fallbacks); `Relationship::forwarded_targets()` reads
+  `light:filters`.
+
 ## Gaps
 
 - Splines (`Ts`): a `.spline` block only round-trips as a dictionary. There

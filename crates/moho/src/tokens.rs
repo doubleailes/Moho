@@ -207,3 +207,13 @@ pub mod material {
     /// The universal render context.
     pub const UNIVERSAL: &str = "";
 }
+
+/// `HdLightSchema`: an open container of light parameters.
+pub mod light {
+    pub const LIGHT: &str = "light";
+    pub const FILTERS: &str = "filters";
+    /// The light-link and shadow-link category ids the light linking filter
+    /// writes into `light`.
+    pub const LIGHT_LINK: &str = "lightLink";
+    pub const SHADOW_LINK: &str = "shadowLink";
+}

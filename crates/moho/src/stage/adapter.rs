@@ -84,6 +84,7 @@ impl AdapterRegistry {
             "MaterialBindingAPI",
             Rc::new(crate::stage::material_binding::MaterialBindingAdapter),
         );
+        registry.add_api("LightAPI", Rc::new(crate::stage::light::LightAdapter));
         registry.set_type("Mesh", Rc::new(crate::stage::mesh::MeshAdapter));
         registry.set_type("Material", Rc::new(crate::stage::material::MaterialAdapter));
         registry.set_type("BasisCurves", Rc::new(crate::stage::curves::BASIS_CURVES));
