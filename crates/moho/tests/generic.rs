@@ -8,6 +8,7 @@ use moho::locator::Locator;
 use moho::openusd::sdf::Value;
 use moho::openusd::tf::Token;
 use moho::scene_index::SceneIndex;
+use moho::scene_index::testing::{Notice, RecordingObserver};
 use moho::stage::StageSceneIndex;
 
 const SCENE: &str = r#"#usda 1.0
@@ -167,4 +168,22 @@ fn every_attribute_equals_openusd() {
             attribute.name()
         );
     }
+}
+
+#[test]
+fn removing_a_relationship_dirties_its_entry() {
+    let (_dir, index) = index();
+    let recorder = RecordingObserver::on(index.as_ref());
+    index
+        .stage()
+        .unwrap()
+        .remove_property("/world/geo.material:binding")
+        .unwrap();
+    index.apply_pending_updates();
+    let notices = recorder.take();
+    assert!(
+        notices.iter().any(|n| matches!(n, Notice::Dirtied(d) if d.path == p("/world/geo") && d.locators.contains(&Locator::new(["__usdRelationships", "material:binding"])))),
+        "{notices:?}"
+    );
+    assert!(read(&index, "/world/geo", "__usdRelationships/material:binding").is_none());
 }
