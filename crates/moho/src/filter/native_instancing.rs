@@ -190,8 +190,9 @@ impl NativeInstancingSceneIndex {
                 continue;
             };
             for name in [material_bindings::USD_MATERIAL_BINDINGS, imageable::PURPOSE] {
+                // The binding values, not the paths of the prims holding
+                // them: instances bound alike share a prototype.
                 if let Some(source) = data.get(&Token::from(name)) {
-                    out.push_str(path.as_str());
                     out.push_str(name);
                     text(&source, &mut out);
                 }
