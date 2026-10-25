@@ -29,7 +29,8 @@ pub enum Strategy {
     /// (B) read through Moho: a `LoadNone` scene input under a merging
     /// index, each chunk a `chain::input` over its masked `LoadAll` stage,
     /// added, read through `chain::merged` and removed in turn. Its digest
-    /// hashes index data, not raw reads (`index`).
+    /// hashes index data, not raw reads, and equals the full-stage index's
+    /// when no light links across chunks (`index`).
     D,
 }
 

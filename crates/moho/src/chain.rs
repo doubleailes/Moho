@@ -41,7 +41,11 @@ pub fn input(stage: Rc<StageSceneIndex>) -> SceneIndexHandle {
 /// `HdsiLightLinkingSceneIndex` after scenes are merged: a receiver in one
 /// input gets the categories of lights in any input. No single stage can
 /// judge every collection, so it judges the lights' complete membership
-/// expressions (path patterns; predicates are not judged).
+/// expressions: path patterns, not predicates. Hydra's linking judges
+/// expressions with Hydra's own predicate library, not USD's either.
+/// Workaround, an upstream candidate in `ROADMAP.md`: openusd's
+/// `CollectionEvaluator::build` is not public, so a light's expression
+/// cannot be judged, predicates included, on the receiver's input stage.
 pub fn merged(index: SceneIndexHandle) -> SceneIndexHandle {
     LightLinkingSceneIndex::new(index, None)
 }

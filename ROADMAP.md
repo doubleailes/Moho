@@ -63,5 +63,10 @@ the steps that land in this repository or depend on it.
   a stage-local id), and a non-empty `prim_stack()` for prototype prims. Moho
   rebuilds the key from the public prim-index graph meanwhile
   (`crates/moho/src/stage/instancing.rs`).
+- A public `CollectionEvaluator::build(stage, expression)` (today
+  `pub(super)`). With it, light linking after a merge could judge a light's
+  complete expression, predicates included, against the receiver's own input
+  stage; today it judges path patterns only
+  (`crates/moho/src/chain.rs`, `merged`).
 - `SdfPath::MakeRelativePath`. Moho builds a prototype-relative prim origin
   from the path's text meanwhile (`crates/moho/src/stage/prim_origin.rs`).
