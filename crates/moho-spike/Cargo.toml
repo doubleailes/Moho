@@ -1,0 +1,15 @@
+[package]
+name = "moho-spike"
+description = "S0 streaming spike: measures payload streaming against masked stages per chunk"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+openusd.workspace = true
+
+[lints]
+workspace = true
