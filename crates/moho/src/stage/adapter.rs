@@ -72,6 +72,7 @@ impl AdapterRegistry {
     /// Moho's adapters for every family it reads.
     pub fn standard() -> Self {
         let mut registry = Self::empty();
+        registry.add_base(Rc::new(crate::stage::generic::GenericAdapter));
         for (usd, hydra) in USD_TO_HYDRA_TYPES {
             registry.set_type(usd, Rc::new(Typed(Token::from(*hydra))));
         }
