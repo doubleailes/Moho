@@ -308,6 +308,24 @@ impl StageSceneIndex {
             added.extend(now);
         }
         let mut dirty: BTreeMap<sdf::Path, LocatorSet> = BTreeMap::new();
+        if pending.stage_metadata && !roots.iter().any(|r| r.is_abs_root()) {
+            dirty
+                .entry(sdf::Path::abs_root())
+                .or_default()
+                .insert(Locator::new([crate::tokens::scene_globals::SCENE_GLOBALS]));
+        }
+        // A shader or node graph resynced (added, removed, replaced) changes
+        // the network of the material that represents it.
+        for root in &roots {
+            if let Some(material) = self.enclosing_material(root)
+                && !roots.iter().any(|r| material.has_prefix(r))
+            {
+                dirty
+                    .entry(material)
+                    .or_default()
+                    .insert(Locator::new([crate::tokens::material::MATERIAL]));
+            }
+        }
         let properties = pending
             .resynced_properties
             .into_iter()
@@ -352,6 +370,19 @@ impl StageSceneIndex {
         }
         path.strict_ancestors_below_root()
             .find(|a| usd_type(a).is_some_and(|t| t == "Material"))
+    }
+
+    /// The nearest `Material` strictly above `path`, whatever `path` is now
+    /// (it may be gone from the stage).
+    fn enclosing_material(&self, path: &sdf::Path) -> Option<sdf::Path> {
+        let stage = self.stage()?;
+        path.strict_ancestors_below_root().find(|a| {
+            stage
+                .prim(a)
+                .ok()
+                .and_then(|p| p.type_name().ok().flatten())
+                .is_some_and(|t| t == "Material")
+        })
     }
 
     /// The index's current time, `None` for the default time.

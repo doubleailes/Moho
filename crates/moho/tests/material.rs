@@ -216,3 +216,18 @@ fn a_shader_edit_dirties_its_material() {
         Some(Value::Float(0.9))
     );
 }
+
+#[test]
+fn removing_a_shader_dirties_its_material() {
+    let (_dir, index) = setup();
+    let recorder = RecordingObserver::on(index.as_ref());
+    index.stage().unwrap().remove_prim("/preview/tex").unwrap();
+    index.apply_pending_updates();
+    let notices = recorder.take();
+    assert!(
+        notices.iter().any(|n| matches!(n, Notice::Dirtied(d) if d.path == p("/preview") && d.locators.contains(&Locator::parse("material")))),
+        "{notices:?}"
+    );
+    let net = network(&index, "/preview", "");
+    assert!(value(&net, &["nodes", "tex", "type"]).is_none());
+}
