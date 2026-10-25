@@ -1,0 +1,14 @@
+[package]
+name = "moho"
+description = "A renderer-agnostic scene index over openusd stages, in the model of Hydra 2.0"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+openusd.workspace = true
+
+[lints]
+workspace = true
