@@ -42,12 +42,18 @@ schemas:    typed accessors over containers (MeshSchema, XformSchema, ...)
 ## Chain
 
 `moho::chain::standard(stage_index)` builds the standard chain, in
-`UsdImagingCreateSceneIndices`' order:
+`UsdImagingCreateSceneIndices`' order, with light linking last, as Hydra
+appends `HdsiLightLinkingSceneIndex` after scenes are merged:
 
 ```
 StageSceneIndex --> NativeInstancing --> PointInstancing --> Flattening
-  --> MaterialBindingResolving --> LightLinking --> RenderSettingsFlattening
+  --> MaterialBindingResolving --> RenderSettingsFlattening      (chain::input)
+  --> LightLinking                                               (chain::merged)
 ```
+
+`chain::input(stage_index)` is the chain without light linking, what each
+input of a streamed scene runs; `chain::merged(index)` is light linking over
+a merging index of input chains (Streaming, below).
 
 - **`StageSceneIndex`** has `UsdImagingStageSceneIndex`'s shape: built
   empty (`new`), then `set_stage`, `set_time` and `apply_pending_updates`.
@@ -72,9 +78,15 @@ StageSceneIndex --> NativeInstancing --> PointInstancing --> Flattening
   and render products into `materialBindings`, categories and
   `renderSettings`.
   - Collection membership comes from the stage index, through
-    `CollectionMembership`.
+    `CollectionMembership`. After a merge, light linking judges the lights'
+    complete membership expressions instead (path patterns, no predicates).
 - **`MergingSceneIndex`** combines several inputs over one namespace
-  (`add_input_scene(index, root)`, `remove_input_scene`).
+  (`add_input_scene(index, root)`, `remove_input_scene`). It lists children
+  in input order, strongest first, then the prims implied by deeper roots;
+  Hydra's gives no order.
+- **Every prim carries `primOrigin/scenePath`**, Hydra's prim origin: the
+  USD prim's path, relative to its prototype root inside a USD prototype.
+  The instancing filters keep it on the prims they re-root.
 
 ### Generic attribute data, Moho's one addition to Hydra
 
@@ -85,6 +97,11 @@ provide them:
 - the metadata a renderer reads (`colorSpace`, `interpolation`,
   `elementSize`);
 - every renderer attribute (`crust:*`) without a schema of its own.
+
+The absolute root carries the same for the stage's metadata,
+`__usdStageMetadata/<field>/{value, authored}`, for the fields the scene
+globals read (time range and rates, metrics, the active render settings):
+Hydra's `sceneGlobals` gives values only.
 
 The leading underscores follow Hydra's convention for private containers
 (`__usdPrimInfo`).
@@ -103,13 +120,20 @@ per chunk (Crust's `subtree_roots`, from 4 chunks up). It does so in Hydra's
 way, by composing standard indices rather than giving `StageSceneIndex` a
 streaming mode:
 
-- the weakest, permanent input is a standard chain over the scene opened
+- the weakest, permanent input is a `chain::input` over the scene opened
   `LoadNone`, with `set_include_unloaded_prims(true)` so each chunk's root
   is present: render settings, products, cameras, passes and everything
   else outside the payloads;
-- each chunk is a standard chain over its own masked stage, a stronger
+- each chunk is a `chain::input` over its own masked stage, a stronger
   input of the same `MergingSceneIndex`, and adding or removing one adds or
   removes that chunk's payload contents;
+- `chain::merged` puts light linking over the merging index, so a receiver
+  in one chunk gets the categories of lights in any input;
+- a prim can depend on prims no loaded input holds: a material bound from
+  inside another chunk's payload, or a network node outside the material.
+  `streaming::unresolved(index)` lists them; the consumer adds a side input
+  (a `chain::input` over a stage masked to them, payloads loaded), weaker
+  than the chunks and stronger than the scene input;
 - the consumer decides when a chunk comes and goes: an offline import adds,
   pulls and removes each in turn, and a viewport keeps what it shows.
 

@@ -23,8 +23,10 @@ repository are in `ROADMAP.md`.
 
 ```
 crates/moho        the scene index: locator, data_source, scene_index, schema,
-                   stage (StageSceneIndex and its adapters), filter, chain, tokens
-crates/moho-spike  S0 streaming spike harness (unpublished; S2 benchmark)
+                   stage (StageSceneIndex and its adapters), filter, chain,
+                   streaming, tokens
+crates/moho-spike  S0 streaming spike harness (unpublished; S2 benchmark),
+                   strategy (D) reading through Moho
 docs/              architecture.md, openusd-notes.md, streaming-spike.md
 scripts/           streaming-spike.sh (runs the spike's strategies on a scene)
 openspec/          OpenSpec changes and specs for this repository
@@ -62,8 +64,9 @@ cargo test --workspace        # everything
   consumers.
 - **Hydra 2.0's model and names.** Schemas, filters and the standard chain
   (`moho::chain::standard`) follow UsdImaging. Moho's one addition is the
-  generic attribute data (`__usdAttributes`, `__usdRelationships`); anything
-  else Hydra lacks is argued in the change that adds it.
+  generic data (`__usdAttributes`, `__usdRelationships`, and the root's
+  `__usdStageMetadata`); anything else Hydra lacks is argued in the change
+  that adds it.
 - **The consumer decides.** Moho reports what changed (dirty locators). It
   never decides whether a renderer can update in place.
 

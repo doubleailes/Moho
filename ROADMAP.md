@@ -22,6 +22,12 @@ the steps that land in this repository or depend on it.
   extent, curves, implicit shapes, materials (UsdPreviewSurface, MaterialX),
   lights and light linking, cameras, instancers, volumes, render settings,
   products, vars and passes. Mantle's side of S1 follows in Mantle.
+- **Scene index gaps. Done** (OpenSpec change `scene-index-gaps`). The seven
+  gaps S2's plan found (crust-render, `moho-import`, M1 to M7): light linking
+  after the merge (`chain::input`, `chain::merged`), `streaming::unresolved`
+  for side inputs, `__usdStageMetadata` with authored-ness, Hydra's
+  `primOrigin`, strategy (D) in the spike, every render pass collection, and
+  a specified order for merged children.
 - **S2 / S3 (crust-render):** Crust's importer, then its live updates, move
   onto Moho, gated on parity with the direct import.
 - **S4 (Mantle):** Obsidian, the GPU offscreen render delegate, as a pure
@@ -30,6 +36,9 @@ the steps that land in this repository or depend on it.
 ## Later
 
 - Instancing and material-network-resolve filters beyond what S2 needs.
+- Light-link predicates across merged inputs: after a merge, linking judges
+  complete membership expressions, so a collection whose membership needs a
+  predicate is not judged (the expression fallback's limit).
 - Offering Moho upstream as an `openusd-imaging` crate.
 
 ## Upstream candidates (openusd)
