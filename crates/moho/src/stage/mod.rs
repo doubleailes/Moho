@@ -10,6 +10,7 @@
 
 pub mod adapter;
 pub mod attribute;
+pub mod camera;
 pub mod collection;
 pub mod curves;
 pub mod generic;
