@@ -1,0 +1,184 @@
+//! The `camera` data of `Camera` prims, as UsdImaging's camera data source:
+//! apertures and focal length scaled from tenths of a scene unit to scene
+//! units (`GfCamera::APERTURE_UNIT`, `FOCAL_LENGTH_UNIT`), `shutter:*` and
+//! `exposure:*` renamed, clipping planes as doubles, and
+//! `linearExposureScale` computed as `UsdGeomCamera` does.
+
+use std::rc::Rc;
+
+use openusd::gf;
+use openusd::sdf::Value;
+use openusd::tf::Token;
+use openusd::usd::{Attribute, TimeCode};
+
+use crate::data_source::{Container, DataSource, Sampled};
+use crate::locator::{Locator, LocatorSet};
+use crate::stage::adapter::Adapter;
+use crate::stage::attribute::{AttributeValue, MappedAttributeValue};
+use crate::stage::{Globals, PrimContext};
+use crate::tokens::camera as t;
+use crate::tokens::prim_type;
+
+/// Hydra member and the USD attribute it reads.
+const MEMBERS: &[(&str, &str)] = &[
+    ("projection", "projection"),
+    ("horizontalAperture", "horizontalAperture"),
+    ("verticalAperture", "verticalAperture"),
+    ("horizontalApertureOffset", "horizontalApertureOffset"),
+    ("verticalApertureOffset", "verticalApertureOffset"),
+    ("focalLength", "focalLength"),
+    ("clippingRange", "clippingRange"),
+    ("clippingPlanes", "clippingPlanes"),
+    ("fStop", "fStop"),
+    ("focusDistance", "focusDistance"),
+    ("shutterOpen", "shutter:open"),
+    ("shutterClose", "shutter:close"),
+    ("exposure", "exposure"),
+    ("exposureTime", "exposure:time"),
+    ("exposureIso", "exposure:iso"),
+    ("exposureFStop", "exposure:fStop"),
+    ("exposureResponsivity", "exposure:responsivity"),
+];
+
+/// The attributes `linearExposureScale` reads.
+const EXPOSURE: &[&str] = &[
+    "exposure",
+    "exposure:time",
+    "exposure:iso",
+    "exposure:fStop",
+    "exposure:responsivity",
+];
+
+/// `GfCamera::APERTURE_UNIT` and `FOCAL_LENGTH_UNIT`.
+const UNIT: f32 = 0.1;
+
+fn scaled(value: Value) -> Option<Value> {
+    match value {
+        Value::Float(f) => Some(Value::Float(f * UNIT)),
+        _ => None,
+    }
+}
+
+fn planes_as_doubles(value: Value) -> Option<Value> {
+    match value {
+        Value::Vec4fVec(v) => Some(Value::Vec4dVec(
+            v.iter()
+                .map(|p| gf::Vec4d {
+                    x: f64::from(p.x),
+                    y: f64::from(p.y),
+                    z: f64::from(p.z),
+                    w: f64::from(p.w),
+                })
+                .collect(),
+        )),
+        other => Some(other),
+    }
+}
+
+/// The adapter of `Camera` prims.
+pub struct CameraAdapter;
+
+impl Adapter for CameraAdapter {
+    fn prim_type(&self, _ctx: &PrimContext) -> Token {
+        Token::from(prim_type::CAMERA)
+    }
+
+    fn names(&self, _ctx: &PrimContext) -> Vec<Token> {
+        vec![Token::from(t::CAMERA)]
+    }
+
+    fn get(&self, ctx: &PrimContext, name: &Token) -> Option<DataSource> {
+        (name == t::CAMERA).then(|| DataSource::Container(Rc::new(CameraData(ctx.clone()))))
+    }
+
+    fn invalidate(&self, _ctx: &PrimContext, name: &str) -> LocatorSet {
+        let mut locators = LocatorSet::new();
+        if let Some((member, _)) = MEMBERS.iter().find(|(_, usd)| *usd == name) {
+            locators.insert(Locator::new([t::CAMERA, member]));
+        }
+        if EXPOSURE.contains(&name) {
+            locators.insert(Locator::new([t::CAMERA, t::LINEAR_EXPOSURE_SCALE]));
+        }
+        locators
+    }
+}
+
+struct CameraData(PrimContext);
+
+impl Container for CameraData {
+    fn names(&self) -> Vec<Token> {
+        let mut names: Vec<Token> = MEMBERS.iter().map(|(m, _)| Token::from(*m)).collect();
+        names.push(Token::from(t::LINEAR_EXPOSURE_SCALE));
+        names
+    }
+
+    fn get(&self, name: &Token) -> Option<DataSource> {
+        let prim = self.0.prim()?;
+        let locator = Locator::new([t::CAMERA, name.as_str()]);
+        if name == t::LINEAR_EXPOSURE_SCALE {
+            let attributes: Vec<Attribute> = EXPOSURE.iter().map(|a| prim.attribute(*a)).collect();
+            if attributes
+                .iter()
+                .any(|a| a.might_be_time_varying().unwrap_or(false))
+            {
+                self.0.globals.flag_time_varying(&self.0.path, locator);
+            }
+            return Some(DataSource::Sampled(Rc::new(LinearExposureScale {
+                attributes,
+                globals: self.0.globals.clone(),
+            })));
+        }
+        let (member, usd) = MEMBERS.iter().find(|(m, _)| *m == name.as_str())?;
+        let attribute = prim.attribute(*usd);
+        let source = match *member {
+            "horizontalAperture"
+            | "verticalAperture"
+            | "horizontalApertureOffset"
+            | "verticalApertureOffset"
+            | "focalLength" => MappedAttributeValue::data_source(attribute, &self.0, locator, scaled),
+            "clippingPlanes" => {
+                MappedAttributeValue::data_source(attribute, &self.0, locator, planes_as_doubles)
+            }
+            _ => AttributeValue::data_source(attribute, &self.0, locator),
+        };
+        Some(source)
+    }
+}
+
+/// `UsdGeomCamera::ComputeLinearExposureScale`.
+struct LinearExposureScale {
+    /// `exposure`, `exposure:time`, `exposure:iso`, `exposure:fStop`,
+    /// `exposure:responsivity`.
+    attributes: Vec<Attribute>,
+    globals: Rc<Globals>,
+}
+
+impl Sampled for LinearExposureScale {
+    fn value(&self, offset: f32) -> Option<Value> {
+        let time = self
+            .globals
+            .time()
+            .map(|t| TimeCode::new(t.value() + f64::from(offset)));
+        let read = |i: usize, fallback: f32| -> f32 {
+            match self
+                .attributes
+                .get(i)
+                .and_then(|a| a.get_at::<Value>(time).ok().flatten())
+            {
+                Some(Value::Float(f)) => f,
+                _ => fallback,
+            }
+        };
+        let exponent = read(0, 0.0);
+        let exposure_time = read(1, 1.0);
+        let iso = read(2, 100.0);
+        let f_stop = read(3, 1.0);
+        let responsivity = read(4, 1.0);
+        let scale = (exposure_time * iso * 2.0f32.powf(exponent) * responsivity) / (100.0 * f_stop * f_stop);
+        Some(Value::Float(scale))
+    }
+
+    fn sample_times(&self, _start: f32, _end: f32) -> Option<Vec<f32>> {
+        None
+    }
+}

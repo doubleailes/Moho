@@ -49,7 +49,7 @@ read at `68a867a` and recorded in `docs/openusd-notes.md` in the same task.
 
 ## 7. Camera
 
-- [ ] 7.1 Add the camera adapter and `CameraSchema` (every member in the `camera-schema` spec; apertures and focal length scaled by Hydra's units; shutter and exposure renamed; `linearExposureScale` computed). Verify the 50 mm and shutter scenarios, and parity, after the unit scale, on a fixture with an orthographic and a perspective camera.
+- [x] 7.1 Add the camera adapter and `CameraSchema` (every member in the `camera-schema` spec; apertures and focal length scaled by Hydra's units; shutter and exposure renamed; `linearExposureScale` computed). Verify the 50 mm and shutter scenarios, and parity, after the unit scale, on a fixture with an orthographic and a perspective camera.
 
 ## 8. Instancing
 

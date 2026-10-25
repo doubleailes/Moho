@@ -226,3 +226,9 @@ pub mod collections {
     pub const INSTANCE_CATEGORIES: &str = "instanceCategories";
     pub const CATEGORIES_VALUES: &str = "categoriesValues";
 }
+
+/// `HdCameraSchema`.
+pub mod camera {
+    pub const CAMERA: &str = "camera";
+    pub const LINEAR_EXPOSURE_SCALE: &str = "linearExposureScale";
+}
