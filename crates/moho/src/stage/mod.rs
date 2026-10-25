@@ -16,6 +16,7 @@ pub mod generic;
 pub mod globals;
 pub mod imageable;
 pub mod implicit;
+pub mod light;
 pub mod material;
 pub mod material_binding;
 pub mod mesh;
@@ -384,11 +385,15 @@ impl StageSceneIndex {
         };
         let usd_type = usd_prim.type_name().ok().flatten().unwrap_or_default();
         let apis = usd_prim.api_schemas().unwrap_or_default();
-        let ty = self
+        let mut ty = self
             .adapters
             .for_type(usd_type.as_str())
             .map(|a| a.prim_type(&ctx))
             .unwrap_or_default();
+        // A prim applying LightAPI with no light type of its own.
+        if ty.as_str().is_empty() && apis.iter().any(|a| a == "LightAPI") {
+            ty = Token::from(crate::tokens::prim_type::LIGHT);
+        }
         let adapters = self.adapters.for_prim(usd_type.as_str(), &apis);
         Prim::new(ty, Rc::new(PrimContainer { ctx, adapters }))
     }

@@ -43,7 +43,7 @@ read at `68a867a` and recorded in `docs/openusd-notes.md` in the same task.
 
 ## 6. Lights
 
-- [ ] 6.1 Add the light adapters: the seven types; the open `light` container answering `LightAPI`, type and `ShapingAPI` inputs by name; `filters`; type `light` for a bare `LightAPI`. Invalidation: `inputs:*` and `light:*` dirty `light`. Verify the sphere light and dome scenarios and parity of every input on a fixture with one light of each type.
+- [x] 6.1 Add the light adapters: the seven types; the open `light` container answering `LightAPI`, type and `ShapingAPI` inputs by name; `filters`; type `light` for a bare `LightAPI`. Invalidation: `inputs:*` and `light:*` dirty `light`. Verify the sphere light and dome scenarios and parity of every input on a fixture with one light of each type.
 - [ ] 6.2 Add the collection adapter (`collections` per instance name, with the complete membership expression from openusd). Verify the light-link collection scenario.
 - [ ] 6.3 Implement `LightLinkingSceneIndex`: `lightLink` and `shadowLink` category ids (empty for "everything"), `light` naming the categories, `categories` on geometry and `instanceCategories` on instancers, judged at instance and instancer paths. Verify the linked-to-one-prim and default-linking scenarios. Settle whether the native-instancing binding hash needs categories (design, open question 2, against Crust's `light_links.rs`), and record the answer in the design.
 
