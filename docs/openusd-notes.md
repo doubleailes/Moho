@@ -200,6 +200,19 @@ the root edit target (`crates/moho-spike/tests/probe.rs` asserts all of it):
   LightAPI fallbacks); `Relationship::forwarded_targets()` reads
   `light:filters`.
 
+## Instancing (S1)
+
+- `Prim::is_instance()`, `Prim::prototype() -> Result<Option<sdf::Path>>`
+  (`/__Prototype_N`, numbered per composition), `Prim::prim_stack() ->
+  Result<Vec<SpecSite>>` (`layer` identifier, `path`, `offset`),
+  `Prim::prim_index().variant_selections()`, `Stage::layer_stack() ->
+  Vec<String>` (the root layer stack's identifiers).
+- The instancing key (`pcp::instancing::InstanceKey`: instanceable arcs,
+  variant selections, relative load rules and mask) and
+  `PrimIndex::instanceable_nodes` are crate-private, and the key names layer
+  stacks by a stage-local `LayerStackId`.
+- `prim_stack()` of a `/__Prototype_N` prim is empty.
+
 ## Gaps
 
 - Splines (`Ts`): a `.spline` block only round-trips as a dictionary. There
@@ -218,3 +231,9 @@ the root edit target (`crates/moho-spike/tests/probe.rs` asserts all of it):
   (a rule-based collection as one path expression, which UsdImaging's
   collection adapter uses). Moho ports it in `stage/collection.rs`, checked
   against `MembershipQuery::is_included`.
+
+- No public, stage-independent instancing key: Moho hashes an instance's
+  shared prim-stack sites and variant selections instead
+  (`stage/instancing.rs`).
+- `prim_stack()` of a prototype prim is empty (C++ `GetPrimStack` returns the
+  prototype's specs).
