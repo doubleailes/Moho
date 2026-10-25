@@ -80,6 +80,10 @@ impl AdapterRegistry {
         for (usd, hydra) in USD_TO_HYDRA_TYPES {
             registry.set_type(usd, Rc::new(Typed(Token::from(*hydra))));
         }
+        registry.add_api(
+            "MaterialBindingAPI",
+            Rc::new(crate::stage::material_binding::MaterialBindingAdapter),
+        );
         registry.set_type("Mesh", Rc::new(crate::stage::mesh::MeshAdapter));
         registry.set_type("BasisCurves", Rc::new(crate::stage::curves::BASIS_CURVES));
         registry.set_type("NurbsCurves", Rc::new(crate::stage::curves::NURBS_CURVES));
