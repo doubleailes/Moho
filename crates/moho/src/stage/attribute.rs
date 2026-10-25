@@ -50,3 +50,42 @@ impl Sampled for AttributeValue {
         bracketing_sample_times(&offsets, start, end)
     }
 }
+
+/// An attribute's value passed through a mapping, read like
+/// [`AttributeValue`].
+pub struct MappedAttributeValue {
+    inner: AttributeValue,
+    map: fn(Value) -> Option<Value>,
+}
+
+impl MappedAttributeValue {
+    /// The value of `attribute` mapped by `map`, as a data source at
+    /// `locator` (flagged time-varying as [`AttributeValue`] is).
+    pub fn data_source(
+        attribute: Attribute,
+        ctx: &PrimContext,
+        locator: Locator,
+        map: fn(Value) -> Option<Value>,
+    ) -> DataSource {
+        if attribute.might_be_time_varying().unwrap_or(false) {
+            ctx.globals.flag_time_varying(&ctx.path, locator);
+        }
+        DataSource::Sampled(Rc::new(Self {
+            inner: AttributeValue {
+                attribute,
+                globals: ctx.globals.clone(),
+            },
+            map,
+        }))
+    }
+}
+
+impl Sampled for MappedAttributeValue {
+    fn value(&self, offset: f32) -> Option<Value> {
+        self.inner.value(offset).and_then(self.map)
+    }
+
+    fn sample_times(&self, start: f32, end: f32) -> Option<Vec<f32>> {
+        self.inner.sample_times(start, end)
+    }
+}

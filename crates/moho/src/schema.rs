@@ -303,3 +303,61 @@ fn gather(values: Value, indices: &[i32], size: usize) -> Option<Value> {
         Matrix4dVec
     )
 }
+
+/// `HdVisibilitySchema`.
+pub struct VisibilitySchema(ContainerHandle);
+
+impl VisibilitySchema {
+    pub fn get(prim: &ContainerHandle) -> Option<Self> {
+        member_container(prim, tokens::imageable::VISIBILITY).map(Self)
+    }
+
+    /// `false` when the prim authors `invisible`, `None` otherwise.
+    pub fn visibility(&self) -> Option<bool> {
+        member_value(&self.0, tokens::imageable::VISIBILITY).and_then(as_bool)
+    }
+}
+
+/// `HdPurposeSchema`.
+pub struct PurposeSchema(ContainerHandle);
+
+impl PurposeSchema {
+    pub fn get(prim: &ContainerHandle) -> Option<Self> {
+        member_container(prim, tokens::imageable::PURPOSE).map(Self)
+    }
+
+    pub fn purpose(&self) -> Option<Token> {
+        member_value(&self.0, tokens::imageable::PURPOSE).and_then(as_token)
+    }
+
+    pub fn inheritable(&self) -> Option<bool> {
+        member_value(&self.0, tokens::imageable::INHERITABLE).and_then(as_bool)
+    }
+
+    pub fn fallback(&self) -> Option<Token> {
+        member_value(&self.0, tokens::imageable::FALLBACK).and_then(as_token)
+    }
+}
+
+/// `HdExtentSchema`.
+pub struct ExtentSchema(ContainerHandle);
+
+impl ExtentSchema {
+    pub fn get(prim: &ContainerHandle) -> Option<Self> {
+        member_container(prim, tokens::imageable::EXTENT).map(Self)
+    }
+
+    pub fn min(&self) -> Option<gf::Vec3d> {
+        match member_value(&self.0, tokens::imageable::MIN)? {
+            Value::Vec3d(v) => Some(v),
+            _ => None,
+        }
+    }
+
+    pub fn max(&self) -> Option<gf::Vec3d> {
+        match member_value(&self.0, tokens::imageable::MAX)? {
+            Value::Vec3d(v) => Some(v),
+            _ => None,
+        }
+    }
+}

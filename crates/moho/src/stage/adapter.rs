@@ -76,6 +76,7 @@ impl AdapterRegistry {
         registry.add_base(Rc::new(crate::stage::globals::SceneGlobalsAdapter));
         registry.add_base(Rc::new(crate::stage::xform::XformAdapter));
         registry.add_base(Rc::new(crate::stage::primvars::PrimvarsAdapter));
+        registry.add_base(Rc::new(crate::stage::imageable::ImageableAdapter));
         for (usd, hydra) in USD_TO_HYDRA_TYPES {
             registry.set_type(usd, Rc::new(Typed(Token::from(*hydra))));
         }
