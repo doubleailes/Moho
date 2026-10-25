@@ -1,7 +1,7 @@
 ## 1. Light linking after the merge (M1)
 
-- [ ] 1.1 Add `chain::input(stage)` (the standard chain without light linking) and `chain::merged(index)` (light linking over a merging index, no oracle); make `chain::standard` `chain::input` plus linking with the stage as oracle. Verify that the existing chain and light-linking tests pass unchanged.
-- [ ] 1.2 Add a streaming fixture whose light, in one chunk's payload, links receivers in another chunk's payload. Verify that, with linking after the merge, the receivers' categories equal those of a standard chain over the fully loaded stage, and that removing the light's chunk dirties the receivers' categories and drops the light's category.
+- [x] 1.1 Add `chain::input(stage)` (the standard chain without light linking) and `chain::merged(index)` (light linking over a merging index, no oracle); make `chain::standard` `chain::input` plus linking with the stage as oracle. Verify that the existing chain and light-linking tests pass unchanged.
+- [x] 1.2 Add a streaming fixture whose light, in one chunk's payload, links receivers in another chunk's payload. Verify that, with linking after the merge, the receivers' categories equal those of a standard chain over the fully loaded stage, and that removing the light's chunk dirties the receivers' categories and drops the light's category.
 
 ## 2. Prims outside the loaded inputs (M2)
 
