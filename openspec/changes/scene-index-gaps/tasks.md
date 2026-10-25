@@ -31,4 +31,4 @@
 ## 8. Docs and checks
 
 - [x] 8.1 Update `docs/architecture.md` (linking after the merge, side inputs, generic stage metadata, prim origin), `ROADMAP.md` (the gaps closed; linking predicates across inputs as a known limit) and `CLAUDE.md`'s layout if modules were added.
-- [ ] 8.2 Run `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, and `openspec validate scene-index-gaps --strict`.
+- [x] 8.2 Run `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, and `openspec validate scene-index-gaps --strict`.
