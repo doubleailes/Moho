@@ -107,35 +107,59 @@ impl MergingSceneIndex {
         self.inputs.borrow().iter().any(|i| i.root.has_prefix(path))
     }
 
-    /// The root of `sender` if it is a current input.
-    fn root_of(&self, sender: &dyn SceneIndex) -> Option<sdf::Path> {
+    /// Every root `sender` is added at (an index may be added at several).
+    fn roots_of(&self, sender: &dyn SceneIndex) -> Vec<sdf::Path> {
         self.inputs
             .borrow()
             .iter()
-            .find(|i| same(sender, &i.index))
+            .filter(|i| same(sender, &i.index))
             .map(|i| i.root.clone())
+            .collect()
     }
 
     fn merged_subtree(&self, path: &sdf::Path, out: &mut Vec<sdf::Path>) {
-        if !self.prim(path).is_defined() {
-            return;
+        out.extend(subtree(self, path));
+    }
+
+    fn forward_added(&self, roots: &[sdf::Path], paths: impl IntoIterator<Item = sdf::Path>) {
+        let added: Vec<Added> = paths
+            .into_iter()
+            .filter(|path| under_any(path, roots))
+            .map(|path| {
+                let ty = self.prim(&path).ty;
+                Added { path, ty }
+            })
+            .collect();
+        self.observers.send_added(self, &added);
+    }
+
+    fn forward_removed(&self, roots: &[sdf::Path], paths: impl IntoIterator<Item = sdf::Path>) {
+        let removed: Vec<Removed> = paths
+            .into_iter()
+            .filter(|path| under_any(path, roots) || roots.iter().any(|r| r.has_prefix(path)))
+            .map(|path| Removed { path })
+            .collect();
+        self.observers.send_removed(self, &removed);
+        // What another input still holds comes back.
+        let mut still = Vec::new();
+        for e in &removed {
+            self.merged_subtree(&e.path, &mut still);
         }
-        out.push(path.clone());
-        for child in self.children(path) {
-            self.merged_subtree(&child, out);
-        }
+        self.forward_added(&[sdf::Path::abs_root()], still);
     }
 }
 
-/// `root` and every prim under it in `index`, parents first.
+fn under_any(path: &sdf::Path, roots: &[sdf::Path]) -> bool {
+    roots.iter().any(|r| path.has_prefix(r))
+}
+
+/// Every defined prim at or under `root` in `index`, parents first. The walk
+/// goes on through undefined prims, which may hold defined descendants.
 fn subtree(index: &dyn SceneIndex, root: &sdf::Path) -> Vec<sdf::Path> {
     let mut out = Vec::new();
     let mut stack = vec![root.clone()];
     while let Some(path) = stack.pop() {
-        if !path.is_abs_root() {
-            if !index.prim(&path).is_defined() {
-                continue;
-            }
+        if !path.is_abs_root() && index.prim(&path).is_defined() {
             out.push(path.clone());
         }
         let mut children = index.children(&path);
@@ -198,55 +222,34 @@ impl SceneIndex for MergingSceneIndex {
 
 impl Observer for MergingSceneIndex {
     fn added(&self, sender: &dyn SceneIndex, entries: &[Added]) {
-        let Some(root) = self.root_of(sender) else { return };
-        let added: Vec<Added> = entries
-            .iter()
-            .filter(|e| e.path.has_prefix(&root))
-            .map(|e| Added {
-                path: e.path.clone(),
-                ty: self.prim(&e.path).ty,
-            })
-            .collect();
-        self.observers.send_added(self, &added);
+        let roots = self.roots_of(sender);
+        self.forward_added(&roots, entries.iter().map(|e| e.path.clone()));
     }
 
     fn removed(&self, sender: &dyn SceneIndex, entries: &[Removed]) {
-        let Some(root) = self.root_of(sender) else { return };
-        let removed: Vec<Removed> = entries
-            .iter()
-            .filter(|e| e.path.has_prefix(&root) || root.has_prefix(&e.path))
-            .cloned()
-            .collect();
-        self.observers.send_removed(self, &removed);
-        // What another input still holds comes back.
-        let mut still = Vec::new();
-        for e in &removed {
-            self.merged_subtree(&e.path, &mut still);
-        }
-        let added: Vec<Added> = still
-            .into_iter()
-            .map(|path| {
-                let ty = self.prim(&path).ty;
-                Added { path, ty }
-            })
-            .collect();
-        self.observers.send_added(self, &added);
+        let roots = self.roots_of(sender);
+        self.forward_removed(&roots, entries.iter().map(|e| e.path.clone()));
     }
 
     fn dirtied(&self, sender: &dyn SceneIndex, entries: &[Dirtied]) {
-        let Some(root) = self.root_of(sender) else { return };
+        let roots = self.roots_of(sender);
         let dirtied: Vec<Dirtied> = entries
             .iter()
-            .filter(|e| e.path.has_prefix(&root))
+            .filter(|e| under_any(&e.path, &roots))
             .cloned()
             .collect();
         self.observers.send_dirtied(self, &dirtied);
     }
 
     fn renamed(&self, sender: &dyn SceneIndex, entries: &[Renamed]) {
-        if self.root_of(sender).is_some() {
-            self.observers.send_renamed(self, entries);
-        }
+        // Each rename becomes the old path removed and the new subtree added
+        // (`HdSceneIndexObserver::ConvertPrimsRenamedToRemovedAndAdded`), so
+        // that each side is checked against the roots the sender answers for
+        // and against what the other inputs hold.
+        let roots = self.roots_of(sender);
+        self.forward_removed(&roots, entries.iter().map(|e| e.old.clone()));
+        let added: Vec<sdf::Path> = entries.iter().flat_map(|e| subtree(sender, &e.new)).collect();
+        self.forward_added(&roots, added);
     }
 }
 

@@ -2,7 +2,7 @@
 
 mod common;
 
-use std::rc::Rc;
+use std::rc::{Rc, Weak};
 
 use common::p;
 use moho::data_source::locate;
@@ -12,7 +12,10 @@ use moho::locator::Locator;
 use moho::openusd::sdf::Value;
 use moho::openusd::tf::Token;
 use moho::scene_index::testing::{Notice, RecordingObserver};
-use moho::scene_index::{Added, Prim, Removed, RetainedSceneIndex, SceneIndex, SceneIndexHandle};
+use moho::scene_index::{
+    Added, Dirtied, Observer, Observers, Prim, Removed, Renamed, RetainedSceneIndex, SceneIndex,
+    SceneIndexHandle,
+};
 
 fn prim(ty: &str, entries: &[(&str, i32)]) -> Prim {
     Prim::new(
@@ -187,4 +190,141 @@ fn ancestors_of_a_root_exist() {
 
 fn sdf_root() -> moho::openusd::sdf::Path {
     moho::openusd::sdf::Path::abs_root()
+}
+
+/// A retained index that can also announce renames, which
+/// `RetainedSceneIndex` never does.
+struct Renaming {
+    inner: Rc<RetainedSceneIndex>,
+    observers: Observers,
+}
+
+impl Renaming {
+    fn new(inner: Rc<RetainedSceneIndex>) -> Rc<Self> {
+        Rc::new(Self {
+            inner,
+            observers: Observers::default(),
+        })
+    }
+
+    /// Moves `old` (a leaf) to `new` and announces the rename.
+    fn rename(&self, old: &str, new: &str) {
+        let prim = self.inner.prim(&p(old));
+        self.inner.remove_prims([p(old)]);
+        self.inner.add_prims([(p(new), prim)]);
+        self.observers.send_renamed(
+            self,
+            &[Renamed {
+                old: p(old),
+                new: p(new),
+            }],
+        );
+    }
+}
+
+impl SceneIndex for Renaming {
+    fn prim(&self, path: &moho::openusd::sdf::Path) -> Prim {
+        self.inner.prim(path)
+    }
+
+    fn children(&self, path: &moho::openusd::sdf::Path) -> Vec<moho::openusd::sdf::Path> {
+        self.inner.children(path)
+    }
+
+    fn add_observer(&self, observer: Weak<dyn Observer>) {
+        self.observers.add(observer);
+    }
+}
+
+#[test]
+fn renames_outside_a_root_stay_hidden() {
+    let inner = RetainedSceneIndex::new();
+    inner.add_prims([
+        (p("/a/x"), prim("mesh", &[])),
+        (p("/hidden/y"), prim("mesh", &[])),
+    ]);
+    let input = Renaming::new(inner);
+    let merged = MergingSceneIndex::new();
+    merged.add_input_scene(input.clone(), p("/a"));
+    let recorder = RecordingObserver::on(merged.as_ref());
+
+    input.rename("/hidden/y", "/hidden/z");
+    assert_eq!(recorder.take(), [], "neither side is under /a");
+
+    input.rename("/a/x", "/a/w");
+    assert_eq!(
+        recorder.take(),
+        [
+            Notice::Removed(Removed { path: p("/a/x") }),
+            Notice::Added(Added {
+                path: p("/a/w"),
+                ty: Token::from("mesh")
+            }),
+        ]
+    );
+
+    input.rename("/a/w", "/hidden/w");
+    assert_eq!(
+        recorder.take(),
+        [Notice::Removed(Removed { path: p("/a/w") })],
+        "moved out of /a: removed only"
+    );
+}
+
+#[test]
+fn an_index_added_at_two_roots_reaches_both() {
+    let inner = RetainedSceneIndex::new();
+    inner.add_prims([(p("/a"), prim("", &[])), (p("/b"), prim("", &[]))]);
+    let merged = MergingSceneIndex::new();
+    merged.add_input_scene(inner.clone(), p("/a"));
+    merged.add_input_scene(inner.clone(), p("/b"));
+    let recorder = RecordingObserver::on(merged.as_ref());
+    inner.add_prims([(p("/b/geo"), prim("mesh", &[]))]);
+    inner.dirty_prims([(p("/b/geo"), Locator::parse("x").into())]);
+    assert_eq!(
+        recorder.take(),
+        [
+            Notice::Added(Added {
+                path: p("/b/geo"),
+                ty: Token::from("mesh")
+            }),
+            Notice::Dirtied(Dirtied {
+                path: p("/b/geo"),
+                locators: Locator::parse("x").into()
+            }),
+        ],
+        "once each, under the second root"
+    );
+}
+
+#[test]
+fn prims_under_undefined_ancestors_are_merged() {
+    // `/a` and `/a/b` are implied, undefined ancestors of the mesh.
+    let deep = RetainedSceneIndex::new();
+    deep.add_prims([(p("/a/b/geo"), prim("mesh", &[]))]);
+    let merged = MergingSceneIndex::new();
+    let recorder = RecordingObserver::on(merged.as_ref());
+    merged.add_input_scene(deep.clone(), sdf_root());
+    assert_eq!(
+        recorder.take(),
+        [Notice::Added(Added {
+            path: p("/a/b/geo"),
+            ty: Token::from("mesh")
+        })]
+    );
+
+    // A second input holds the mesh too: removing the first keeps it.
+    let other = RetainedSceneIndex::new();
+    other.add_prims([(p("/a/b/geo"), prim("mesh", &[]))]);
+    merged.add_input_scene(other.clone(), sdf_root());
+    recorder.take();
+    let handle: SceneIndexHandle = deep;
+    merged.remove_input_scene(&handle);
+    assert_eq!(
+        recorder.take(),
+        [Notice::Added(Added {
+            path: p("/a/b/geo"),
+            ty: Token::from("mesh")
+        })]
+    );
 }
