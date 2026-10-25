@@ -52,6 +52,8 @@ impl RenderSettingsFlatteningSceneIndex {
         });
         let observer: Weak<dyn Observer> = index.me.clone();
         input.add_observer(observer);
+        // Built now, so a later removal can still see what was included.
+        index.dependents();
         index
     }
 
@@ -166,6 +168,33 @@ impl RenderSettingsFlatteningSceneIndex {
         *self.dependents.borrow_mut() = Some(map.clone());
         map
     }
+
+    /// The settings dirtied because the prims at or under `paths` came or
+    /// went, by the dependency map before and after the change.
+    fn changed_dependents(
+        &self,
+        before: &BTreeMap<sdf::Path, BTreeSet<sdf::Path>>,
+        paths: &[&sdf::Path],
+    ) -> Vec<Dirtied> {
+        let after = self.dependents();
+        let mut settings: BTreeSet<sdf::Path> = BTreeSet::new();
+        for map in [before, &after] {
+            for (dependency, dependents) in map {
+                if paths.iter().any(|p| dependency.has_prefix(p)) {
+                    settings.extend(dependents.iter().cloned());
+                }
+            }
+        }
+        let flattened = LocatorSet::from(Locator::new([t::RENDER_SETTINGS]));
+        settings
+            .into_iter()
+            .filter(|s| self.input.prim(s).is_defined())
+            .map(|path| Dirtied {
+                path,
+                locators: flattened.clone(),
+            })
+            .collect()
+    }
 }
 
 impl SceneIndex for RenderSettingsFlatteningSceneIndex {
@@ -202,13 +231,19 @@ impl SceneIndex for RenderSettingsFlatteningSceneIndex {
 
 impl Observer for RenderSettingsFlatteningSceneIndex {
     fn added(&self, _: &dyn SceneIndex, entries: &[Added]) {
-        *self.dependents.borrow_mut() = None;
+        let before = self.dependents.borrow_mut().take().unwrap_or_default();
         self.observers.send_added(self, entries);
+        let paths: Vec<&sdf::Path> = entries.iter().map(|e| &e.path).collect();
+        let dirtied = self.changed_dependents(&before, &paths);
+        self.observers.send_dirtied(self, &dirtied);
     }
 
     fn removed(&self, _: &dyn SceneIndex, entries: &[Removed]) {
-        *self.dependents.borrow_mut() = None;
+        let before = self.dependents.borrow_mut().take().unwrap_or_default();
         self.observers.send_removed(self, entries);
+        let paths: Vec<&sdf::Path> = entries.iter().map(|e| &e.path).collect();
+        let dirtied = self.changed_dependents(&before, &paths);
+        self.observers.send_dirtied(self, &dirtied);
     }
 
     fn dirtied(&self, _: &dyn SceneIndex, entries: &[Dirtied]) {
