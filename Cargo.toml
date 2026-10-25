@@ -1,0 +1,27 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.96"
+license = "MIT"
+repository = "https://github.com/doubleailes/moho"
+
+[workspace.dependencies]
+# openusd's API is not stable: always pin an exact `rev`, and bump both crates
+# together after re-reading the APIs listed in docs/openusd-notes.md. Moho's
+# consumers (Mantle, crust-render) must resolve the same revision: Mantle
+# depends on this git source at the same `rev`, crust-render patches its
+# crates.io `openusd` to it. Bump in order: Moho, then crust-render, then Mantle.
+openusd = { git = "https://github.com/mxpv/openusd", rev = "68a867a69f3fb429a30f9e1155a0a30a3d2cdf9f" }
+openusd-schemas = { git = "https://github.com/mxpv/openusd", rev = "68a867a69f3fb429a30f9e1155a0a30a3d2cdf9f" }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = { level = "deny", priority = -1 }
+unwrap_used = "deny"
+dbg_macro = "deny"
