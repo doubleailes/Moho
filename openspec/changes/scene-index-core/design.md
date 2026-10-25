@@ -251,6 +251,13 @@ sites (`prim_stack()`).
     `UsdComputePathExpressionFromCollectionMembershipQueryRuleMap`, which
     openusd lacks (an upstream candidate).
 
+### D6b. Asset paths
+
+openusd resolves an asset path only when the file exists, so a `<UDIM>`
+texture set or a missing file arrives unresolved. Every attribute value Moho
+reads anchors an unresolved relative asset path on the layer that authors it
+(the strongest site of the property stack). The authored path is kept.
+
 ### D7. Render settings keep namespaced data
 
 - **Flattening.** Settings, products and vars flatten into `renderSettings`
