@@ -310,6 +310,8 @@ reads anchors an unresolved relative asset path on the layer that authors it
 - The exact identity that keys a stable native prototype (D5). It is
   settled by the first instancing task against openusd's prim index API, and
   recorded in `docs/openusd-notes.md`.
-- Whether the native-instancing filter's binding hash also needs light
-  linking categories, which Crust judges at the instance path. It is settled
-  with the light linking task, against Crust's `light_links.rs`.
+- ~~Whether the native-instancing filter's binding hash also needs light
+  linking categories.~~ Settled by the light linking task: no. Categories
+  travel per instance in the instancer's `instanceCategories`, judged at each
+  instance's location, which is where Crust judges them. Instances with
+  different categories can still share a prototype.

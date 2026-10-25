@@ -10,3 +10,6 @@ pub use merging::MergingSceneIndex;
 pub mod material_binding;
 
 pub use material_binding::MaterialBindingResolvingSceneIndex;
+pub mod light_linking;
+
+pub use light_linking::LightLinkingSceneIndex;
