@@ -9,7 +9,7 @@
 
 ## 3. Stage metadata as generic data (M3)
 
-- [ ] 3.1 Expose `__usdStageMetadata/<field>/{value, authored}` on the absolute root for the seven fields, and dirty it with `sceneGlobals` on a stage metadata change. Verify authored and unauthored fields, and the dirty notice. Record `Stage::has_authored_stage_metadata` in `docs/openusd-notes.md`.
+- [x] 3.1 Expose `__usdStageMetadata/<field>/{value, authored}` on the absolute root for the seven fields, and dirty it with `sceneGlobals` on a stage metadata change. Verify authored and unauthored fields, and the dirty notice. Record `Stage::has_authored_stage_metadata` in `docs/openusd-notes.md`.
 
 ## 4. Prim origin (M4)
 

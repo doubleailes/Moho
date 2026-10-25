@@ -82,3 +82,56 @@ fn a_stage_metadata_edit_dirties_the_globals() {
         Some(Value::Double(1100.0))
     );
 }
+
+#[test]
+fn stage_metadata_says_what_is_authored() {
+    let (_dir, usd) = stage(
+        r#"#usda 1.0
+(
+    metersPerUnit = 1
+    endTimeCode = 50
+)
+def Xform "world"
+{
+}
+"#,
+    );
+    let index = StageSceneIndex::new();
+    index.set_stage(usd);
+    let root = index.prim(&sdf::Path::abs_root()).data.unwrap();
+    let field = |name: &str, member: &str| {
+        locate(&root, &Locator::new(["__usdStageMetadata", name, member])).and_then(|d| d.value())
+    };
+    assert_eq!(field("metersPerUnit", "value"), Some(Value::Double(1.0)));
+    assert_eq!(field("metersPerUnit", "authored"), Some(Value::Bool(true)));
+    assert_eq!(field("endTimeCode", "authored"), Some(Value::Bool(true)));
+    assert_eq!(
+        field("startTimeCode", "value"),
+        Some(Value::Double(0.0)),
+        "the fallback"
+    );
+    assert_eq!(field("startTimeCode", "authored"), Some(Value::Bool(false)));
+    assert_eq!(field("upAxis", "authored"), Some(Value::Bool(false)));
+    assert_eq!(
+        field("renderSettingsPrimPath", "authored"),
+        Some(Value::Bool(false))
+    );
+
+    let recorder = RecordingObserver::on(index.as_ref());
+    index.stage().unwrap().set_start_time_code(1.0).unwrap();
+    index.apply_pending_updates();
+    let notices = recorder.take();
+    assert!(
+        notices.iter().any(|n| matches!(n, Notice::Dirtied(d) if d.path.is_abs_root() && d.locators.contains(&Locator::parse("__usdStageMetadata/startTimeCode/authored")))),
+        "{notices:?}"
+    );
+    let root = index.prim(&sdf::Path::abs_root()).data.unwrap();
+    assert_eq!(
+        locate(
+            &root,
+            &Locator::parse("__usdStageMetadata/startTimeCode/authored")
+        )
+        .and_then(|d| d.value()),
+        Some(Value::Bool(true))
+    );
+}

@@ -37,6 +37,9 @@ pub mod usd {
     pub const ATTRIBUTES: &str = "__usdAttributes";
     /// Every relationship of a prim, by name.
     pub const RELATIONSHIPS: &str = "__usdRelationships";
+    /// The stage metadata the scene globals read, by field, on the absolute
+    /// root.
+    pub const STAGE_METADATA: &str = "__usdStageMetadata";
 
     /// An attribute's resolved value (sampled).
     pub const VALUE: &str = "value";
