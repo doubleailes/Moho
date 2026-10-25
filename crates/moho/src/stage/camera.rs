@@ -11,7 +11,7 @@ use openusd::sdf::Value;
 use openusd::tf::Token;
 use openusd::usd::{Attribute, TimeCode};
 
-use crate::data_source::{Container, DataSource, Sampled};
+use crate::data_source::{Container, DataSource, Sampled, bracketing_sample_times};
 use crate::locator::{Locator, LocatorSet};
 use crate::stage::adapter::Adapter;
 use crate::stage::attribute::{AttributeValue, MappedAttributeValue};
@@ -178,7 +178,21 @@ impl Sampled for LinearExposureScale {
         Some(Value::Float(scale))
     }
 
-    fn sample_times(&self, _start: f32, _end: f32) -> Option<Vec<f32>> {
-        None
+    /// The union of every input's bracketing samples.
+    fn sample_times(&self, start: f32, end: f32) -> Option<Vec<f32>> {
+        let now = self.globals.time()?.value();
+        let mut times: Vec<f32> = Vec::new();
+        for attribute in &self.attributes {
+            let samples = attribute.time_sample_times().unwrap_or_default();
+            #[allow(clippy::cast_possible_truncation)]
+            let offsets: Vec<f32> = samples.iter().map(|t| (t - now) as f32).collect();
+            times.extend(bracketing_sample_times(&offsets, start, end).unwrap_or_default());
+        }
+        if times.is_empty() {
+            return None;
+        }
+        times.sort_by(f32::total_cmp);
+        times.dedup();
+        Some(times)
     }
 }

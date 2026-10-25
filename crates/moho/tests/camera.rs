@@ -118,3 +118,28 @@ fn cameras_equal_openusd_after_scaling() {
         Some(Value::Token("orthographic".into()))
     );
 }
+
+#[test]
+fn animated_exposure_has_sample_times() {
+    let (_dir, stage) = stage(
+        r#"#usda 1.0
+def Camera "cam"
+{
+    float exposure.timeSamples = {
+        1: 0,
+        3: 2,
+    }
+}
+"#,
+    );
+    let index = StageSceneIndex::new();
+    index.set_stage(stage);
+    index.set_time(moho::openusd::usd::TimeCode::new(2.0));
+    let data = index.prim(&p("/cam")).data.unwrap();
+    let source = locate(&data, &Locator::parse("camera/linearExposureScale")).unwrap();
+    let sampled = source.as_sampled().unwrap();
+    assert_eq!(sampled.sample_times(0.0, 0.5), Some(vec![-1.0, 1.0]));
+    // 2^1 at the index's time, 2^2 one frame later.
+    assert_eq!(sampled.value(0.0), Some(Value::Float(2.0)));
+    assert_eq!(sampled.value(1.0), Some(Value::Float(4.0)));
+}
