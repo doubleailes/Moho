@@ -231,3 +231,47 @@ fn removing_a_shader_dirties_its_material() {
     let net = network(&index, "/preview", "");
     assert!(value(&net, &["nodes", "tex", "type"]).is_none());
 }
+
+#[test]
+fn an_input_keeps_every_connection() {
+    let (_dir, usd) = stage(
+        r#"#usda 1.0
+def Material "m"
+{
+    token outputs:surface.connect = </m/sum.outputs:out>
+    def Shader "sum"
+    {
+        uniform token info:id = "ND_add_float"
+        float inputs:in.connect = [</m/a.outputs:out>, </m/b.outputs:out>]
+        token outputs:out
+    }
+    def Shader "a"
+    {
+        uniform token info:id = "ND_constant_float"
+        float outputs:out
+    }
+    def Shader "b"
+    {
+        uniform token info:id = "ND_constant_float"
+        float outputs:out
+    }
+}
+"#,
+    );
+    let index = StageSceneIndex::new();
+    index.set_stage(usd);
+    let net = network(&index, "/m", "");
+    let links = locate(&net, &Locator::new(["nodes", "sum", "inputConnections", "in"])).unwrap();
+    let links = links.as_vector().unwrap();
+    assert_eq!(links.len(), 2);
+    let upstream = |i: usize| {
+        locate(
+            links.get(i).unwrap().as_container().unwrap(),
+            &Locator::parse("upstreamNodePath"),
+        )
+        .and_then(|d| d.value())
+    };
+    assert_eq!(upstream(0), token("a"));
+    assert_eq!(upstream(1), token("b"));
+    assert!(value(&net, &["nodes", "b", "nodeIdentifier"]).is_some());
+}
