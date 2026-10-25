@@ -15,6 +15,17 @@
 
 #![forbid(unsafe_code)]
 
+pub mod chain;
+pub mod data_source;
+pub mod filter;
+pub mod locator;
+pub mod scene_index;
+pub mod schema;
+pub mod stage;
+pub mod tokens;
+
 /// The pinned openusd, re-exported so consumers build against exactly the
 /// revision Moho does.
 pub use openusd;
+/// The pinned openusd-schemas, from the same openusd revision.
+pub use openusd_schemas;
