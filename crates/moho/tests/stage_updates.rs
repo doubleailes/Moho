@@ -1,0 +1,157 @@
+#![allow(clippy::unwrap_used)]
+
+mod common;
+
+use common::{p, stage};
+use moho::locator::{Locator, LocatorSet};
+use moho::openusd::tf::Token;
+use moho::scene_index::testing::{Notice, RecordingObserver};
+use moho::scene_index::{Added, Dirtied, Removed, SceneIndex};
+use moho::stage::StageSceneIndex;
+
+const SCENE: &str = r#"#usda 1.0
+def Xform "world"
+{
+    def Mesh "geo"
+    {
+        int crust:rayMask = 6
+        int crust:other = 1
+    }
+    def Camera "cam"
+    {
+        int crust:rayMask = 2
+    }
+    def Mesh "off" (
+        active = false
+    )
+    {
+        int crust:rayMask = 2
+    }
+}
+"#;
+
+fn setup() -> (
+    common::TempDir,
+    std::rc::Rc<StageSceneIndex>,
+    std::rc::Rc<RecordingObserver>,
+) {
+    let (dir, stage) = stage(SCENE);
+    let index = StageSceneIndex::new();
+    index.set_stage(stage);
+    let recorder = RecordingObserver::on(index.as_ref());
+    (dir, index, recorder)
+}
+
+fn set_int(index: &StageSceneIndex, attr: &str, value: i32) {
+    index
+        .stage()
+        .unwrap()
+        .attribute(attr)
+        .unwrap()
+        .set(value)
+        .unwrap();
+}
+
+fn attrs(names: &[&str]) -> LocatorSet {
+    names
+        .iter()
+        .map(|n| Locator::new(["__usdAttributes", n]))
+        .collect()
+}
+
+#[test]
+fn nothing_until_applied() {
+    let (_dir, index, recorder) = setup();
+    set_int(&index, "/world/geo.crust:rayMask", 7);
+    assert!(recorder.take().is_empty());
+    index.apply_pending_updates();
+    assert_eq!(
+        recorder.take(),
+        [Notice::Dirtied(Dirtied {
+            path: p("/world/geo"),
+            locators: attrs(&["crust:rayMask"])
+        })]
+    );
+    index.apply_pending_updates();
+    assert!(recorder.take().is_empty(), "applying twice notifies once");
+}
+
+#[test]
+fn a_prim_defined_and_another_removed() {
+    let (_dir, index, recorder) = setup();
+    let stage = index.stage().unwrap();
+    stage.define_typed_prim("/world/new", "Sphere").unwrap();
+    stage.remove_prim("/world/cam").unwrap();
+    index.apply_pending_updates();
+    let notices = recorder.take();
+    assert!(
+        notices.contains(&Notice::Removed(Removed {
+            path: p("/world/cam")
+        })),
+        "{notices:?}"
+    );
+    assert!(
+        notices.contains(&Notice::Added(Added {
+            path: p("/world/new"),
+            ty: Token::from("sphere")
+        })),
+        "{notices:?}"
+    );
+    assert!(
+        !notices
+            .iter()
+            .any(|n| matches!(n, Notice::Removed(r) if r.path == p("/world/new"))),
+        "a new prim is added, not removed and re-added: {notices:?}"
+    );
+    assert!(!index.prim(&p("/world/cam")).is_defined());
+    assert_eq!(index.prim(&p("/world/new")).ty, "sphere");
+}
+
+#[test]
+fn several_edits_one_application() {
+    let (_dir, index, recorder) = setup();
+    set_int(&index, "/world/geo.crust:rayMask", 7);
+    set_int(&index, "/world/geo.crust:other", 2);
+    set_int(&index, "/world/cam.crust:rayMask", 3);
+    index.apply_pending_updates();
+    let mut notices = recorder.take();
+    notices.sort_by_key(|n| format!("{n:?}"));
+    assert_eq!(
+        notices,
+        [
+            Notice::Dirtied(Dirtied {
+                path: p("/world/cam"),
+                locators: attrs(&["crust:rayMask"])
+            }),
+            Notice::Dirtied(Dirtied {
+                path: p("/world/geo"),
+                locators: attrs(&["crust:other", "crust:rayMask"])
+            }),
+        ]
+    );
+}
+
+#[test]
+fn edits_to_unexposed_prims_are_silent() {
+    let (_dir, index, recorder) = setup();
+    set_int(&index, "/world/off.crust:rayMask", 9);
+    index.apply_pending_updates();
+    assert!(recorder.take().is_empty());
+}
+
+#[test]
+fn activating_a_prim_adds_it() {
+    let (_dir, index, recorder) = setup();
+    let stage = index.stage().unwrap();
+    stage.prim("/world/off").unwrap().set_active(true).unwrap();
+    index.apply_pending_updates();
+    let notices = recorder.take();
+    assert!(
+        notices.contains(&Notice::Added(Added {
+            path: p("/world/off"),
+            ty: Token::from("mesh")
+        })),
+        "{notices:?}"
+    );
+    assert!(index.prim(&p("/world/off")).is_defined());
+}
