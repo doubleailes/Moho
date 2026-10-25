@@ -222,3 +222,24 @@ def Xform "world"
         "judged at the point instancer's path"
     );
 }
+
+#[test]
+fn prototype_copies_keep_their_origin() {
+    let (_dir, usd) = stage(PEBBLES);
+    let stage_index = StageSceneIndex::new();
+    stage_index.set_stage(usd);
+    let index = PointInstancingSceneIndex::new(stage_index);
+    let Some(Value::PathVec(copies)) = read(
+        index.as_ref(),
+        &p("/world/scatter"),
+        "instancerTopology/prototypes",
+    ) else {
+        panic!()
+    };
+    let geo = copies[0].append_path("geo").unwrap();
+    assert_eq!(
+        read(index.as_ref(), &geo, "primOrigin/scenePath"),
+        Some(Value::PathVec(vec![p("/world/scatter/protos/round/geo")])),
+        "the original prototype prim"
+    );
+}

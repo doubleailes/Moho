@@ -252,3 +252,6 @@ the root edit target (`crates/moho-spike/tests/probe.rs` asserts all of it):
   identifiers (`stage/instancing.rs`).
 - `prim_stack()` of a prototype prim is empty (C++ `GetPrimStack` returns the
   prototype's specs).
+- No `SdfPath::MakeRelativePath`: the prim origin's prototype-relative scene
+  path (`stage/prim_origin.rs`) is built from the path's text, parsed back
+  with `sdf::Path::new`, which accepts relative paths and `.`.

@@ -78,6 +78,7 @@ impl AdapterRegistry {
         registry.add_base(Rc::new(crate::stage::primvars::PrimvarsAdapter));
         registry.add_base(Rc::new(crate::stage::imageable::ImageableAdapter));
         registry.add_base(Rc::new(crate::stage::prim_info::PrimInfoAdapter));
+        registry.add_base(Rc::new(crate::stage::prim_origin::PrimOriginAdapter));
         for (usd, hydra) in USD_TO_HYDRA_TYPES {
             registry.set_type(usd, Rc::new(Typed(Token::from(*hydra))));
         }

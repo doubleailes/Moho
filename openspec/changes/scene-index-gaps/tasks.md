@@ -13,7 +13,7 @@
 
 ## 4. Prim origin (M4)
 
-- [ ] 4.1 Add `primOrigin/scenePath` to every stage prim, prototype-relative inside a USD prototype. Verify on a plain prim, a prim inside `/__Prototype_N`, a re-rooted native prototype prim, and a point-instancer prototype copy.
+- [x] 4.1 Add `primOrigin/scenePath` to every stage prim, prototype-relative inside a USD prototype. Verify on a plain prim, a prim inside `/__Prototype_N`, a re-rooted native prototype prim, and a point-instancer prototype copy.
 
 ## 5. Strategy (D) in the spike (M5)
 
