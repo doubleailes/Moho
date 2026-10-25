@@ -85,6 +85,7 @@ impl AdapterRegistry {
             Rc::new(crate::stage::material_binding::MaterialBindingAdapter),
         );
         registry.set_type("Mesh", Rc::new(crate::stage::mesh::MeshAdapter));
+        registry.set_type("Material", Rc::new(crate::stage::material::MaterialAdapter));
         registry.set_type("BasisCurves", Rc::new(crate::stage::curves::BASIS_CURVES));
         registry.set_type("NurbsCurves", Rc::new(crate::stage::curves::NURBS_CURVES));
         {
