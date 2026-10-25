@@ -217,3 +217,12 @@ pub mod light {
     pub const LIGHT_LINK: &str = "lightLink";
     pub const SHADOW_LINK: &str = "shadowLink";
 }
+
+/// `HdCollectionsSchema`, `HdCollectionSchema` and `HdCategoriesSchema`.
+pub mod collections {
+    pub const COLLECTIONS: &str = "collections";
+    pub const MEMBERSHIP_EXPRESSION: &str = "membershipExpression";
+    pub const CATEGORIES: &str = "categories";
+    pub const INSTANCE_CATEGORIES: &str = "instanceCategories";
+    pub const CATEGORIES_VALUES: &str = "categoriesValues";
+}
