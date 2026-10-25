@@ -49,7 +49,8 @@ struct Link {
     light: sdf::Path,
     collection: &'static str,
     category: Token,
-    expression: Option<PathExpression>,
+    /// The complete membership expression, compiled once.
+    eval: Option<Rc<PathExpressionEval<()>>>,
 }
 
 /// A scene index adding light-link categories.
@@ -59,6 +60,10 @@ pub struct LightLinkingSceneIndex {
     me: Weak<LightLinkingSceneIndex>,
     /// Lights with a `light` container, found on first use.
     lights: RefCell<Option<BTreeSet<sdf::Path>>>,
+    /// Every light's two link collections, built on first use and kept until
+    /// a light comes, goes or changes its collections: a receiver, and each
+    /// instance of an instancer, is judged against them.
+    links: RefCell<Option<Rc<Vec<Link>>>>,
     cache: RefCell<HashMap<sdf::Path, Prim>>,
     observers: Observers,
 }
@@ -85,6 +90,7 @@ impl LightLinkingSceneIndex {
             membership,
             me: me.clone(),
             lights: RefCell::new(None),
+            links: RefCell::new(None),
             cache: RefCell::new(HashMap::new()),
             observers: Observers::default(),
         });
@@ -109,7 +115,10 @@ impl LightLinkingSceneIndex {
     }
 
     /// Every light's two link collections.
-    fn links(&self) -> Vec<Link> {
+    fn links(&self) -> Rc<Vec<Link>> {
+        if let Some(links) = self.links.borrow().as_ref() {
+            return links.clone();
+        }
         let mut links = Vec::new();
         for light_path in self.lights() {
             let Some(data) = self.input.prim(&light_path).data else {
@@ -133,14 +142,20 @@ impl LightLinkingSceneIndex {
                     Some(e) if !trivial(e) => Token::from(format!("{collection}:{e}")),
                     _ => Token::default(),
                 };
+                let eval = expression
+                    .as_ref()
+                    .and_then(|e| PathExpressionEval::<()>::build(e, &PredicateLibrary::new()).ok())
+                    .map(Rc::new);
                 links.push(Link {
                     light: light_path.clone(),
                     collection,
                     category,
-                    expression,
+                    eval,
                 });
             }
         }
+        let links = Rc::new(links);
+        *self.links.borrow_mut() = Some(links.clone());
         links
     }
 
@@ -150,12 +165,9 @@ impl LightLinkingSceneIndex {
         {
             return included;
         }
-        let Some(expression) = &link.expression else {
-            return false;
-        };
-        PathExpressionEval::<()>::build(expression, &PredicateLibrary::new())
-            .map(|eval| eval.match_path(path, &|_| ()).value)
-            .unwrap_or(false)
+        link.eval
+            .as_ref()
+            .is_some_and(|eval| eval.match_path(path, &|_| ()).value)
     }
 
     /// The non-empty categories whose collections include `path`.
@@ -173,6 +185,10 @@ impl LightLinkingSceneIndex {
 
     fn forget_all(&self) {
         self.cache.borrow_mut().clear();
+    }
+
+    fn forget_links(&self) {
+        *self.links.borrow_mut() = None;
     }
 
     /// Every geometry prim and instancer under the root, for re-dirtying
@@ -205,8 +221,9 @@ impl Linked {
         let index = self.index.upgrade()?;
         let links: Vec<Link> = index
             .links()
-            .into_iter()
+            .iter()
             .filter(|l| l.light == self.path)
+            .cloned()
             .collect();
         Some(DataSource::Container(Rc::new(LightWithLinks { local, links })))
     }
@@ -242,14 +259,25 @@ impl Linked {
                 vec![self.path.clone(); count]
             }
         };
-        let values = paths.iter().map(|p| {
-            let entries: Vec<(Token, DataSource)> = index
-                .categories(p)
-                .into_iter()
-                .map(|c| (c, value(true)))
-                .collect();
-            container(entries)
-        });
+        // Instances judged at the same path (every one, without locations)
+        // share their categories.
+        let mut judged: HashMap<&sdf::Path, DataSource> = HashMap::new();
+        let values: Vec<DataSource> = paths
+            .iter()
+            .map(|p| {
+                judged
+                    .entry(p)
+                    .or_insert_with(|| {
+                        let entries: Vec<(Token, DataSource)> = index
+                            .categories(p)
+                            .into_iter()
+                            .map(|c| (c, value(true)))
+                            .collect();
+                        container(entries)
+                    })
+                    .clone()
+            })
+            .collect();
         Some(container([(
             collections::CATEGORIES_VALUES,
             RetainedVector::new(values).into_data_source(),
@@ -274,10 +302,19 @@ fn instance_count(topology: &ContainerHandle) -> usize {
 }
 
 impl Container for Linked {
+    /// Which of `categories` and `instanceCategories` the prim has, decided
+    /// from its type alone: judging them is what reading them costs.
     fn names(&self) -> Vec<Token> {
         let mut names = self.local.names();
+        let has = |name: &str| match name {
+            collections::CATEGORIES => GEOMETRY.contains(&self.ty.as_str()),
+            _ => {
+                self.ty == prim_type::INSTANCER
+                    && member_container(&self.local, "instancerTopology").is_some()
+            }
+        };
         for name in [collections::CATEGORIES, collections::INSTANCE_CATEGORIES] {
-            if !names.iter().any(|n| n == name) && self.get(&Token::from(name)).is_some() {
+            if !names.iter().any(|n| n == name) && has(name) {
                 names.push(Token::from(name));
             }
         }
@@ -376,6 +413,9 @@ impl Observer for LightLinkingSceneIndex {
     fn added(&self, sender: &dyn SceneIndex, entries: &[Added]) {
         self.forget_all();
         let lights_changed = entries.iter().any(|e| is_light(&sender.prim(&e.path)));
+        if lights_changed {
+            self.forget_links();
+        }
         if let Some(lights) = self.lights.borrow_mut().as_mut() {
             for e in entries {
                 if is_light(&sender.prim(&e.path)) {
@@ -400,6 +440,9 @@ impl Observer for LightLinkingSceneIndex {
                 lights_changed |= lights.len() != before;
             }
         }
+        if lights_changed {
+            self.forget_links();
+        }
         self.observers.send_removed(self, entries);
         if lights_changed {
             let dirtied = self.dirty_categories();
@@ -412,6 +455,9 @@ impl Observer for LightLinkingSceneIndex {
         let links_changed = entries
             .iter()
             .any(|e| e.locators.intersects(&links) && self.lights().contains(&e.path));
+        if links_changed {
+            self.forget_links();
+        }
         let mut out: Vec<Dirtied> = entries
             .iter()
             .map(|e| {
@@ -434,6 +480,7 @@ impl Observer for LightLinkingSceneIndex {
 
     fn renamed(&self, _: &dyn SceneIndex, entries: &[Renamed]) {
         self.forget_all();
+        self.forget_links();
         *self.lights.borrow_mut() = None;
         self.observers.send_renamed(self, entries);
     }
