@@ -178,6 +178,12 @@ the root edit target (`crates/moho-spike/tests/probe.rs` asserts all of it):
   Vec<ShadingAttribute>` follows node-graph outputs and interface inputs (C++
   `UsdShadeUtils::GetValueProducingAttributes`); `ShadingAttribute::{Input,
   Output}` and `attribute()`.
+- Asset values: `sdf::AssetPath` keeps `authored_path` and, from value
+  resolution, `resolved_path()`, which openusd sets only when the anchored
+  path names an existing file (so never for a `<UDIM>` set). Moho anchors an
+  unresolved relative path on the strongest site of
+  `Attribute::property_stack()` (`SpecSite.layer` is the layer identifier),
+  as Crust does, and sets it with `set_resolved_path`.
 - Stage-free matching: `sdf::path_expr::PathExpressionEval::<D>::build(&expr,
   &PredicateLibrary::new())` then `match_path(&path, &domain).value`. With an
   empty library, expressions with predicates do not compile.

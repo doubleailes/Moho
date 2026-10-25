@@ -30,6 +30,38 @@ impl AttributeValue {
     }
 }
 
+impl AttributeValue {
+    /// An asset path openusd left unresolved (it resolves only paths naming
+    /// a file that exists, so never a `<UDIM>` set), when relative: anchored
+    /// against the layer that authors the value, the strongest site of the
+    /// attribute's property stack, which is what USD anchors against.
+    fn anchor(&self, value: Value) -> Value {
+        let Value::AssetPath(mut asset) = value else {
+            return value;
+        };
+        let unresolved = asset.resolved_path().is_none_or(str::is_empty);
+        let authored = asset.as_str().to_owned();
+        if unresolved && !authored.is_empty() && std::path::Path::new(&authored).is_relative() {
+            let layer_dir = self
+                .attribute
+                .property_stack()
+                .ok()
+                .and_then(|stack| stack.into_iter().next())
+                .and_then(|site| {
+                    std::path::Path::new(&site.layer)
+                        .parent()
+                        .map(std::path::Path::to_path_buf)
+                })
+                .filter(|dir| !dir.as_os_str().is_empty());
+            if let Some(dir) = layer_dir {
+                let relative = authored.strip_prefix("./").unwrap_or(&authored);
+                asset.set_resolved_path(dir.join(relative).to_string_lossy());
+            }
+        }
+        Value::AssetPath(asset)
+    }
+}
+
 impl Sampled for AttributeValue {
     fn value(&self, offset: f32) -> Option<Value> {
         // At the default time there is no timeline to offset along.
@@ -37,7 +69,11 @@ impl Sampled for AttributeValue {
             .globals
             .time()
             .map(|t| TimeCode::new(t.value() + f64::from(offset)));
-        self.attribute.get_at::<Value>(time).ok().flatten()
+        self.attribute
+            .get_at::<Value>(time)
+            .ok()
+            .flatten()
+            .map(|v| self.anchor(v))
     }
 
     fn sample_times(&self, start: f32, end: f32) -> Option<Vec<f32>> {
