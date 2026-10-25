@@ -14,6 +14,7 @@ pub mod generic;
 pub mod globals;
 pub mod mesh;
 pub mod pending;
+pub mod primvars;
 pub mod table;
 pub mod xform;
 
