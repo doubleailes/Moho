@@ -260,6 +260,7 @@ dependencies = [
 name = "moho-spike"
 version = "0.1.0"
 dependencies = [
+ "moho",
  "openusd",
 ]
 

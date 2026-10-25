@@ -1,11 +1,15 @@
 #!/usr/bin/env bash
-# Runs the S0 streaming spike's three strategies on one scene, each in its own
+# Runs the S0 streaming spike's strategies on one scene, each in its own
 # process (a process's peak memory cannot be reset), and prints a comparison.
 #
-#   scripts/streaming-spike.sh [--skip-c] [--out DIR] <scene>
+#   scripts/streaming-spike.sh [--skip-c] [--with-d] [--out DIR] <scene>
 #
 # --skip-c  skip the full-stage reference (C), for Moana: Crust's recorded
 #           75.74 GiB composition stands as its baseline.
+# --with-d  also run (D), (B) read through Moho. Its digest hashes index data,
+#           not raw reads, so it is reported but not compared with the
+#           reference (crates/moho-spike/tests/strategy.rs compares it with an
+#           index over the fully loaded stage).
 # --out DIR keep each strategy's JSON lines and a meta.txt (machine, openusd
 #           rev, date, scene) in DIR.
 #
@@ -13,14 +17,16 @@
 # digest differs from the reference or a strategy reports errors.
 set -euo pipefail
 
-usage() { echo "usage: $0 [--skip-c] [--out DIR] <scene>" >&2; exit 2; }
+usage() { echo "usage: $0 [--skip-c] [--with-d] [--out DIR] <scene>" >&2; exit 2; }
 
 skip_c=0
+with_d=0
 out=""
 scene=""
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --skip-c) skip_c=1; shift ;;
+        --with-d) with_d=1; shift ;;
         --out) [[ $# -ge 2 ]] || usage; out="$2"; shift 2 ;;
         -*) usage ;;
         *) [[ -z "$scene" ]] || usage; scene="$1"; shift ;;
@@ -36,6 +42,8 @@ bin="$target/release/streaming-spike"
 
 strategies=(a b c)
 [[ $skip_c -eq 1 ]] && strategies=(a b)
+# (D) runs first so that the reference stays the last strategy.
+[[ $with_d -eq 1 ]] && strategies=(d "${strategies[@]}")
 
 if [[ -n "$out" ]]; then
     mkdir -p "$out"
@@ -82,7 +90,11 @@ for s in "${strategies[@]}"; do
     digest="$(jq -r 'select(.phase=="total") | .digest' "$f")"
     errors="$(jq -r 'select(.phase=="total") | .errors + .mismatches' "$f")"
     match="yes"
-    [[ "$digest" == "$ref" ]] || { match="NO"; failed=1; }
+    if [[ "$s" == "d" ]]; then
+        match="n/a (index digest)"
+    elif [[ "$digest" != "$ref" ]]; then
+        match="NO"; failed=1
+    fi
     [[ "$errors" == "0" ]] || { match="$match (errors: $errors)"; failed=1; }
     printf '%-8s %6s %10.2f %10.2f %10s %10s %12s %18s %s\n' \
         "$s" "$chunks" "$open_s" "$total_s" "$peak" "$final" "$max_chunk" "$digest" "$match"

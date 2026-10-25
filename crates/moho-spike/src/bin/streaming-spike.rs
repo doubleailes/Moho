@@ -1,7 +1,7 @@
 //! The S0 measurement driver (design D3).
 //!
 //! ```text
-//! streaming-spike --strategy a|b|c <scene>   one JSON line per phase and chunk
+//! streaming-spike --strategy a|b|c|d <scene>   one JSON line per phase and chunk
 //! streaming-spike fixture <dir>               write the CI fixture, print its root
 //! streaming-spike probe                       run the notice probe on the fixture
 //! ```
@@ -20,7 +20,7 @@ use moho_spike::fixture::{self, TempDir};
 use moho_spike::mem::Memory;
 use moho_spike::strategy::{Phase, Strategy};
 
-const USAGE: &str = "usage: streaming-spike --strategy a|b|c <scene>\n       streaming-spike fixture <dir>\n       \
+const USAGE: &str = "usage: streaming-spike --strategy a|b|c|d <scene>\n       streaming-spike fixture <dir>\n       \
                      streaming-spike probe";
 
 fn main() -> ExitCode {

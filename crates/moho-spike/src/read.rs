@@ -89,7 +89,7 @@ impl Digest {
         self.chunks.keys().map(String::as_str)
     }
 
-    fn record_outside(&mut self, path: &sdf::Path, hash: u64) {
+    pub(crate) fn record_outside(&mut self, path: &sdf::Path, hash: u64) {
         if let Some(previous) = self.outside.insert(path.as_str().to_owned(), hash)
             && previous != hash
         {
@@ -97,7 +97,7 @@ impl Digest {
         }
     }
 
-    fn record_chunk(&mut self, path: &sdf::Path, read: ChunkRead) {
+    pub(crate) fn record_chunk(&mut self, path: &sdf::Path, read: ChunkRead) {
         if let Some(previous) = self.chunks.insert(path.as_str().to_owned(), read)
             && previous != read
         {
