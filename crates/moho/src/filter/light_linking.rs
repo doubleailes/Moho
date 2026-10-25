@@ -412,7 +412,12 @@ impl LightLinkingSceneIndex {
 impl Observer for LightLinkingSceneIndex {
     fn added(&self, sender: &dyn SceneIndex, entries: &[Added]) {
         self.forget_all();
-        let lights_changed = entries.iter().any(|e| is_light(&sender.prim(&e.path)));
+        // A light added, or a known light re-added as something else (a
+        // resync that changes its type): either way the links change.
+        let was_light = |path: &sdf::Path| self.lights.borrow().as_ref().is_some_and(|l| l.contains(path));
+        let lights_changed = entries
+            .iter()
+            .any(|e| is_light(&sender.prim(&e.path)) || was_light(&e.path));
         if lights_changed {
             self.forget_links();
         }
@@ -420,6 +425,8 @@ impl Observer for LightLinkingSceneIndex {
             for e in entries {
                 if is_light(&sender.prim(&e.path)) {
                     lights.insert(e.path.clone());
+                } else {
+                    lights.remove(&e.path);
                 }
             }
         }
