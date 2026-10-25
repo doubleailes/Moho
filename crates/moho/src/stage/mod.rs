@@ -12,7 +12,9 @@ pub mod adapter;
 pub mod attribute;
 pub mod generic;
 pub mod globals;
+pub mod mesh;
 pub mod pending;
+pub mod table;
 pub mod xform;
 
 use std::cell::{Cell, RefCell};
