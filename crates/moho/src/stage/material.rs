@@ -68,25 +68,29 @@ enum Producer {
     Value(usd::Attribute),
 }
 
-fn producer(attribute: ShadingAttribute, filter: ProducerFilter) -> Option<Producer> {
+/// Every producer of `attribute`, in openusd's order.
+fn producers(attribute: ShadingAttribute, filter: ProducerFilter) -> Vec<Producer> {
     let producers = match &attribute {
-        ShadingAttribute::Input(i) => i.value_producing_attributes(filter).ok()?,
-        ShadingAttribute::Output(o) => o.value_producing_attributes(filter).ok()?,
+        ShadingAttribute::Input(i) => i.value_producing_attributes(filter),
+        ShadingAttribute::Output(o) => o.value_producing_attributes(filter),
     };
-    let first = producers.into_iter().next()?;
-    match first {
-        ShadingAttribute::Output(output) => {
-            let attr = output.attribute();
-            let prim = attr.prim();
-            let base = attr
-                .name()
-                .strip_prefix("outputs:")
-                .unwrap_or(attr.name())
-                .to_owned();
-            Some(Producer::Node(prim, base))
-        }
-        ShadingAttribute::Input(input) => Some(Producer::Value(input.attribute().clone())),
-    }
+    producers
+        .unwrap_or_default()
+        .into_iter()
+        .map(|producer| match producer {
+            ShadingAttribute::Output(output) => {
+                let attr = output.attribute();
+                let prim = attr.prim();
+                let base = attr
+                    .name()
+                    .strip_prefix("outputs:")
+                    .unwrap_or(attr.name())
+                    .to_owned();
+                Producer::Node(prim, base)
+            }
+            ShadingAttribute::Input(input) => Producer::Value(input.attribute().clone()),
+        })
+        .collect()
 }
 
 impl Adapter for MaterialAdapter {
@@ -150,10 +154,14 @@ impl<'a> Network<'a> {
         };
         let mut terminal_entries = Vec::new();
         for (terminal, output) in terminals {
-            if let Some(Producer::Node(prim, output_name)) = producer(
+            // A terminal reads one output, the first.
+            if let Some(Producer::Node(prim, output_name)) = producers(
                 ShadingAttribute::Output(output),
                 ProducerFilter::ShaderOutputsOnly,
-            ) {
+            )
+            .into_iter()
+            .next()
+            {
                 let node = network.node_name(prim.path());
                 network.walk(&ctx.stage, &prim);
                 terminal_entries.push((terminal, connection(&node, &output_name)));
@@ -195,16 +203,32 @@ impl<'a> Network<'a> {
         for input in shader.authored_inputs().unwrap_or_default() {
             let full = input.attribute().name().to_owned();
             let base = full.strip_prefix("inputs:").unwrap_or(&full).to_owned();
-            match producer(ShadingAttribute::Input(input.clone()), ProducerFilter::Any) {
-                Some(Producer::Node(upstream, output)) => {
-                    let node = self.node_name(upstream.path());
-                    connections.push((
-                        base,
-                        RetainedVector::new([connection(&node, &output)]).into_data_source(),
-                    ));
-                    self.walk(stage, &upstream);
+            // As UsdImaging's graph walk: every upstream output is a
+            // connection; failing any, an interface input gives the value.
+            let found = producers(ShadingAttribute::Input(input.clone()), ProducerFilter::Any);
+            let mut upstream_nodes = Vec::new();
+            let mut value_from = None;
+            for producer in found {
+                match producer {
+                    Producer::Node(upstream, output) => upstream_nodes.push((upstream, output)),
+                    Producer::Value(attribute) => {
+                        value_from.get_or_insert(attribute);
+                    }
                 }
-                Some(Producer::Value(attribute)) => {
+            }
+            if !upstream_nodes.is_empty() {
+                let links: Vec<DataSource> = upstream_nodes
+                    .iter()
+                    .map(|(upstream, output)| connection(&self.node_name(upstream.path()), output))
+                    .collect();
+                connections.push((base, RetainedVector::new(links).into_data_source()));
+                for (upstream, _) in &upstream_nodes {
+                    self.walk(stage, upstream);
+                }
+                continue;
+            }
+            match value_from {
+                Some(attribute) => {
                     parameters.push((base, self.parameter(attribute)));
                 }
                 None if input.attribute().has_authored_value().unwrap_or(false) => {
