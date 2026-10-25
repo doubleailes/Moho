@@ -97,7 +97,9 @@ pub trait Sampled {
 
 - **Handles are `Rc`.** Observers are held weakly, as Hydra holds them.
 - **Values are `sdf::Value`,** which is `Send`, so values cross threads while
-  the index does not.
+  the index does not. `sdf::Value` has no single-path variant, so where Hydra
+  holds one `Path` (`activeRenderSettingsPrim`, `camera`, a binding's
+  `path`), Moho holds a one-element `Value::PathVec`.
 - **A locator is a `Vec` of tokens.** A `LocatorSet` stays minimal, and
   `intersects` is a prefix test both ways.
 - **Typed schemas are thin views over containers** (`MeshSchema::get(&container)`,

@@ -11,6 +11,7 @@
 pub mod adapter;
 pub mod attribute;
 pub mod generic;
+pub mod globals;
 pub mod pending;
 
 use std::cell::{Cell, RefCell};

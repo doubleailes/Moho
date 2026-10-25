@@ -125,6 +125,14 @@ the root edit target (`crates/moho-spike/tests/probe.rs` asserts all of it):
   `CollectionAPI:lightLink`). `Prim::is_instance(&self) -> Result<bool>`.
 - `StageBuilder::schema_registry(Arc<SchemaRegistry>)`: see openusd-schemas
   above; `moho::stage::stage_builder()` installs it.
+- Scene globals: `Stage::start_time_code`, `end_time_code`,
+  `time_codes_per_second`; `openusd_schemas::geom::stage_meters_per_unit` and
+  `stage_up_axis -> Result<UpAxis>` (both fall back to the registry's
+  declared value, else 0.01 and `Y`); `render::Settings::stage_settings_path
+  -> Result<Option<sdf::Path>>` (the `renderSettingsPrimPath` metadata, empty
+  as `None`).
+- `sdf::Value` has no single-path variant; Moho holds one path as a
+  one-element `Value::PathVec`.
 
 ## Gaps
 
