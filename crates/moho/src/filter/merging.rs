@@ -193,6 +193,10 @@ impl SceneIndex for MergingSceneIndex {
         Prim { ty, data }
     }
 
+    /// The children of `path`, in input order, strongest first: each input's
+    /// children in its own order, each path once, then the intermediate prims
+    /// implied by deeper input roots, in input order. (`HdMergingSceneIndex`
+    /// collects them in a hash set and gives no order.)
     fn children(&self, path: &sdf::Path) -> Vec<sdf::Path> {
         let mut children: Vec<sdf::Path> = Vec::new();
         let push = |child: sdf::Path, children: &mut Vec<sdf::Path>| {
@@ -200,16 +204,18 @@ impl SceneIndex for MergingSceneIndex {
                 children.push(child);
             }
         };
-        for input in self.inputs.borrow().iter() {
-            if path.has_prefix(&input.root) {
-                for child in input.index.children(path) {
-                    push(child, &mut children);
-                }
-            } else if input.root.has_prefix(path) {
-                // An intermediate prim implied by a deeper root.
-                if let Some(child) = input.root.ancestors().find(|a| a.parent().as_ref() == Some(path)) {
-                    push(child, &mut children);
-                }
+        let inputs = self.inputs.borrow();
+        for input in inputs.iter().filter(|i| path.has_prefix(&i.root)) {
+            for child in input.index.children(path) {
+                push(child, &mut children);
+            }
+        }
+        for input in inputs
+            .iter()
+            .filter(|i| i.root.has_prefix(path) && i.root != *path)
+        {
+            if let Some(child) = input.root.ancestors().find(|a| a.parent().as_ref() == Some(path)) {
+                push(child, &mut children);
             }
         }
         children
