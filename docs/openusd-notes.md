@@ -219,6 +219,9 @@ the root edit target (`crates/moho-spike/tests/probe.rs` asserts all of it):
   `has_specs()`, `map_to_root().time_offset()`; `Stage::node_layer_stack(node)`
   and `Stage::layer_identifier(LayerId)`.
 - `prim_stack()` of a `/__Prototype_N` prim is empty.
+- Parity references (S1 chain tests): `geom::XformCache::new(time)` and
+  `local_to_world_transform(&Prim)`, `ImageableExt::compute_visibility(time)
+  -> Visibility`, `shade::MaterialBindingAPI::bound_material(purpose)`.
 - Point instancers: `geom::PointInstancer::get`, `mask_at(time, Some(&ids))`
   (inactive and invisible ids folded together; the inactive-id helper is
   private, so Moho separates them against `invisibleIds`), and
