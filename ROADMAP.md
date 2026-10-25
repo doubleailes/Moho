@@ -22,7 +22,8 @@ the steps that land in this repository or depend on it.
   extent, curves, implicit shapes, materials (UsdPreviewSurface, MaterialX),
   lights and light linking, cameras, instancers, volumes, render settings,
   products, vars and passes. Mantle's side of S1 follows in Mantle.
-- **Scene index gaps. Done** (OpenSpec change `scene-index-gaps`). The seven
+- **Scene index gaps. Done** (OpenSpec change `scene-index-gaps`, archived;
+  its requirements are in `openspec/specs/`). The seven
   gaps S2's plan found (crust-render, `moho-import`, M1 to M7): light linking
   after the merge (`chain::input`, `chain::merged`), `streaming::unresolved`
   for side inputs, `__usdStageMetadata` with authored-ness, Hydra's
