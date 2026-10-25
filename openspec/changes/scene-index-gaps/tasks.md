@@ -22,7 +22,7 @@
 
 ## 6. Render pass collections (M6)
 
-- [ ] 6.1 Verify, with a render pass applying `prune`, `matte` and `cameraVisibility`, that its `collections` hold those and the built-in `renderVisibility`; fix the collections adapter if they do not.
+- [x] 6.1 Verify, with a render pass applying `prune`, `matte` and `cameraVisibility`, that its `collections` hold those and the built-in `renderVisibility`; fix the collections adapter if they do not.
 
 ## 7. Merged children order (M7)
 
