@@ -7,6 +7,13 @@
 //! so a large array never becomes a string. The digest is not comparable
 //! with (A) to (C)'s, which hash raw openusd reads; it is compared with an
 //! index read of the fully loaded stage ([`read_whole`]).
+//!
+//! The two agree only when no light links across chunks. (D) reads a chunk
+//! while only that chunk and the scene input are mounted, so a receiver's
+//! `categories` lack lights that live in a chunk not yet (or no longer)
+//! mounted, where the reference sees every light. That is what streaming
+//! gives a consumer; one that needs such links decides them once the lights
+//! are in, as Crust does after its last chunk.
 
 use std::fmt::{self, Write as _};
 use std::hash::{DefaultHasher, Hasher};
@@ -97,9 +104,13 @@ pub fn read_chunk(index: &dyn SceneIndex, chunk: &sdf::Path, digest: &mut Digest
 }
 
 /// Reads every chunk of `chunks` from one index over the whole scene: the
-/// reference (D) is compared with.
+/// reference (D) is compared with. No chunks (a scene below the streaming
+/// threshold) is one read from the absolute root, as (D) reads it.
 pub fn read_whole(index: &dyn SceneIndex, chunks: &[sdf::Path]) -> Digest {
     let mut digest = Digest::default();
+    if chunks.is_empty() {
+        read_chunk(index, &sdf::Path::abs_root(), &mut digest);
+    }
     for chunk in chunks {
         read_chunk(index, chunk, &mut digest);
     }
