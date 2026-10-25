@@ -314,3 +314,26 @@ fn a_prim_that_stops_being_an_instance_is_dirtied() {
     );
     assert!(read(index.as_ref(), &p("/a"), "instance/instancer").is_none());
 }
+
+#[test]
+fn prototype_prims_keep_their_origin() {
+    let f = fixture();
+    let index = f.index.as_ref();
+    let origin = |path: &sdf::Path| read(index, path, "primOrigin/scenePath");
+    assert_eq!(origin(&p("/world/a")), Some(Value::PathVec(vec![p("/world/a")])));
+    let instancer = instancer_of(index, "/world/a");
+    let Some(Value::PathVec(prototypes)) = read(index, &instancer, "instancerTopology/prototypes") else {
+        panic!()
+    };
+    let geo = prototypes[0].append_path("geo").unwrap();
+    assert_eq!(
+        origin(&geo),
+        Some(Value::PathVec(vec![sdf::Path::new("geo").unwrap()])),
+        "relative to the USD prototype's root"
+    );
+    assert_eq!(
+        origin(&prototypes[0]),
+        Some(Value::PathVec(vec![sdf::Path::new(".").unwrap()])),
+        "the prototype root itself"
+    );
+}

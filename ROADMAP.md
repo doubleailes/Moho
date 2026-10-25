@@ -51,3 +51,5 @@ the steps that land in this repository or depend on it.
   a stage-local id), and a non-empty `prim_stack()` for prototype prims. Moho
   rebuilds the key from the public prim-index graph meanwhile
   (`crates/moho/src/stage/instancing.rs`).
+- `SdfPath::MakeRelativePath`. Moho builds a prototype-relative prim origin
+  from the path's text meanwhile (`crates/moho/src/stage/prim_origin.rs`).
