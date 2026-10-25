@@ -12,6 +12,7 @@ use openusd::tf::Token;
 use crate::data_source::{Container, DataSource};
 use crate::locator::{Locator, LocatorSet};
 use crate::stage::PrimContext;
+use crate::stage::adapter::Adapter;
 use crate::stage::attribute::AttributeValue;
 
 /// One member of a schema table.
@@ -64,6 +65,32 @@ impl Container for TableContainer {
             }
             Member::Nested(_, members) => Some(TableContainer::data_source(&self.ctx, locator, members)),
         }
+    }
+}
+
+/// A table-driven schema adapter: a prim type, a schema token and a table.
+pub struct TableAdapter {
+    pub prim_type: &'static str,
+    pub schema: &'static str,
+    pub members: &'static [Member],
+}
+
+impl Adapter for TableAdapter {
+    fn prim_type(&self, _ctx: &PrimContext) -> Token {
+        Token::from(self.prim_type)
+    }
+
+    fn names(&self, _ctx: &PrimContext) -> Vec<Token> {
+        vec![Token::from(self.schema)]
+    }
+
+    fn get(&self, ctx: &PrimContext, name: &Token) -> Option<DataSource> {
+        (name == self.schema)
+            .then(|| TableContainer::data_source(ctx, Locator::new([self.schema]), self.members))
+    }
+
+    fn invalidate(&self, _ctx: &PrimContext, name: &str) -> LocatorSet {
+        invalidate(&Locator::new([self.schema]), self.members, name)
     }
 }
 
