@@ -247,3 +247,70 @@ fn nested_instances() {
     let window = window_protos.pop().unwrap();
     assert_eq!(index.prim(&window.append_path("pane").unwrap()).ty, "mesh");
 }
+
+/// Instance data a test can switch off, then dirty.
+struct Switchable {
+    on: std::cell::Cell<bool>,
+}
+
+impl moho::data_source::Container for Switchable {
+    fn names(&self) -> Vec<moho::openusd::tf::Token> {
+        if self.on.get() {
+            vec!["__usdPrimInfo".into()]
+        } else {
+            Vec::new()
+        }
+    }
+
+    fn get(&self, name: &moho::openusd::tf::Token) -> Option<moho::data_source::DataSource> {
+        use moho::data_source::retained::{container, value};
+        if !self.on.get() || name != "__usdPrimInfo" {
+            return None;
+        }
+        Some(container([
+            (
+                "niPrototypePath",
+                value(Value::PathVec(vec![p("/__Prototype_1")])),
+            ),
+            (
+                "niPrototypeIdentity",
+                value(Value::Token(moho::openusd::tf::Token::from("1"))),
+            ),
+        ]))
+    }
+}
+
+#[test]
+fn a_prim_that_stops_being_an_instance_is_dirtied() {
+    use moho::data_source::retained::RetainedContainer;
+    use moho::scene_index::testing::{Notice, RecordingObserver};
+    use moho::scene_index::{Prim, RetainedSceneIndex};
+
+    let input = RetainedSceneIndex::new();
+    let a = Rc::new(Switchable {
+        on: std::cell::Cell::new(true),
+    });
+    let b = Rc::new(Switchable {
+        on: std::cell::Cell::new(true),
+    });
+    input.add_prims([
+        (
+            p("/__Prototype_1/geo"),
+            Prim::new("mesh", RetainedContainer::default().into_handle()),
+        ),
+        (p("/a"), Prim::new("", a.clone())),
+        (p("/b"), Prim::new("", b)),
+    ]);
+    let index = NativeInstancingSceneIndex::new(input.clone());
+    assert!(read(index.as_ref(), &p("/a"), "instance/instancer").is_some());
+    let recorder = RecordingObserver::on(index.as_ref());
+
+    a.on.set(false);
+    input.dirty_prims([(p("/a"), Locator::parse("__usdPrimInfo").into())]);
+    let notices = recorder.take();
+    assert!(
+        notices.iter().any(|n| matches!(n, Notice::Dirtied(d) if d.path == p("/a") && d.locators.contains(&Locator::parse("instance")))),
+        "{notices:?}"
+    );
+    assert!(read(index.as_ref(), &p("/a"), "instance/instancer").is_none());
+}

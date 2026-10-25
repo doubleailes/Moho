@@ -378,7 +378,7 @@ impl NativeInstancingSceneIndex {
     fn resync(&self, old: Option<Rc<Model>>) {
         let new = self.model();
         let mut removed: Vec<Removed> = Vec::new();
-        if let Some(old) = old {
+        if let Some(old) = &old {
             for root in old.directories.get(&sdf::Path::abs_root()).into_iter().flatten() {
                 removed.push(Removed { path: root.clone() });
             }
@@ -393,10 +393,14 @@ impl NativeInstancingSceneIndex {
             .collect();
         self.observers.send_removed(self, &removed);
         self.observers.send_added(self, &added);
-        // Instances gained or lost their `instance` data.
-        let instances: Vec<Dirtied> = new
-            .instance_of
-            .keys()
+        // Instances gained or lost their `instance` data: the old instances
+        // and the new.
+        let mut paths: BTreeSet<&sdf::Path> = new.instance_of.keys().collect();
+        if let Some(old) = &old {
+            paths.extend(old.instance_of.keys());
+        }
+        let instances: Vec<Dirtied> = paths
+            .into_iter()
             .filter(|p| !is_propagated(p))
             .map(|path| Dirtied {
                 path: path.clone(),
