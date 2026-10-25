@@ -19,3 +19,6 @@ pub use native_instancing::NativeInstancingSceneIndex;
 pub mod point_instancing;
 
 pub use point_instancing::PointInstancingSceneIndex;
+pub mod render_settings;
+
+pub use render_settings::RenderSettingsFlatteningSceneIndex;
