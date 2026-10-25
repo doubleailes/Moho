@@ -37,7 +37,7 @@ use std::rc::{Rc, Weak};
 
 use openusd::sdf;
 use openusd::tf::Token;
-use openusd::usd::{self, PrimPredicate, Stage, StageBuilder, StageSinkId, TimeCode};
+use openusd::usd::{self, PrimPredicate, PrimStatus, Stage, StageBuilder, StageSinkId, TimeCode};
 
 use crate::data_source::{Container, DataSource};
 use crate::locator::{Locator, LocatorSet};
@@ -142,6 +142,9 @@ pub struct StageSceneIndex {
     populated: RefCell<BTreeSet<sdf::Path>>,
     /// Collection membership queries, until the stage changes.
     memberships: RefCell<HashMap<(sdf::Path, String), Option<usd::MembershipQuery>>>,
+    /// Whether unloaded prims are prims of the index (UsdImaging's
+    /// `includeUnloadedPrims`).
+    include_unloaded: Cell<bool>,
     observers: Observers,
 }
 
@@ -160,8 +163,28 @@ impl StageSceneIndex {
             cache: RefCell::new(HashMap::new()),
             populated: RefCell::new(BTreeSet::new()),
             memberships: RefCell::new(HashMap::new()),
+            include_unloaded: Cell::new(false),
             observers: Observers::default(),
         })
+    }
+
+    /// Makes unloaded prims (a payload's root, without what the payload
+    /// brings) prims of the index, as UsdImaging's `includeUnloadedPrims`
+    /// option does. A streamed scene's `LoadNone` input uses it, so that each
+    /// chunk's root stays when the chunk is dropped. Set it before
+    /// [`set_stage`](Self::set_stage).
+    pub fn set_include_unloaded_prims(&self, include: bool) {
+        self.include_unloaded.set(include);
+    }
+
+    /// The traversal predicate: active, defined, not abstract, and loaded
+    /// unless unloaded prims are included.
+    fn predicate(&self) -> PrimPredicate {
+        if self.include_unloaded.get() {
+            PrimPredicate::new(PrimStatus::ACTIVE | PrimStatus::DEFINED, PrimStatus::ABSTRACT)
+        } else {
+            PrimPredicate::DEFAULT
+        }
     }
 
     /// The stage being read, if any.
@@ -208,7 +231,7 @@ impl StageSceneIndex {
         if root.is_abs_root() {
             // A traversal error leaves the prims found so far: the index
             // shows what the stage could compose.
-            let _ = stage.traverse(PrimPredicate::DEFAULT, |path| paths.push(path.clone()));
+            let _ = stage.traverse(self.predicate(), |path| paths.push(path.clone()));
             // Then the prototypes, which the traversal composes by visiting
             // their instances: each prototype's subtree may hold nested
             // instances, registering more prototypes, until none is new.
@@ -225,7 +248,7 @@ impl StageSceneIndex {
                 }
                 for prototype in fresh {
                     if let Ok(prim) = stage.prim(&prototype)
-                        && let Ok(range) = prim.filtered_subtree(PrimPredicate::DEFAULT)
+                        && let Ok(range) = prim.filtered_subtree(self.predicate())
                     {
                         paths.extend(range.filter_map(Result::ok).map(|p| p.path().clone()));
                     }
@@ -234,7 +257,7 @@ impl StageSceneIndex {
             }
         } else if self.prim(root).is_defined()
             && let Ok(start) = stage.prim(root)
-            && let Ok(range) = start.filtered_subtree(PrimPredicate::DEFAULT)
+            && let Ok(range) = start.filtered_subtree(self.predicate())
         {
             paths.extend(range.filter_map(Result::ok).map(|p| p.path().clone()));
         }
@@ -387,8 +410,8 @@ impl StageSceneIndex {
     }
 
     /// Whether the stage exposes `path` as a prim of this index.
-    fn exposes(stage: &Stage, path: &sdf::Path) -> bool {
-        if !stage.prim_matches(path, PrimPredicate::DEFAULT).unwrap_or(false) {
+    fn exposes(stage: &Stage, path: &sdf::Path, predicate: PrimPredicate) -> bool {
+        if !stage.prim_matches(path, predicate).unwrap_or(false) {
             return false;
         }
         // Inside a native instance: the instancing filter exposes those.
@@ -406,7 +429,7 @@ impl StageSceneIndex {
             let adapters = self.adapters.for_prim("", &[]);
             return Prim::new(Token::default(), Rc::new(PrimContainer { ctx, adapters }));
         }
-        if !Self::exposes(stage, path) {
+        if !Self::exposes(stage, path, self.predicate()) {
             return Prim::undefined();
         }
         let Some(usd_prim) = ctx.prim() else {
@@ -470,7 +493,7 @@ impl SceneIndex for StageSceneIndex {
         let mut children: Vec<sdf::Path> = stage
             .prim(path)
             .ok()
-            .and_then(|p| p.filtered_children(PrimPredicate::DEFAULT).ok())
+            .and_then(|p| p.filtered_children(self.predicate()).ok())
             .map(|children| children.iter().map(|c| c.path().clone()).collect())
             .unwrap_or_default();
         if path.is_abs_root() {

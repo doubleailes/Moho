@@ -70,7 +70,7 @@ read at `68a867a` and recorded in `docs/openusd-notes.md` in the same task.
 ## 11. The standard chain and streaming
 
 - [x] 11.1 Add `moho::chain::standard(stage_index)`: native instancing, point instancing, flattening, material binding resolving, light linking and render settings flattening, in that order (design D4). Verify on an end-to-end fixture with every family: each value read through the chain equals openusd's resolved value (the world transform, inherited visibility and the resolved binding included), and an edit to each family dirties exactly its locators through the chain.
-- [ ] 11.2 Verify streaming as S0 decided, on `crates/moho-spike`'s generated fixture: a merging index over a `LoadNone` scene input and the eight chunk inputs, each a standard chain, exposes the same prims and values as one standard chain over the fully loaded stage. Removing a chunk notifies its payload contents removed, while its root stays from the scene input.
+- [x] 11.2 Verify streaming as S0 decided, on `crates/moho-spike`'s generated fixture: a merging index over a `LoadNone` scene input and the eight chunk inputs, each a standard chain, exposes the same prims and values as one standard chain over the fully loaded stage. Removing a chunk notifies its payload contents removed, while its root stays from the scene input.
 
 ## 12. Docs and wrap-up
 
