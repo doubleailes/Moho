@@ -177,3 +177,129 @@ impl SubdivisionTagsSchema {
         member_value(&self.0, tokens::mesh::CREASE_SHARPNESSES).and_then(as_floats)
     }
 }
+
+/// `HdPrimvarsSchema`: a prim's primvars by name.
+pub struct PrimvarsSchema(ContainerHandle);
+
+impl PrimvarsSchema {
+    pub fn get(prim: &ContainerHandle) -> Option<Self> {
+        member_container(prim, tokens::primvars::PRIMVARS).map(Self)
+    }
+
+    /// The names of the prim's primvars.
+    pub fn names(&self) -> Vec<Token> {
+        self.0.names()
+    }
+
+    /// The primvar `name`.
+    pub fn primvar(&self, name: &str) -> Option<PrimvarSchema> {
+        member_container(&self.0, name).map(PrimvarSchema)
+    }
+}
+
+/// `HdPrimvarSchema`: one primvar.
+pub struct PrimvarSchema(ContainerHandle);
+
+impl PrimvarSchema {
+    /// The value of an unindexed primvar.
+    pub fn primvar_value(&self) -> Option<SampledHandle> {
+        member_sampled(&self.0, tokens::primvars::PRIMVAR_VALUE)
+    }
+
+    /// The values of an indexed primvar, before its indices apply.
+    pub fn indexed_primvar_value(&self) -> Option<SampledHandle> {
+        member_sampled(&self.0, tokens::primvars::INDEXED_PRIMVAR_VALUE)
+    }
+
+    pub fn indices(&self) -> Option<Vec<i32>> {
+        member_value(&self.0, tokens::primvars::INDICES).and_then(as_ints)
+    }
+
+    pub fn interpolation(&self) -> Option<Token> {
+        member_value(&self.0, tokens::primvars::INTERPOLATION).and_then(as_token)
+    }
+
+    pub fn role(&self) -> Option<Token> {
+        member_value(&self.0, tokens::primvars::ROLE).and_then(as_token)
+    }
+
+    pub fn element_size(&self) -> Option<i32> {
+        match member_value(&self.0, tokens::primvars::ELEMENT_SIZE)? {
+            Value::Int(i) => Some(i),
+            _ => None,
+        }
+    }
+
+    pub fn color_space(&self) -> Option<Value> {
+        member_value(&self.0, tokens::primvars::COLOR_SPACE)
+    }
+
+    /// The value with its indices applied (Hydra's
+    /// `GetFlattenedPrimvarValue`), at the index's time plus `offset`: the
+    /// plain value of an unindexed primvar, else, for each index, the
+    /// `elementSize` values it selects. `None` when an index is out of
+    /// range.
+    pub fn flattened_value(&self, offset: f32) -> Option<Value> {
+        if let Some(value) = self.primvar_value() {
+            return value.value(offset);
+        }
+        let values = self.indexed_primvar_value()?.value(offset)?;
+        let indices = member_sampled(&self.0, tokens::primvars::INDICES)?
+            .value(offset)
+            .and_then(as_ints)?;
+        let size = usize::try_from(self.element_size().unwrap_or(1)).ok()?.max(1);
+        gather(values, &indices, size)
+    }
+}
+
+/// `values` gathered through `indices`, `size` elements per index.
+fn gather(values: Value, indices: &[i32], size: usize) -> Option<Value> {
+    fn pick<T: Clone>(v: &[T], indices: &[i32], size: usize) -> Option<Vec<T>> {
+        let mut out = Vec::with_capacity(indices.len() * size);
+        for &i in indices {
+            let start = usize::try_from(i).ok()? * size;
+            out.extend_from_slice(v.get(start..start + size)?);
+        }
+        Some(out)
+    }
+    macro_rules! gather {
+        ($($variant:ident),*) => {
+            match values {
+                $(Value::$variant(v) => pick(&v, indices, size).map(Value::$variant),)*
+                other => Some(other),
+            }
+        };
+    }
+    gather!(
+        BoolVec,
+        UcharVec,
+        IntVec,
+        UintVec,
+        Int64Vec,
+        Uint64Vec,
+        HalfVec,
+        FloatVec,
+        DoubleVec,
+        StringVec,
+        TokenVec,
+        AssetPathVec,
+        QuathVec,
+        QuatfVec,
+        QuatdVec,
+        Vec2hVec,
+        Vec2fVec,
+        Vec2dVec,
+        Vec2iVec,
+        Vec3hVec,
+        Vec3fVec,
+        Vec3dVec,
+        Vec3iVec,
+        Vec4hVec,
+        Vec4fVec,
+        Vec4dVec,
+        Vec4iVec,
+        Matrix2dVec,
+        Matrix3dVec,
+        Matrix4dVec
+    )
+}

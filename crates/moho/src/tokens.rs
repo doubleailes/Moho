@@ -97,3 +97,24 @@ pub mod mesh {
     pub const CREASE_LENGTHS: &str = "creaseLengths";
     pub const CREASE_SHARPNESSES: &str = "creaseSharpnesses";
 }
+
+/// `HdPrimvarsSchema` and `HdPrimvarSchema`.
+pub mod primvars {
+    pub const PRIMVARS: &str = "primvars";
+    pub const PRIMVAR_VALUE: &str = "primvarValue";
+    pub const INDEXED_PRIMVAR_VALUE: &str = "indexedPrimvarValue";
+    pub const INDICES: &str = "indices";
+    pub const INTERPOLATION: &str = "interpolation";
+    pub const ROLE: &str = "role";
+    pub const ELEMENT_SIZE: &str = "elementSize";
+    pub const COLOR_SPACE: &str = "colorSpace";
+
+    pub const POINTS: &str = "points";
+    pub const NORMALS: &str = "normals";
+    pub const VELOCITIES: &str = "velocities";
+    pub const ACCELERATIONS: &str = "accelerations";
+    pub const WIDTHS: &str = "widths";
+
+    pub const CONSTANT: &str = "constant";
+    pub const VERTEX: &str = "vertex";
+}

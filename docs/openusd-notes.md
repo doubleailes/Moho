@@ -144,6 +144,13 @@ the root edit target (`crates/moho-spike/tests/probe.rs` asserts all of it):
   `time_samples()` (the ops' unioned samples). The query fixes the op list
   when built; Moho builds one per read. `Xformable::affects_transform(name)`
   is C++ `IsTransformationAffectedByAttrNamed`.
+- `PrimvarsAPI::from_prim_unchecked(Prim).primvars_with_values()` (authored
+  or fallback; `:indices` attributes are not primvars). `Primvar`:
+  `primvar_name()`, `interpolation_token()` (fallback `constant`),
+  `element_size()` (fallback 1), `is_indexed()`, `indices_attr()`,
+  `flattened::<Value>(time)` (C++ `ComputeFlattened`). `Attribute::role() ->
+  Result<Option<sdf::Role>>` gives the Hydra role. `Prim::is_a("PointBased")`
+  and `is_a("Curves")` select the plain attributes Hydra reads as primvars.
 
 ## Gaps
 
