@@ -9,7 +9,9 @@ edits become notices only when updates are applied.
 ### Requirement: Built empty, then given a stage
 A stage scene index SHALL start empty. Setting a stage SHALL remove every
 prim it held, then add every prim of the new stage that the default
-traversal reaches (active, loaded, defined, not abstract), with its type. It
+traversal reaches (active, loaded, defined, not abstract), with its type. Built to
+include unloaded prims (UsdImaging's `includeUnloadedPrims`), it SHALL also
+expose each unloaded payload's root, without what the payload brings. It
 SHALL read whatever load set and population mask the stage was opened with,
 and SHALL never load or unload anything itself.
 
@@ -20,6 +22,10 @@ and SHALL never load or unload anything itself.
 #### Scenario: Replacing the stage
 - **WHEN** another stage is set
 - **THEN** observers are notified of the old prims removed before the new prims are added
+
+#### Scenario: Unloaded prims included
+- **WHEN** an index that includes unloaded prims is given a stage opened `LoadNone`
+- **THEN** each element carrying a payload is a prim of the index, with none of the payload's prims beneath it
 
 #### Scenario: A masked stage
 - **WHEN** the stage was opened with a population mask of `/world/a`

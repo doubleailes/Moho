@@ -11,5 +11,8 @@ repository.workspace = true
 openusd.workspace = true
 openusd-schemas = { workspace = true, features = ["geom", "lux", "render", "shade", "vol"] }
 
+[dev-dependencies]
+moho-spike = { path = "../moho-spike" }
+
 [lints]
 workspace = true

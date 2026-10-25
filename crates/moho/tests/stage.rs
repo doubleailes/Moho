@@ -115,3 +115,29 @@ fn instance_contents_are_hidden() {
     assert!(!index.prim(&p("/inst/geo")).is_defined());
     assert!(index.children(&p("/inst")).is_empty());
 }
+
+#[test]
+fn unloaded_prims_included() {
+    let dir = TempDir::new().unwrap();
+    dir.write("element.usda", "#usda 1.0\n(\n    defaultPrim = \"element\"\n)\ndef Xform \"element\"\n{\n    def Mesh \"geo\"\n    {\n    }\n}\n");
+    let root = dir.write(
+        "root.usda",
+        "#usda 1.0\ndef Xform \"world\"\n{\n    def Xform \"elem\" (\n        payload = @./element.usda@\n    )\n    {\n    }\n}\n",
+    );
+    let open_unloaded = || {
+        moho::stage::stage_builder()
+            .load(moho::openusd::usd::InitialLoadSet::LoadNone)
+            .open(root.to_str().unwrap())
+            .unwrap()
+    };
+    let loaded_only = StageSceneIndex::new();
+    loaded_only.set_stage(open_unloaded());
+    assert!(!loaded_only.prim(&p("/world/elem")).is_defined());
+
+    let with_unloaded = StageSceneIndex::new();
+    with_unloaded.set_include_unloaded_prims(true);
+    with_unloaded.set_stage(open_unloaded());
+    assert!(with_unloaded.prim(&p("/world/elem")).is_defined());
+    assert!(!with_unloaded.prim(&p("/world/elem/geo")).is_defined());
+    assert!(with_unloaded.children(&p("/world/elem")).is_empty());
+}

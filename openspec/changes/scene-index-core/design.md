@@ -118,6 +118,10 @@ The index follows `UsdImagingStageSceneIndex`.
   `apply_pending_updates()`.
 - `set_stage` removes everything and populates by the default traversal.
   Instances are traversed as prims; their content comes from D5.
+- `set_include_unloaded_prims(true)` drops the *loaded* requirement, as
+  UsdImaging's `includeUnloadedPrims` option does. A streamed scene's
+  `LoadNone` scene input uses it, so each chunk's root stays in the merged
+  index when its chunk input is removed.
 - Stages must carry openusd-schemas' registry, or schema fallbacks and typed
   views are missing (`docs/openusd-notes.md`). `moho::stage::stage_builder()`
   opens stages with it; the index reads whatever stage it is given.
