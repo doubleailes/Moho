@@ -94,7 +94,10 @@ under a `MergingSceneIndex`, each chunk a `chain::input` over its masked
 It reads every data source of every prim down to its leaves, generic data
 included, so it is an upper bound on what a consumer reads, not (B)'s read
 set. Its digest hashes index data; `crates/moho-spike/tests/strategy.rs`
-checks that it equals an index read of the fully loaded stage.
+checks that it equals an index read of the fully loaded stage. The two agree
+when no light links across chunks: (D) reads each chunk with only that
+chunk's lights mounted (beside the scene input's), as streaming gives a
+consumer.
 
 One run of (D), (A) and (B) on Moana, same machine, openusd `68a867a`, Moho
 `5574673` (`scripts/streaming-spike.sh --skip-c --with-d`; raw output in

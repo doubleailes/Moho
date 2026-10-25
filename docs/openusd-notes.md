@@ -265,6 +265,11 @@ the root edit target (`crates/moho-spike/tests/probe.rs` asserts all of it):
   identifiers (`stage/instancing.rs`).
 - `prim_stack()` of a prototype prim is empty (C++ `GetPrimStack` returns the
   prototype's specs).
+- `CollectionEvaluator::build` is `pub(super)`: an expression can only be
+  compiled against the stage of the collection that owns it
+  (`MembershipQuery`). Light linking after a merge, whose lights and
+  receivers sit on different input stages, therefore judges expressions
+  without predicates (`PathExpressionEval` with an empty library).
 - No `SdfPath::MakeRelativePath`: the prim origin's prototype-relative scene
   path (`stage/prim_origin.rs`) is built from the path's text, parsed back
   with `sdf::Path::new`, which accepts relative paths and `.`.
