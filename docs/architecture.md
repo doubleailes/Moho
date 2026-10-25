@@ -12,8 +12,9 @@ it, and Crust (the path tracer) and Obsidian (the GPU viewport) consume it.
 ```
 
 The program that introduces Moho is planned in Mantle's OpenSpec change
-`scene-index` (`doubleailes/mantle`, `openspec/changes/scene-index/`). This
-page records the decisions that bind Moho itself.
+`scene-index` (`doubleailes/mantle`, archived in
+`openspec/changes/archive/2026-10-25-scene-index/`). This page records the
+decisions that bind Moho itself.
 
 ## Model (Hydra 2.0)
 
