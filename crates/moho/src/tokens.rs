@@ -69,3 +69,10 @@ pub mod scene_globals {
     pub const METERS_PER_UNIT: &str = "metersPerUnit";
     pub const UP_AXIS: &str = "upAxis";
 }
+
+/// `HdXformSchema`.
+pub mod xform {
+    pub const XFORM: &str = "xform";
+    pub const MATRIX: &str = "matrix";
+    pub const RESET_XFORM_STACK: &str = "resetXformStack";
+}

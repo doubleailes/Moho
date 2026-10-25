@@ -74,6 +74,7 @@ impl AdapterRegistry {
         let mut registry = Self::empty();
         registry.add_base(Rc::new(crate::stage::generic::GenericAdapter));
         registry.add_base(Rc::new(crate::stage::globals::SceneGlobalsAdapter));
+        registry.add_base(Rc::new(crate::stage::xform::XformAdapter));
         for (usd, hydra) in USD_TO_HYDRA_TYPES {
             registry.set_type(usd, Rc::new(Typed(Token::from(*hydra))));
         }

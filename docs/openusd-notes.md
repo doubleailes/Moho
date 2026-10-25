@@ -134,6 +134,17 @@ the root edit target (`crates/moho-spike/tests/probe.rs` asserts all of it):
 - `sdf::Value` has no single-path variant; Moho holds one path as a
   one-element `Value::PathVec`.
 
+## Geometry schemas (S1)
+
+- `openusd_schemas::geom::XformQuery::for_prim(&Prim) -> Result<XformQuery>`
+  (the empty query for a prim that is not Xformable): `local_transform(time)
+  -> Result<gf::Mat4d, SchemaError>` (row vectors, the last op most local),
+  `resets_xform_stack()`, `transform_might_have_effect()` (false for no ops
+  or a lone op beside its inverse), `transform_might_be_time_varying()`,
+  `time_samples()` (the ops' unioned samples). The query fixes the op list
+  when built; Moho builds one per read. `Xformable::affects_transform(name)`
+  is C++ `IsTransformationAffectedByAttrNamed`.
+
 ## Gaps
 
 - Splines (`Ts`): a `.spline` block only round-trips as a dictionary. There
