@@ -38,15 +38,27 @@ impl Adapter for GenericAdapter {
     }
 
     fn invalidate(&self, ctx: &PrimContext, name: &str) -> LocatorSet {
-        let is_relationship = ctx
-            .prim()
-            .is_some_and(|p| p.relationship(name).is_defined().unwrap_or(false));
-        let container = if is_relationship {
-            t::RELATIONSHIPS
-        } else {
-            t::ATTRIBUTES
+        let prim = ctx.prim();
+        let defined = |relationship: bool| {
+            prim.as_ref().is_some_and(|p| {
+                if relationship {
+                    p.relationship(name).is_defined().unwrap_or(false)
+                } else {
+                    p.attribute(name).is_defined().unwrap_or(false)
+                }
+            })
         };
-        LocatorSet::from(Locator::new([container, name]))
+        let mut locators = LocatorSet::new();
+        let (attribute, relationship) = (defined(false), defined(true));
+        // A property no longer on the prim was removed: either kind may
+        // have held the name, so both entries are dirtied.
+        if attribute || !relationship {
+            locators.insert(Locator::new([t::ATTRIBUTES, name]));
+        }
+        if relationship || !attribute {
+            locators.insert(Locator::new([t::RELATIONSHIPS, name]));
+        }
+        locators
     }
 }
 
