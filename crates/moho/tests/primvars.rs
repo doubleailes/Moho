@@ -187,6 +187,27 @@ fn a_primvar_edit_dirties_that_primvar() {
     assert!(!d.locators.intersects(&Locator::parse("primvars/points")));
 }
 
+/// Interpolation is metadata on the primvar's attribute, not a property of
+/// its own: its change arrives on `primvars:displayColor`.
+#[test]
+fn a_primvar_metadata_edit_dirties_that_primvar() {
+    let (_dir, index) = setup();
+    let recorder = RecordingObserver::on(index.as_ref());
+    index
+        .stage()
+        .unwrap()
+        .attribute("/world/geo.primvars:displayColor")
+        .unwrap()
+        .set_metadata("interpolation", Token::from("uniform"))
+        .unwrap();
+    index.apply_pending_updates();
+    let notices = recorder.take();
+    assert!(
+        notices.iter().any(|n| matches!(n, Notice::Dirtied(d) if d.path == p("/world/geo") && d.locators.contains(&Locator::parse("primvars/displayColor/interpolation")))),
+        "{notices:?}"
+    );
+}
+
 #[test]
 fn a_time_change_dirties_animated_points_alone() {
     let (_dir, index) = setup();
