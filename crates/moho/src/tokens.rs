@@ -149,3 +149,17 @@ pub mod curves {
     pub const RANGES: &str = "ranges";
     pub const POINT_WEIGHTS: &str = "pointWeights";
 }
+
+/// The implicit shape schemas (`HdSphereSchema`, `HdCubeSchema`, ...): each
+/// schema token equals its prim type.
+pub mod implicit {
+    pub const RADIUS: &str = "radius";
+    pub const RADIUS_TOP: &str = "radiusTop";
+    pub const RADIUS_BOTTOM: &str = "radiusBottom";
+    pub const HEIGHT: &str = "height";
+    pub const SIZE: &str = "size";
+    pub const AXIS: &str = "axis";
+    pub const WIDTH: &str = "width";
+    pub const LENGTH: &str = "length";
+    pub const DOUBLE_SIDED: &str = "doubleSided";
+}

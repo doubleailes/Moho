@@ -27,7 +27,7 @@ read at `68a867a` and recorded in `docs/openusd-notes.md` in the same task.
 - [x] 3.3 Add primvars (`PrimvarsSchema`, `PrimvarSchema`): authored `primvars:*`; `points`, `normals`, `velocities` and `accelerations` on point-based prims; `widths` on curves. Include indexed values and indices, interpolation, role, element size, colour space, the flattened value, and `primvars:normals` over `normals`. Verify the indexed-UV and points scenarios, parity of every primvar on the fixture, that a `primvars:displayColor` edit dirties `primvars/displayColor`, and that a time change on a mesh with sampled points dirties `primvars/points` alone (the `stage-scene-index` "one animated mesh" scenario, whose locator needs the primvar schema).
 - [x] 3.4 Add visibility, purpose and extent as in the spec (`invisible` → false, authored purpose inheritable, `default` → `geometry`, extent when authored). Verify each scenario and its invalidation.
 - [x] 3.5 Add basis curves and NURBS curves (topology, `type`, `basis`, `wrap`, `order`, `knots`, `ranges`, `pointWeights`, and `widths` as a primvar). Verify parity on a fixture with cubic B-spline hair and a NURBS curve.
-- [ ] 3.6 Add the implicit shapes (`sphere`, `cube`, `cone`, `cylinder`, `capsule` and `plane`, including the `_1` variants' top and bottom radii), never converted to meshes. Verify parity on a fixture with one of each, including `Cylinder_1` and `Capsule_1`.
+- [x] 3.6 Add the implicit shapes (`sphere`, `cube`, `cone`, `cylinder`, `capsule` and `plane`, including the `_1` variants' top and bottom radii), never converted to meshes. Verify parity on a fixture with one of each, including `Cylinder_1` and `Capsule_1`.
 
 ## 4. Filters
 

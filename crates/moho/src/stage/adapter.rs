@@ -83,6 +83,21 @@ impl AdapterRegistry {
         registry.set_type("Mesh", Rc::new(crate::stage::mesh::MeshAdapter));
         registry.set_type("BasisCurves", Rc::new(crate::stage::curves::BASIS_CURVES));
         registry.set_type("NurbsCurves", Rc::new(crate::stage::curves::NURBS_CURVES));
+        {
+            use crate::stage::implicit::*;
+            for (usd, adapter) in [
+                ("Sphere", SPHERE),
+                ("Cube", CUBE),
+                ("Cone", CONE),
+                ("Cylinder", CYLINDER),
+                ("Cylinder_1", CYLINDER_1),
+                ("Capsule", CAPSULE),
+                ("Capsule_1", CAPSULE_1),
+                ("Plane", PLANE),
+            ] {
+                registry.set_type(usd, Rc::new(adapter));
+            }
+        }
         registry
     }
 
