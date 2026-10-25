@@ -9,6 +9,8 @@
 //! exposed here (the native-instancing filter does that).
 
 pub mod adapter;
+pub mod attribute;
+pub mod generic;
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;

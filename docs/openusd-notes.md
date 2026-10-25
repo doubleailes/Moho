@@ -27,8 +27,16 @@ these before every bump, and add any API Moho starts relying on.
 - `Attribute::time_samples(&self) -> Result<Option<sdf::TimeSampleMap>>`
   (`None` for clip-driven values), `time_sample_times(&self) -> Result<Vec<f64>>`,
   and `time_samples_in(&self, interval: impl Into<gf::Interval>) ->
-  Result<Vec<f64>>`. The last also returns the samples bracketing the
-  interval's start, which is what motion-blur sampling needs.
+  Result<Vec<f64>>`. **Correction (S1):** at `68a867a`, `time_samples_in`
+  keeps only the samples inside the interval (its source notes C++ also
+  stops at the bracketing sample). Moho takes `time_sample_times` and adds
+  the bracketing samples itself (`data_source::bracketing_sample_times`).
+- Generic reads (S1): `Prim::attributes()` lists the composed attributes,
+  the schema's declared ones included; `Attribute::is_defined`,
+  `has_authored_value`, `has_authored_metadata(key)`, `metadata::<Value>(key)`
+  (raw: `colorSpace` is a `Value::String`), `type_name() -> Option<ValueTypeName>`
+  (`as_token()`), `connections()`; `Prim::relationships()`,
+  `Relationship::targets()` and `forwarded_targets()`.
 - `Stage::start_time_code`, `end_time_code` and
   `has_authored_time_code_range` read the root and session layers only, as in
   USD.
