@@ -258,3 +258,92 @@ fn light_links_reach_across_chunks() {
     );
     assert!(categories(terminal.as_ref(), "/world/b/lit").is_empty());
 }
+
+/// `/world/b/geo` is bound to a material inside `/world/a`'s payload.
+fn bound_across_chunks() -> (TempDir, std::path::PathBuf) {
+    let dir = TempDir::new().unwrap();
+    dir.write(
+        "a.usda",
+        r#"#usda 1.0
+(
+    defaultPrim = "a"
+)
+def Xform "a"
+{
+    def Scope "Looks"
+    {
+        def Material "mat"
+        {
+            token outputs:surface.connect = </a/Looks/mat/surf.outputs:surface>
+            def Shader "surf"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                float inputs:roughness = 0.25
+                token outputs:surface
+            }
+        }
+    }
+}
+"#,
+    );
+    dir.write(
+        "b.usda",
+        "#usda 1.0\n(\n    defaultPrim = \"b\"\n)\ndef Xform \"b\"\n{\n    def Mesh \"geo\" (prepend apiSchemas = [\"MaterialBindingAPI\"])\n    {\n    }\n}\n",
+    );
+    let root = dir.write(
+        "root.usda",
+        r#"#usda 1.0
+def Xform "world"
+{
+    def "a" (prepend payload = @./a.usda@)
+    {
+    }
+    def "b" (prepend payload = @./b.usda@)
+    {
+        over "geo"
+        {
+            rel material:binding = </world/a/Looks/mat>
+        }
+    }
+}
+"#,
+    );
+    (dir, root)
+}
+
+#[test]
+fn a_side_input_resolves_a_material_from_another_chunk() {
+    let (_dir, root) = bound_across_chunks();
+    // Only chunk b is in.
+    let (merged, terminal, _chunks) = stream(&root, &["/world/b".to_owned()]);
+    let material = p("/world/a/Looks/mat");
+    assert!(!terminal.prim(&material).is_defined());
+    let missing = moho::streaming::unresolved(terminal.as_ref());
+    assert_eq!(
+        missing.into_iter().collect::<Vec<_>>(),
+        std::slice::from_ref(&material)
+    );
+
+    // The consumer adds a side input over a stage masked to it, weaker than
+    // the chunks and stronger than the scene input.
+    let side = input(open_masked(&root, &["/world/a/Looks/mat"]));
+    merged.insert_input_scene(1, side, material.clone());
+    assert_eq!(terminal.prim(&material).ty, "material");
+    let roughness = terminal.prim(&material).data.and_then(|d| {
+        moho::data_source::locate(
+            &d,
+            &moho::locator::Locator::new([
+                "material",
+                "",
+                "nodes",
+                "surf",
+                "parameters",
+                "roughness",
+                "value",
+            ]),
+        )
+        .and_then(|s| s.value())
+    });
+    assert_eq!(roughness, Some(moho::openusd::sdf::Value::Float(0.25)));
+    assert!(moho::streaming::unresolved(terminal.as_ref()).is_empty());
+}

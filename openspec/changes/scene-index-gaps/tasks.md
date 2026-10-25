@@ -5,7 +5,7 @@
 
 ## 2. Prims outside the loaded inputs (M2)
 
-- [ ] 2.1 Add `streaming::unresolved(index)`: materials named by resolved bindings and network nodes outside held materials, that the index does not hold. Verify with a fixture binding a mesh in one chunk to a material in another chunk's payload: the material is listed; after adding an input over a stage masked to it, its network reads and nothing is listed.
+- [x] 2.1 Add `streaming::unresolved(index)`: materials named by resolved bindings and network nodes outside held materials, that the index does not hold. Verify with a fixture binding a mesh in one chunk to a material in another chunk's payload: the material is listed; after adding an input over a stage masked to it, its network reads and nothing is listed.
 
 ## 3. Stage metadata as generic data (M3)
 
