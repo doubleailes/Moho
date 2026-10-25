@@ -96,3 +96,35 @@ fn instanced_chunks_read_the_same_data() {
     }
     assert!(digests.iter().all(|(_, d)| *d == digests[0].1), "{digests:?}");
 }
+
+/// (D) reads through a merged, streamed index what one index over the fully
+/// loaded stage exposes.
+#[test]
+fn strategy_d_equals_an_index_over_the_loaded_stage() {
+    use moho::openusd::usd::InitialLoadSet;
+
+    let dir = TempDir::new().unwrap();
+    let root = fixture::write(dir.path()).unwrap();
+    let scene = root.to_str().unwrap();
+    let mut chunk_events = 0;
+    let outcome = Strategy::D
+        .run(scene, &mut |phase| {
+            if let Phase::Chunk { read, .. } = phase {
+                chunk_events += 1;
+                assert!(read.prims >= fixture::PRIMS_PER_ELEMENT, "{read:?}");
+            }
+        })
+        .unwrap();
+    assert_eq!(chunk_events, fixture::ELEMENTS);
+    assert_eq!(outcome.digest.mismatches, 0);
+
+    let open = |load| moho::stage::stage_builder().load(load).open(scene).unwrap();
+    let chunks = moho_spike::chunks::stream_roots(&open(InitialLoadSet::LoadNone)).unwrap();
+    let full = moho::chain::standard(moho_spike::strategy::stage_index(
+        open(InitialLoadSet::LoadAll),
+        false,
+    ));
+    let reference = moho_spike::index::read_whole(full.as_ref(), &chunks);
+    assert_eq!(outcome.digest.value(), reference.value());
+    assert_eq!(outcome.digest.prims(), reference.prims());
+}

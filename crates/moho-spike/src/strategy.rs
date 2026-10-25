@@ -1,4 +1,4 @@
-//! The three ways of reading a stage chunk by chunk that the spike compares.
+//! The ways of reading a stage chunk by chunk that the spike compares.
 //!
 //! Each strategy reports its phases to an observer as they end (the stage
 //! opened, each chunk read, the last chunk unloaded), so the caller can time
@@ -26,6 +26,11 @@ pub enum Strategy {
     B,
     /// One stage with every payload loaded: the reference.
     C,
+    /// (B) read through Moho: a `LoadNone` scene input under a merging
+    /// index, each chunk a `chain::input` over its masked `LoadAll` stage,
+    /// added, read through `chain::merged` and removed in turn. Its digest
+    /// hashes index data, not raw reads (`index`).
+    D,
 }
 
 /// The end of a phase, as a strategy reports it.
@@ -59,6 +64,7 @@ impl Strategy {
             Strategy::C => run_c(scene, observe),
             Strategy::B => run_b(scene, observe),
             Strategy::A => run_a(scene, observe),
+            Strategy::D => run_d(scene, observe),
         }
     }
 }
@@ -128,6 +134,77 @@ fn run_b(scene: &str, observe: &mut dyn FnMut(Phase<'_>)) -> Result<Outcome> {
     })
 }
 
+/// A stage index over `stage`, at its start time code if it authors a range
+/// (as [`Reader`] reads), including unloaded prims for a scene input.
+pub fn stage_index(stage: Stage, include_unloaded: bool) -> std::rc::Rc<moho::stage::StageSceneIndex> {
+    let time = stage
+        .has_authored_time_code_range()
+        .then(|| openusd::usd::TimeCode::new(stage.start_time_code()));
+    let index = moho::stage::StageSceneIndex::new();
+    index.set_include_unloaded_prims(include_unloaded);
+    index.set_stage(stage);
+    if let Some(t) = time {
+        index.set_time(t);
+    }
+    index
+}
+
+fn open_moho(scene: &str, load: InitialLoadSet, mask: Option<&sdf::Path>) -> Result<Stage> {
+    let mut builder = moho::stage::stage_builder().load(load);
+    if let Some(path) = mask {
+        builder = builder.mask(StagePopulationMask::new([path.clone()])?);
+    }
+    Ok(builder.open(scene)?)
+}
+
+fn run_d(scene: &str, observe: &mut dyn FnMut(Phase<'_>)) -> Result<Outcome> {
+    let hierarchy = open_moho(scene, InitialLoadSet::LoadNone, None)?;
+    let chunks = chunks::stream_roots(&hierarchy)?;
+    if chunks.is_empty() {
+        drop(hierarchy);
+        let stage = open_moho(scene, InitialLoadSet::LoadAll, None)?;
+        let terminal = moho::chain::standard(stage_index(stage, false));
+        observe(Phase::Open {
+            chunks: 1,
+            streamed: false,
+        });
+        let root = sdf::Path::abs_root();
+        let mut digest = Digest::default();
+        let read = crate::index::read_chunk(terminal.as_ref(), &root, &mut digest);
+        observe(Phase::Chunk { path: &root, read });
+        return Ok(Outcome {
+            digest,
+            chunks: 1,
+            streamed: false,
+        });
+    }
+    observe(Phase::Open {
+        chunks: chunks.len(),
+        streamed: true,
+    });
+    let merged = moho::filter::MergingSceneIndex::new();
+    merged.add_input_scene(
+        moho::chain::input(stage_index(hierarchy, true)),
+        sdf::Path::abs_root(),
+    );
+    let terminal = moho::chain::merged(merged.clone());
+    let mut digest = Digest::default();
+    for chunk in &chunks {
+        let stage = open_moho(scene, InitialLoadSet::LoadAll, Some(chunk))?;
+        let input = moho::chain::input(stage_index(stage, false));
+        merged.insert_input_scene(0, input.clone(), chunk.clone());
+        let read = crate::index::read_chunk(terminal.as_ref(), chunk, &mut digest);
+        merged.remove_input_scene(&input);
+        drop(input);
+        observe(Phase::Chunk { path: chunk, read });
+    }
+    Ok(Outcome {
+        digest,
+        chunks: chunks.len(),
+        streamed: true,
+    })
+}
+
 fn run_a(scene: &str, observe: &mut dyn FnMut(Phase<'_>)) -> Result<Outcome> {
     let stage = open(scene, InitialLoadSet::LoadNone, None)?;
     let chunks = chunks::stream_roots(&stage)?;
@@ -168,7 +245,8 @@ impl FromStr for Strategy {
             "a" | "A" => Ok(Strategy::A),
             "b" | "B" => Ok(Strategy::B),
             "c" | "C" => Ok(Strategy::C),
-            other => Err(format!("unknown strategy `{other}`: expected a, b or c")),
+            "d" | "D" => Ok(Strategy::D),
+            other => Err(format!("unknown strategy `{other}`: expected a, b, c or d")),
         }
     }
 }
@@ -179,6 +257,7 @@ impl fmt::Display for Strategy {
             Strategy::A => "a",
             Strategy::B => "b",
             Strategy::C => "c",
+            Strategy::D => "d",
         })
     }
 }

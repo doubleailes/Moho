@@ -10,6 +10,7 @@ publish = false
 
 [dependencies]
 openusd.workspace = true
+moho = { path = "../moho" }
 
 [lints]
 workspace = true

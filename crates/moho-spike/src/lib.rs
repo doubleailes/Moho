@@ -6,7 +6,9 @@
 //! - **(A)** one stage opened `LoadNone`, each chunk loaded, read and unloaded;
 //! - **(B)** a `LoadNone` hierarchy stage, plus one `LoadAll` stage masked to
 //!   each chunk, opened, read and dropped in turn (Crust's import);
-//! - **(C)** one stage with everything loaded, the reference.
+//! - **(C)** one stage with everything loaded, the reference;
+//! - **(D)** (B) read through Moho: a merging index of input chains, with
+//!   light linking after the merge (`scene-index-gaps`, M5).
 //!
 //! Not published. Kept after S0 as a regression benchmark for S2.
 
@@ -14,6 +16,7 @@
 
 pub mod chunks;
 pub mod fixture;
+pub mod index;
 pub mod mem;
 pub mod probe;
 pub mod read;
