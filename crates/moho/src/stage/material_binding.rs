@@ -6,6 +6,7 @@
 
 use openusd::sdf::{self, Value};
 use openusd::tf::Token;
+use openusd::usd::{CollectionAPI, Stage};
 use openusd_schemas::shade::{BindingStrength, MATERIAL_PURPOSES, MaterialBindingAPI};
 
 use crate::data_source::DataSource;
@@ -30,8 +31,14 @@ fn path(path: &sdf::Path) -> DataSource {
     value(Value::PathVec(vec![path.clone()]))
 }
 
+/// The complete membership expression of the collection `name` on `prim`.
+fn membership_expression(stage: &Stage, prim: &sdf::Path, name: &str) -> Option<Value> {
+    let collection = CollectionAPI::from_prim_unchecked(stage.prim(prim).ok()?, name);
+    crate::stage::collection::complete_expression(&collection).map(Value::PathExpression)
+}
+
 /// One purpose's opinions on this prim, or `None` when it authors none.
-fn bindings(api: &MaterialBindingAPI, purpose: &str) -> Option<DataSource> {
+fn bindings(stage: &Stage, api: &MaterialBindingAPI, purpose: &str) -> Option<DataSource> {
     let direct = api.direct_binding(purpose).ok().flatten();
     let collections = api.collection_bindings(purpose).unwrap_or_default();
     if direct.is_none() && collections.is_empty() {
@@ -60,15 +67,22 @@ fn bindings(api: &MaterialBindingAPI, purpose: &str) -> Option<DataSource> {
                     (prim, name.to_owned())
                 })
                 .unwrap_or_else(|| (collection.clone(), String::new()));
-            container([
+            let mut entries = vec![
                 (t::COLLECTION_PRIM_PATH, path(&prim)),
-                (t::COLLECTION_NAME, value(Value::Token(Token::from(name)))),
+                (
+                    t::COLLECTION_NAME,
+                    value(Value::Token(Token::from(name.as_str()))),
+                ),
                 (t::MATERIAL_PATH, path(binding.material_path())),
                 (
                     t::BINDING_STRENGTH,
                     strength(binding.strength().unwrap_or_default()),
                 ),
-            ])
+            ];
+            if let Some(expression) = membership_expression(stage, &prim, &name) {
+                entries.push((t::MEMBERSHIP_EXPRESSION, value(expression)));
+            }
+            container(entries)
         });
         entries.push((
             t::COLLECTION_MATERIAL_BINDINGS,
@@ -96,13 +110,14 @@ impl Adapter for MaterialBindingAdapter {
         let api = api(ctx)?;
         let entries: Vec<(Token, DataSource)> = MATERIAL_PURPOSES
             .iter()
-            .filter_map(|purpose| bindings(&api, purpose).map(|b| (Token::from(*purpose), b)))
+            .filter_map(|purpose| bindings(&ctx.stage, &api, purpose).map(|b| (Token::from(*purpose), b)))
             .collect();
         Some(container(entries))
     }
 
     fn invalidate(&self, _ctx: &PrimContext, name: &str) -> LocatorSet {
-        if MaterialBindingAPI::owns_property(name) {
+        // A collection's membership decides which collection binding applies.
+        if MaterialBindingAPI::owns_property(name) || name.starts_with("collection:") {
             LocatorSet::from(Locator::new([t::USD_MATERIAL_BINDINGS]))
         } else {
             LocatorSet::new()

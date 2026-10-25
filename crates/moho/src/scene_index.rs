@@ -101,6 +101,16 @@ pub trait SceneIndex {
 /// A shared scene index handle.
 pub type SceneIndexHandle = Rc<dyn SceneIndex>;
 
+/// Answers whether a USD collection includes a path, for filters that
+/// resolve collection-based data (material bindings, light linking) without
+/// a stage of their own. `StageSceneIndex` answers through openusd's
+/// membership query, membership expressions and their predicates included.
+pub trait CollectionMembership {
+    /// Whether the collection `name` on `collection_prim` includes `path`,
+    /// or `None` when the collection cannot be read.
+    fn includes(&self, collection_prim: &sdf::Path, name: &str, path: &sdf::Path) -> Option<bool>;
+}
+
 /// The observers of one scene index, and the sending of notices to them.
 ///
 /// Sending copies the list first, so an observer may query the sender, or

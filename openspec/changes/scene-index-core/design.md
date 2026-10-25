@@ -240,6 +240,16 @@ sites (`prim_stack()`).
 - **Resolution** happens in the resolving filter, by Hydra's rules: the
   first `strongerThanDescendants` binding walking down wins, else the
   deepest; at one level, a collection binding beats a direct one.
+- **Membership without a stage.** Filters judge collection membership
+  through a `CollectionMembership` oracle, which `StageSceneIndex`
+  implements with openusd's membership query (predicates included). The
+  standard chain wires it in.
+  - **Fallback for chains without a stage:** each collection binding also
+    carries the collection's complete membership expression, evaluated
+    stage-free. It covers path patterns, not predicates.
+  - **Rule-based collections** become an expression through a port of C++
+    `UsdComputePathExpressionFromCollectionMembershipQueryRuleMap`, which
+    openusd lacks (an upstream candidate).
 
 ### D7. Render settings keep namespaced data
 
