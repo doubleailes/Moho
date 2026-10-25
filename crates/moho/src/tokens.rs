@@ -236,14 +236,14 @@ pub mod camera {
     pub const LINEAR_EXPOSURE_SCALE: &str = "linearExposureScale";
 }
 
-/// `UsdImagingUsdPrimInfoSchema` (`__usdPrimInfo`), plus Moho's stable
-/// prototype identity.
 /// `HdPrimOriginSchema`.
 pub mod prim_origin {
     pub const PRIM_ORIGIN: &str = "primOrigin";
     pub const SCENE_PATH: &str = "scenePath";
 }
 
+/// `UsdImagingUsdPrimInfoSchema` (`__usdPrimInfo`), plus Moho's stable
+/// prototype identity.
 pub mod usd_prim_info {
     pub const USD_PRIM_INFO: &str = "__usdPrimInfo";
     pub const NI_PROTOTYPE_PATH: &str = "niPrototypePath";
