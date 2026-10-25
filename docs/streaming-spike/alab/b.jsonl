@@ -1,0 +1,3 @@
+{"strategy":"b","phase":"open","chunks":1,"streamed":false,"wall_s":0.005598,"elapsed_s":0.005598,"rss_kib":6512,"hwm_kib":6512}
+{"strategy":"b","phase":"chunk","index":1,"path":"/","prims":12195,"errors":0,"prototype_prims":11970,"hash":"cf6f2bf74210a053","wall_s":40.086109,"elapsed_s":40.091707,"rss_kib":24972304,"hwm_kib":26035540}
+{"strategy":"b","phase":"total","scene":"/home/philippe.llerena/Workspace/samples/ALab/entry.usda","chunks":1,"streamed":false,"prims":12195,"errors":0,"mismatches":0,"digest":"b21308cc5ae9cdce","wall_s":41.072733,"rss_kib":1344060,"hwm_kib":26035540}

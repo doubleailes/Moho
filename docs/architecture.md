@@ -48,9 +48,14 @@ stage --> StageSceneIndex --> FlatteningSceneIndex --> (instancing, material res
           notices -> dirty
 ```
 
-`StageSceneIndex` observes its stage through openusd's `StageSink`, so any
-author of the stage (a Mantle mirror replaying `usd::Diff`s, or nothing at
-all for a file opened by `crust render`) produces the same notices.
+`StageSceneIndex` has `UsdImagingStageSceneIndex`'s shape: built empty
+(`new`), then `set_stage`, `set_time` and `apply_pending_updates`. It
+observes its stage through openusd's `StageSink`, so any author of the stage
+(a Mantle mirror replaying `usd::Diff`s, or nothing at all for a file opened
+by `crust render`) produces the same notices. Notices are queued and become
+added, removed and dirtied entries only in `apply_pending_updates`, as in
+Hydra. Several inputs combine under a `MergingSceneIndex`
+(`add_input_scene(index, root)`, `remove_input_scene`).
 
 ## Boundaries
 
@@ -59,9 +64,22 @@ all for a file opened by `crust render`) produces the same notices.
 - Moho is shaped to be offered upstream (as an `openusd-imaging` crate) once
   its API has settled.
 
-## Open
+## Streaming (decided in S0)
 
-- **Streaming (S0).** Crust bounds memory on Moana-scale scenes with one
-  population-masked stage per chunk. The spike measures that against a single
-  stage with payload `load_and_unload` per subtree pulled. The result fixes
-  `StageSceneIndex`'s constructor.
+Moho streams the way Crust does, with one population-masked `LoadAll` stage
+per chunk (Crust's `subtree_roots`, from 4 chunks up). It does so in Hydra's
+way, by composing standard indices rather than giving `StageSceneIndex` a
+streaming mode:
+
+- each chunk is a `StageSceneIndex` over its own masked stage;
+- a `MergingSceneIndex` combines them, and adding or removing an input adds
+  or removes that chunk's prims;
+- the consumer decides when a chunk comes and goes: an offline import adds,
+  pulls and removes each in turn, and a viewport keeps what it shows.
+
+Below 4 chunks, one stage index over one `LoadAll` stage serves the scene.
+
+Payload `load_and_unload` on a single stage was rejected. On Moana its peak
+was 2.56× the masked stages' (5.05 against 1.97 GiB), because unloading does
+not give back memory. The numbers, the notice probe and the reasoning are in
+`streaming-spike.md`.

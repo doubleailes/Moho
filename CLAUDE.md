@@ -22,9 +22,11 @@ repository are in `ROADMAP.md`.
 ## Layout
 
 ```
-crates/moho   the scene index (empty until S1; see ROADMAP.md)
-docs/         architecture.md, openusd-notes.md
-openspec/     OpenSpec changes and specs for this repository
+crates/moho        the scene index (empty until S1; see ROADMAP.md)
+crates/moho-spike  S0 streaming spike harness (unpublished; S2 benchmark)
+docs/              architecture.md, openusd-notes.md, streaming-spike.md
+scripts/           streaming-spike.sh (runs the spike's strategies on a scene)
+openspec/          OpenSpec changes and specs for this repository
 ```
 
 ## Commands
