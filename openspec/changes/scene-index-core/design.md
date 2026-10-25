@@ -307,9 +307,12 @@ reads anchors an unresolved relative asset path on the layer that authors it
 
 ## Open Questions
 
-- The exact identity that keys a stable native prototype (D5). It is
-  settled by the first instancing task against openusd's prim index API, and
-  recorded in `docs/openusd-notes.md`.
+- ~~The exact identity that keys a stable native prototype (D5).~~ Settled
+  by task 8.1. openusd's instancing key is crate-private and stage-local, and
+  a prototype prim's `prim_stack()` is empty. So the identity hashes the
+  instance's prim-stack sites outside its own local opinions (layer
+  identifier, spec path, offset) and its variant selections. It is equal
+  across chunk stages and the full stage. Both gaps are upstream candidates.
 - ~~Whether the native-instancing filter's binding hash also needs light
   linking categories.~~ Settled by the light linking task: no. Categories
   travel per instance in the instancer's `instanceCategories`, judged at each

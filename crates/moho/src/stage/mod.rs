@@ -17,6 +17,7 @@ pub mod generic;
 pub mod globals;
 pub mod imageable;
 pub mod implicit;
+pub mod instancing;
 pub mod light;
 pub mod material;
 pub mod material_binding;
