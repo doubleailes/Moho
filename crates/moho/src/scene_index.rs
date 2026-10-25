@@ -119,9 +119,12 @@ pub trait CollectionMembership {
 pub struct Observers(RefCell<Vec<Weak<dyn Observer>>>);
 
 impl Observers {
-    /// Registers `observer`.
+    /// Registers `observer`, once however often it is added.
     pub fn add(&self, observer: Weak<dyn Observer>) {
-        self.0.borrow_mut().push(observer);
+        let mut list = self.0.borrow_mut();
+        if !list.iter().any(|o| Weak::ptr_eq(o, &observer)) {
+            list.push(observer);
+        }
     }
 
     fn live(&self) -> Vec<Rc<dyn Observer>> {
