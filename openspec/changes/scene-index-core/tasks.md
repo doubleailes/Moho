@@ -8,7 +8,7 @@ read at `68a867a` and recorded in `docs/openusd-notes.md` in the same task.
 ## 1. The contract
 
 - [x] 1.1 Add `openusd-schemas` to `crates/moho` from the workspace (same git rev as openusd), and lay out the modules: `locator`, `data_source`, `scene_index`, `schema`, `stage`, `filter`, `chain` and `tokens`. Verify that `cargo build -p moho` passes and that `cargo tree -i openusd` shows a single openusd.
-- [ ] 1.2 Implement `Locator` and `LocatorSet` (design D1): prefix cover, `intersects`, and a set that stays minimal on insert. Verify with unit tests for the `scene-index` spec's locator scenarios, plus inserting, intersecting and replacing prefixes.
+- [x] 1.2 Implement `Locator` and `LocatorSet` (design D1): prefix cover, `intersects`, and a set that stays minimal on insert. Verify with unit tests for the `scene-index` spec's locator scenarios, plus inserting, intersecting and replacing prefixes.
 - [ ] 1.3 Implement data sources: `DataSource`, the container, vector and sampled traits on `Rc` handles, sampled values with `sample_times` (`None` when uniform), and retained (in-memory) data sources for tests and filters. Verify with unit tests that a container lists only the names it answers, and that a retained sampled value reports its sample times.
 - [ ] 1.4 Implement the `SceneIndex` and `Observer` traits with batched added, removed, dirtied and renamed entries; observers held weakly; and a `RetainedSceneIndex` (add, remove and dirty prims by hand), as Hydra has. Add a recording observer for tests. Verify with tests that a removal covers its subtree, a dirty entry is local, and an observer registered late sees only later notices.
 
