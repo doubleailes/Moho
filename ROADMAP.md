@@ -10,12 +10,17 @@ the steps that land in this repository or depend on it.
   stage, and streaming is one stage index per chunk under a
   `MergingSceneIndex` (`docs/streaming-spike.md`).
   `crates/moho-spike` stays as a regression benchmark for S2.
-- **S1: core.** Scene index traits, observers, data sources, locators,
-  `StageSceneIndex` (change notices, time, the time-varying set) and
-  `FlatteningSceneIndex`, with typed schemas for every family Crust imports:
-  mesh, xform, primvars, visibility, purpose, materials (UsdPreviewSurface,
-  MaterialX), lights and light linking, cameras, curves, implicit shapes,
-  instancers, volumes, render settings, products, vars and passes.
+- **S1: core (Moho side). Done** (OpenSpec change `scene-index-core`). Scene
+  index traits, observers, data sources, locators, `StageSceneIndex` (queued
+  notices, time, the time-varying set, generic attribute data in
+  `__usdAttributes`), the
+  flattening, merging, native and point instancing, material binding, light
+  linking and render settings filters, the standard chain
+  (`moho::chain::standard`), and schemas for
+  every family Crust imports: mesh, xform, primvars, visibility, purpose,
+  extent, curves, implicit shapes, materials (UsdPreviewSurface, MaterialX),
+  lights and light linking, cameras, instancers, volumes, render settings,
+  products, vars and passes. Mantle's side of S1 follows in Mantle.
 - **S2 / S3 (crust-render):** Crust's importer, then its live updates, move
   onto Moho, gated on parity with the direct import.
 - **S4 (Mantle):** Obsidian, the GPU offscreen render delegate, as a pure
