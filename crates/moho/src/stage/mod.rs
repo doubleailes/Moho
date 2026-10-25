@@ -13,6 +13,7 @@ pub mod attribute;
 pub mod generic;
 pub mod globals;
 pub mod pending;
+pub mod xform;
 
 use std::cell::{Cell, RefCell};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
