@@ -11,17 +11,21 @@
 pub mod adapter;
 pub mod attribute;
 pub mod generic;
+pub mod pending;
 
 use std::cell::{Cell, RefCell};
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::rc::{Rc, Weak};
 
 use openusd::sdf;
 use openusd::tf::Token;
-use openusd::usd::{self, PrimPredicate, Stage, StageBuilder, TimeCode};
+use openusd::usd::{self, PrimPredicate, Stage, StageBuilder, StageSinkId, TimeCode};
 
 use crate::data_source::{Container, DataSource};
-use crate::scene_index::{Added, Observer, Observers, Prim, Removed, SceneIndex};
+use crate::locator::LocatorSet;
+use crate::scene_index::{Added, Dirtied, Observer, Observers, Prim, Removed, SceneIndex};
+
+use pending::{Pending, Recorder};
 
 use adapter::{Adapter, AdapterRegistry};
 
@@ -88,6 +92,8 @@ impl Container for PrimContainer {
 
 struct Current {
     stage: Stage,
+    sink: StageSinkId,
+    pending: Rc<RefCell<Pending>>,
 }
 
 /// One openusd stage read as a scene index.
@@ -96,6 +102,8 @@ pub struct StageSceneIndex {
     globals: Rc<Globals>,
     adapters: AdapterRegistry,
     cache: RefCell<HashMap<sdf::Path, Prim>>,
+    /// Every prim announced to observers and not since removed.
+    populated: RefCell<BTreeSet<sdf::Path>>,
     observers: Observers,
 }
 
@@ -112,6 +120,7 @@ impl StageSceneIndex {
             globals: Rc::new(Globals::default()),
             adapters,
             cache: RefCell::new(HashMap::new()),
+            populated: RefCell::new(BTreeSet::new()),
             observers: Observers::default(),
         })
     }
@@ -123,10 +132,16 @@ impl StageSceneIndex {
 
     /// Replaces the stage: every prim held is removed (one removal of the
     /// absolute root), then every prim of `stage` the default traversal
-    /// reaches is added.
+    /// reaches is added. Edits made to `stage` from now on are queued until
+    /// [`apply_pending_updates`](Self::apply_pending_updates).
     pub fn set_stage(&self, stage: Stage) {
-        let had_stage = self.current.borrow_mut().take().is_some();
+        let previous = self.current.borrow_mut().take();
+        let had_stage = previous.is_some();
+        if let Some(previous) = previous {
+            previous.stage.remove_sink(previous.sink);
+        }
         self.cache.borrow_mut().clear();
+        self.populated.borrow_mut().clear();
         if had_stage {
             self.observers.send_removed(
                 self,
@@ -135,11 +150,30 @@ impl StageSceneIndex {
                 }],
             );
         }
+        let pending = Rc::new(RefCell::new(Pending::default()));
+        let sink = stage.add_sink(Recorder(pending.clone()));
+        *self.current.borrow_mut() = Some(Current { stage, sink, pending });
+        let added = self.populate(&sdf::Path::abs_root());
+        self.observers.send_added(self, &added);
+    }
+
+    /// The prims the default traversal reaches at and under `root` (the
+    /// absolute root itself excluded), recorded as populated.
+    fn populate(&self, root: &sdf::Path) -> Vec<Added> {
+        let Some(stage) = self.stage() else {
+            return Vec::new();
+        };
         let mut paths = Vec::new();
-        // A traversal error leaves the prims found so far: the index shows
-        // what the stage could compose.
-        let _ = stage.traverse(PrimPredicate::DEFAULT, |path| paths.push(path.clone()));
-        *self.current.borrow_mut() = Some(Current { stage });
+        if root.is_abs_root() {
+            // A traversal error leaves the prims found so far: the index
+            // shows what the stage could compose.
+            let _ = stage.traverse(PrimPredicate::DEFAULT, |path| paths.push(path.clone()));
+        } else if self.prim(root).is_defined()
+            && let Ok(start) = stage.prim(root)
+            && let Ok(range) = start.filtered_subtree(PrimPredicate::DEFAULT)
+        {
+            paths.extend(range.filter_map(Result::ok).map(|p| p.path().clone()));
+        }
         let added: Vec<Added> = paths
             .into_iter()
             .map(|path| {
@@ -147,7 +181,85 @@ impl StageSceneIndex {
                 Added { path, ty }
             })
             .collect();
+        self.populated
+            .borrow_mut()
+            .extend(added.iter().map(|a| a.path.clone()));
+        added
+    }
+
+    /// Turns every stage edit since the last call into notices: resynced
+    /// prims removed and re-added (or added when new, removed when gone),
+    /// and changed properties as their prims dirtied for the locators the
+    /// adapters map them to. Property changes under a resynced prim are
+    /// folded into its resync.
+    pub fn apply_pending_updates(&self) {
+        let Some(pending) = self
+            .current
+            .borrow()
+            .as_ref()
+            .map(|c| std::mem::take(&mut *c.pending.borrow_mut()))
+        else {
+            return;
+        };
+        let roots = pending.resync_roots();
+        let mut removed = Vec::new();
+        let mut added = Vec::new();
+        for root in &roots {
+            let was_present = {
+                let mut populated = self.populated.borrow_mut();
+                let present = populated.contains(root);
+                populated.retain(|p| !p.has_prefix(root));
+                present
+            };
+            self.cache.borrow_mut().retain(|p, _| !p.has_prefix(root));
+            let now = self.populate(root);
+            if was_present {
+                removed.push(Removed { path: root.clone() });
+            }
+            added.extend(now);
+        }
+        let mut dirtied: Vec<Dirtied> = Vec::new();
+        let properties = pending
+            .resynced_properties
+            .into_iter()
+            .chain(pending.updated_properties);
+        let mut by_prim: std::collections::BTreeMap<sdf::Path, BTreeSet<String>> = Default::default();
+        for (prim, names) in properties {
+            by_prim.entry(prim).or_default().extend(names);
+        }
+        for (prim, names) in by_prim {
+            if roots.iter().any(|r| prim.has_prefix(r)) || !self.populated.borrow().contains(&prim) {
+                continue;
+            }
+            let locators = self.invalidate(&prim, &names);
+            if !locators.is_empty() {
+                dirtied.push(Dirtied { path: prim, locators });
+            }
+        }
+        self.observers.send_removed(self, &removed);
         self.observers.send_added(self, &added);
+        self.observers.send_dirtied(self, &dirtied);
+    }
+
+    /// The locators a change to `names` on `path` dirties, from the prim's
+    /// adapters.
+    fn invalidate(&self, path: &sdf::Path, names: &BTreeSet<String>) -> LocatorSet {
+        let mut locators = LocatorSet::new();
+        let Some(stage) = self.stage() else {
+            return locators;
+        };
+        let ctx = self.context(&stage, path);
+        let Some(prim) = ctx.prim() else {
+            return locators;
+        };
+        let usd_type = prim.type_name().ok().flatten().unwrap_or_default();
+        let apis = prim.api_schemas().unwrap_or_default();
+        for adapter in self.adapters.for_prim(usd_type.as_str(), &apis) {
+            for name in names {
+                locators.insert_set(&adapter.invalidate(&ctx, name));
+            }
+        }
+        locators
     }
 
     fn context(&self, stage: &Stage, path: &sdf::Path) -> PrimContext {
