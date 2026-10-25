@@ -154,12 +154,14 @@ fn under_any(path: &sdf::Path, roots: &[sdf::Path]) -> bool {
 }
 
 /// Every defined prim at or under `root` in `index`, parents first. The walk
-/// goes on through undefined prims, which may hold defined descendants.
+/// goes on through undefined prims, which may hold defined descendants. The
+/// absolute root is included when `index` defines it (it carries the scene
+/// globals), so an input mounted at `/` notifies the root it changes.
 fn subtree(index: &dyn SceneIndex, root: &sdf::Path) -> Vec<sdf::Path> {
     let mut out = Vec::new();
     let mut stack = vec![root.clone()];
     while let Some(path) = stack.pop() {
-        if !path.is_abs_root() && index.prim(&path).is_defined() {
+        if index.prim(&path).is_defined() {
             out.push(path.clone());
         }
         let mut children = index.children(&path);

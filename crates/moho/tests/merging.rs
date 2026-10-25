@@ -354,3 +354,31 @@ fn merged_children_are_in_input_order() {
     expected.push(p("/w/d"));
     assert_eq!(merged.children(&p("/w")), expected);
 }
+
+/// An input mounted at `/` can change the root's data (the scene globals):
+/// adding or removing it notifies the root.
+#[test]
+fn an_input_at_the_root_notifies_the_root() {
+    let weak = RetainedSceneIndex::new();
+    weak.add_prims([(sdf_root(), prim("", &[("startTimeCode", 1)]))]);
+    let strong = RetainedSceneIndex::new();
+    strong.add_prims([(sdf_root(), prim("", &[("startTimeCode", 1001)]))]);
+    let merged = MergingSceneIndex::new();
+    merged.add_input_scene(weak.clone(), sdf_root());
+    let recorder = RecordingObserver::on(merged.as_ref());
+    merged.insert_input_scene(0, strong.clone(), sdf_root());
+    let root_added = |notices: &[Notice]| {
+        notices
+            .iter()
+            .any(|n| matches!(n, Notice::Added(a) if a.path == sdf_root()))
+    };
+    assert!(root_added(&recorder.take()));
+    assert_eq!(
+        read(merged.as_ref(), "/", "startTimeCode"),
+        Some(Value::Int(1001))
+    );
+    let handle: SceneIndexHandle = strong;
+    merged.remove_input_scene(&handle);
+    assert!(root_added(&recorder.take()), "the root's data changed back");
+    assert_eq!(read(merged.as_ref(), "/", "startTimeCode"), Some(Value::Int(1)));
+}
