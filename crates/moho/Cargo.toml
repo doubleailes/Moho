@@ -9,6 +9,7 @@ repository.workspace = true
 
 [dependencies]
 openusd.workspace = true
+openusd-schemas = { workspace = true, features = ["geom", "lux", "render", "shade", "vol"] }
 
 [lints]
 workspace = true

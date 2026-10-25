@@ -89,6 +89,18 @@ the root edit target (`crates/moho-spike/tests/probe.rs` asserts all of it):
 - `Stage::override_prim(path)`, `Stage::create_attribute(path, type_name)`
   then `Attribute::set(value)`.
 
+## openusd-schemas (S1)
+
+- `moho` depends on `openusd-schemas` from the same git source and rev as
+  `openusd`, with the features `geom`, `lux`, `render`, `shade` and `vol`.
+  Each schema family is opt-in; none is on by default.
+- **Typed views and fallbacks need the schema registry on the stage.**
+  `openusd_schemas::schema_registry() -> Arc<SchemaRegistry>` (a process-wide
+  `OnceLock` over `ALL`) is handed to `Stage::builder().schema_registry(..)`.
+  A stage opened without it knows only the core `usd` family: typed `get`
+  constructors answer `None`, and `Attribute::fallback_value` finds no schema
+  fallback.
+
 ## Gaps
 
 - Splines (`Ts`): a `.spline` block only round-trips as a dictionary. There
