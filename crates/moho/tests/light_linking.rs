@@ -119,3 +119,50 @@ fn a_collection_edit_relinks() {
     assert!(categories(&index, "/world/b").contains(&key));
     assert!(!categories(&index, "/world/a").contains(&key));
 }
+
+/// A light re-added as a non-light, with no removal before it (as a filter
+/// or a merge may notify a resync): receivers stop carrying its category.
+#[test]
+fn a_light_that_stops_being_a_light_drops_its_category() {
+    use moho::data_source::retained::{container, value};
+    use moho::openusd::sdf::PathExpression;
+    use moho::scene_index::{Prim, RetainedSceneIndex};
+
+    let light = Prim::new(
+        "sphereLight",
+        moho::data_source::retained::RetainedContainer::new([
+            ("light", container([("intensity", value(1.0f32))])),
+            (
+                "collections",
+                container([(
+                    "lightLink",
+                    container([(
+                        "membershipExpression",
+                        value(Value::PathExpression(PathExpression::parse("/world/a"))),
+                    )]),
+                )]),
+            ),
+        ])
+        .into_handle(),
+    );
+    let mesh = || {
+        Prim::new(
+            "mesh",
+            moho::data_source::retained::RetainedContainer::default().into_handle(),
+        )
+    };
+    let input = RetainedSceneIndex::new();
+    input.add_prims([(p("/world/key"), light), (p("/world/a"), mesh())]);
+    let index = LightLinkingSceneIndex::new(input.clone(), None);
+    let key = link(&index, "/world/key", "lightLink");
+    assert!(categories(&index, "/world/a").contains(&key));
+
+    let recorder = RecordingObserver::on(index.as_ref());
+    input.add_prims([(p("/world/key"), mesh())]);
+    let notices = recorder.take();
+    assert!(
+        notices.iter().any(|n| matches!(n, Notice::Dirtied(d) if d.path == p("/world/a") && d.locators.contains(&Locator::parse("categories")))),
+        "{notices:?}"
+    );
+    assert!(!categories(&index, "/world/a").contains(&key));
+}
