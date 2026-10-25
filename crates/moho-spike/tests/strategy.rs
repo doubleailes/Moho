@@ -128,3 +128,31 @@ fn strategy_d_equals_an_index_over_the_loaded_stage() {
     assert_eq!(outcome.digest.value(), reference.value());
     assert_eq!(outcome.digest.prims(), reference.prims());
 }
+
+/// Below the streaming threshold, (D) reads the whole index once, and so
+/// does the reference.
+#[test]
+fn below_the_threshold_d_equals_the_reference() {
+    use moho::openusd::usd::InitialLoadSet;
+
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("small.usda");
+    std::fs::write(
+        &path,
+        "#usda 1.0\ndef Xform \"world\"\n{\n    def Mesh \"a\"\n    {\n    }\n}\n",
+    )
+    .unwrap();
+    let scene = path.to_str().unwrap();
+    let outcome = Strategy::D.run(scene, &mut |_| {}).unwrap();
+    assert!(!outcome.streamed);
+    let open = |load| moho::stage::stage_builder().load(load).open(scene).unwrap();
+    let chunks = moho_spike::chunks::stream_roots(&open(InitialLoadSet::LoadNone)).unwrap();
+    assert!(chunks.is_empty());
+    let full = moho::chain::standard(moho_spike::strategy::stage_index(
+        open(InitialLoadSet::LoadAll),
+        false,
+    ));
+    let reference = moho_spike::index::read_whole(full.as_ref(), &chunks);
+    assert!(reference.prims() > 0);
+    assert_eq!(outcome.digest.value(), reference.value());
+}
