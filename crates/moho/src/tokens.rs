@@ -76,3 +76,24 @@ pub mod xform {
     pub const MATRIX: &str = "matrix";
     pub const RESET_XFORM_STACK: &str = "resetXformStack";
 }
+
+/// `HdMeshSchema`, `HdMeshTopologySchema` and `HdSubdivisionTagsSchema`.
+pub mod mesh {
+    pub const MESH: &str = "mesh";
+    pub const TOPOLOGY: &str = "topology";
+    pub const SUBDIVISION_SCHEME: &str = "subdivisionScheme";
+    pub const SUBDIVISION_TAGS: &str = "subdivisionTags";
+    pub const DOUBLE_SIDED: &str = "doubleSided";
+    pub const FACE_VERTEX_COUNTS: &str = "faceVertexCounts";
+    pub const FACE_VERTEX_INDICES: &str = "faceVertexIndices";
+    pub const HOLE_INDICES: &str = "holeIndices";
+    pub const ORIENTATION: &str = "orientation";
+    pub const INTERPOLATE_BOUNDARY: &str = "interpolateBoundary";
+    pub const FACE_VARYING_LINEAR_INTERPOLATION: &str = "faceVaryingLinearInterpolation";
+    pub const TRIANGLE_SUBDIVISION_RULE: &str = "triangleSubdivisionRule";
+    pub const CORNER_INDICES: &str = "cornerIndices";
+    pub const CORNER_SHARPNESSES: &str = "cornerSharpnesses";
+    pub const CREASE_INDICES: &str = "creaseIndices";
+    pub const CREASE_LENGTHS: &str = "creaseLengths";
+    pub const CREASE_SHARPNESSES: &str = "creaseSharpnesses";
+}

@@ -78,6 +78,7 @@ impl AdapterRegistry {
         for (usd, hydra) in USD_TO_HYDRA_TYPES {
             registry.set_type(usd, Rc::new(Typed(Token::from(*hydra))));
         }
+        registry.set_type("Mesh", Rc::new(crate::stage::mesh::MeshAdapter));
         registry
     }
 
