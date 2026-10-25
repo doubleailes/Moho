@@ -133,3 +133,19 @@ pub mod imageable {
     pub const DEFAULT: &str = "default";
     pub const GEOMETRY: &str = "geometry";
 }
+
+/// `HdBasisCurvesSchema`, `HdBasisCurvesTopologySchema` and
+/// `HdNurbsCurvesSchema` (plus `pointWeights`, which Hydra does not carry).
+pub mod curves {
+    pub const BASIS_CURVES: &str = "basisCurves";
+    pub const NURBS_CURVES: &str = "nurbsCurves";
+    pub const TOPOLOGY: &str = "topology";
+    pub const CURVE_VERTEX_COUNTS: &str = "curveVertexCounts";
+    pub const TYPE: &str = "type";
+    pub const BASIS: &str = "basis";
+    pub const WRAP: &str = "wrap";
+    pub const ORDER: &str = "order";
+    pub const KNOTS: &str = "knots";
+    pub const RANGES: &str = "ranges";
+    pub const POINT_WEIGHTS: &str = "pointWeights";
+}

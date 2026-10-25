@@ -81,6 +81,8 @@ impl AdapterRegistry {
             registry.set_type(usd, Rc::new(Typed(Token::from(*hydra))));
         }
         registry.set_type("Mesh", Rc::new(crate::stage::mesh::MeshAdapter));
+        registry.set_type("BasisCurves", Rc::new(crate::stage::curves::BASIS_CURVES));
+        registry.set_type("NurbsCurves", Rc::new(crate::stage::curves::NURBS_CURVES));
         registry
     }
 

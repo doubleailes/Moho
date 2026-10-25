@@ -10,6 +10,7 @@
 
 pub mod adapter;
 pub mod attribute;
+pub mod curves;
 pub mod generic;
 pub mod globals;
 pub mod imageable;
