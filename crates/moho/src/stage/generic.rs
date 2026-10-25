@@ -120,7 +120,11 @@ impl Container for AttributeEntry {
     fn get(&self, name: &Token) -> Option<DataSource> {
         let attribute = self.attribute()?;
         match name.as_str() {
-            t::VALUE => Some(AttributeValue::data_source(attribute, self.ctx.globals.clone())),
+            t::VALUE => Some(AttributeValue::data_source(
+                attribute,
+                &self.ctx,
+                Locator::new([t::ATTRIBUTES, self.name.as_str()]),
+            )),
             t::AUTHORED => Some(value(attribute.has_authored_value().unwrap_or(false))),
             t::TYPE_NAME => attribute
                 .type_name()

@@ -14,7 +14,7 @@ pub mod generic;
 pub mod pending;
 
 use std::cell::{Cell, RefCell};
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::rc::{Rc, Weak};
 
 use openusd::sdf;
@@ -22,7 +22,7 @@ use openusd::tf::Token;
 use openusd::usd::{self, PrimPredicate, Stage, StageBuilder, StageSinkId, TimeCode};
 
 use crate::data_source::{Container, DataSource};
-use crate::locator::LocatorSet;
+use crate::locator::{Locator, LocatorSet};
 use crate::scene_index::{Added, Dirtied, Observer, Observers, Prim, Removed, SceneIndex};
 
 use pending::{Pending, Recorder};
@@ -37,16 +37,32 @@ pub fn stage_builder() -> StageBuilder {
 }
 
 /// State every data source of one stage scene index shares: the current
-/// time.
+/// time, and the data that may vary over time.
 #[derive(Default)]
 pub struct Globals {
     time: Cell<Option<TimeCode>>,
+    /// Per prim, the locators of data sources built so far whose value may
+    /// vary over time (Hydra's `FlagAsTimeVarying`).
+    time_varying: RefCell<BTreeMap<sdf::Path, LocatorSet>>,
 }
 
 impl Globals {
     /// The index's current time, `None` for the default time.
     pub fn time(&self) -> Option<TimeCode> {
         self.time.get()
+    }
+
+    /// Records that the data at `locator` on `path` may vary over time.
+    pub fn flag_time_varying(&self, path: &sdf::Path, locator: Locator) {
+        self.time_varying
+            .borrow_mut()
+            .entry(path.clone())
+            .or_default()
+            .insert(locator);
+    }
+
+    fn forget_under(&self, root: &sdf::Path) {
+        self.time_varying.borrow_mut().retain(|p, _| !p.has_prefix(root));
     }
 }
 
@@ -142,6 +158,7 @@ impl StageSceneIndex {
         }
         self.cache.borrow_mut().clear();
         self.populated.borrow_mut().clear();
+        self.globals.forget_under(&sdf::Path::abs_root());
         if had_stage {
             self.observers.send_removed(
                 self,
@@ -212,6 +229,7 @@ impl StageSceneIndex {
                 present
             };
             self.cache.borrow_mut().retain(|p, _| !p.has_prefix(root));
+            self.globals.forget_under(root);
             let now = self.populate(root);
             if was_present {
                 removed.push(Removed { path: root.clone() });
@@ -238,6 +256,32 @@ impl StageSceneIndex {
         }
         self.observers.send_removed(self, &removed);
         self.observers.send_added(self, &added);
+        self.observers.send_dirtied(self, &dirtied);
+    }
+
+    /// The index's current time, `None` for the default time.
+    pub fn time(&self) -> Option<TimeCode> {
+        self.globals.time()
+    }
+
+    /// Sets the index's time. A different time dirties every data source
+    /// built so far whose value may vary over time; the same time notifies
+    /// nothing.
+    pub fn set_time(&self, time: TimeCode) {
+        if self.globals.time() == Some(time) {
+            return;
+        }
+        self.globals.time.set(Some(time));
+        let dirtied: Vec<Dirtied> = self
+            .globals
+            .time_varying
+            .borrow()
+            .iter()
+            .map(|(path, locators)| Dirtied {
+                path: path.clone(),
+                locators: locators.clone(),
+            })
+            .collect();
         self.observers.send_dirtied(self, &dirtied);
     }
 
