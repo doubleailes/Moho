@@ -26,7 +26,7 @@
 
 ## 7. Merged children order (M7)
 
-- [ ] 7.1 Document the order on `MergingSceneIndex::children` and verify it with two inputs sharing and owning children, and an implied intermediate prim.
+- [x] 7.1 Document the order on `MergingSceneIndex::children` and verify it with two inputs sharing and owning children, and an implied intermediate prim.
 
 ## 8. Docs and checks
 

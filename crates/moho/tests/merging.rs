@@ -328,3 +328,29 @@ fn prims_under_undefined_ancestors_are_merged() {
         })]
     );
 }
+
+#[test]
+fn merged_children_are_in_input_order() {
+    let strong = RetainedSceneIndex::new();
+    strong.add_prims([(p("/w/b"), prim("", &[])), (p("/w/a"), prim("", &[]))]);
+    let weak = RetainedSceneIndex::new();
+    weak.add_prims([(p("/w/a"), prim("", &[])), (p("/w/c"), prim("", &[]))]);
+    let deep = RetainedSceneIndex::new();
+    deep.add_prims([(p("/w/d/e"), prim("", &[]))]);
+    let merged = MergingSceneIndex::new();
+    merged.add_input_scene(deep.clone(), p("/w/d/e"));
+    merged.add_input_scene(strong.clone(), sdf_root());
+    merged.add_input_scene(weak.clone(), sdf_root());
+    // The deep input is strongest, but implied prims come after every
+    // input's own children.
+    let strong_order = strong.children(&p("/w"));
+    let weak_order = weak.children(&p("/w"));
+    let mut expected: Vec<_> = strong_order.clone();
+    for c in weak_order {
+        if !expected.contains(&c) {
+            expected.push(c);
+        }
+    }
+    expected.push(p("/w/d"));
+    assert_eq!(merged.children(&p("/w")), expected);
+}
