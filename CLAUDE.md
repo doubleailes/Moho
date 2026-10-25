@@ -22,7 +22,8 @@ repository are in `ROADMAP.md`.
 ## Layout
 
 ```
-crates/moho        the scene index (empty until S1; see ROADMAP.md)
+crates/moho        the scene index: locator, data_source, scene_index, schema,
+                   stage (StageSceneIndex and its adapters), filter, chain, tokens
 crates/moho-spike  S0 streaming spike harness (unpublished; S2 benchmark)
 docs/              architecture.md, openusd-notes.md, streaming-spike.md
 scripts/           streaming-spike.sh (runs the spike's strategies on a scene)
@@ -55,9 +56,14 @@ cargo test --workspace        # everything
 
 ## Boundaries
 
-- **openusd only.** Moho never depends on Mantle, Crust or Obsidian, and holds
-  none of their types. Adapters (Mantle's `ChangeSet` to a mirror stage, a
-  renderer's import) live in the consumers.
+- **openusd only** (openusd and openusd-schemas, one rev). Moho never depends
+  on Mantle, Crust or Obsidian, and holds none of their types. Adapters
+  (Mantle's `ChangeSet` to a mirror stage, a renderer's import) live in the
+  consumers.
+- **Hydra 2.0's model and names.** Schemas, filters and the standard chain
+  (`moho::chain::standard`) follow UsdImaging. Moho's one addition is the
+  generic attribute data (`__usdAttributes`, `__usdRelationships`); anything
+  else Hydra lacks is argued in the change that adds it.
 - **The consumer decides.** Moho reports what changed (dirty locators). It
   never decides whether a renderer can update in place.
 
@@ -76,4 +82,6 @@ cargo test --workspace        # everything
   "Upstream candidates" in `ROADMAP.md` (and to the gaps in
   `docs/openusd-notes.md`), and comment the workaround in code.
 - `moho` re-exports `openusd` (`moho::openusd`), so consumers build against
-  exactly the pinned version.
+  exactly the pinned version, and `openusd-schemas` (`moho::openusd_schemas`)
+  from the same rev. openusd-schemas is part of the openusd project, so
+  depending on it keeps Moho "openusd only".

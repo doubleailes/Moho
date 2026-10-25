@@ -74,7 +74,7 @@ read at `68a867a` and recorded in `docs/openusd-notes.md` in the same task.
 
 ## 12. Docs and wrap-up
 
-- [ ] 12.1 Update `docs/architecture.md`:
+- [x] 12.1 Update `docs/architecture.md`:
   - the implemented contract;
   - the standard chain;
   - generic attribute data (D3) as Moho's one addition to Hydra.

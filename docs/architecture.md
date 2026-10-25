@@ -41,21 +41,53 @@ schemas:    typed accessors over containers (MeshSchema, XformSchema, ...)
 
 ## Chain
 
+`moho::chain::standard(stage_index)` builds the standard chain, in
+`UsdImagingCreateSceneIndices`' order:
+
 ```
-stage --> StageSceneIndex --> FlatteningSceneIndex --> (instancing, material resolve, ...)
-          local data, lazy,    world xform, inherited visibility / purpose,
-          time, change          resolved material binding
-          notices -> dirty
+StageSceneIndex --> NativeInstancing --> PointInstancing --> Flattening
+  --> MaterialBindingResolving --> LightLinking --> RenderSettingsFlattening
 ```
 
-`StageSceneIndex` has `UsdImagingStageSceneIndex`'s shape: built empty
-(`new`), then `set_stage`, `set_time` and `apply_pending_updates`. It
-observes its stage through openusd's `StageSink`, so any author of the stage
-(a Mantle mirror replaying `usd::Diff`s, or nothing at all for a file opened
-by `crust render`) produces the same notices. Notices are queued and become
-added, removed and dirtied entries only in `apply_pending_updates`, as in
-Hydra. Several inputs combine under a `MergingSceneIndex`
-(`add_input_scene(index, root)`, `remove_input_scene`).
+- **`StageSceneIndex`** has `UsdImagingStageSceneIndex`'s shape: built
+  empty (`new`), then `set_stage`, `set_time` and `apply_pending_updates`.
+  - It observes its stage through openusd's `StageSink`, so any author of
+    the stage (a Mantle mirror replaying `usd::Diff`s, or nothing at all for
+    a file opened by `crust render`) produces the same notices.
+  - Notices are queued and become added, removed and dirtied entries only in
+    `apply_pending_updates`.
+  - Per-type adapters build each prim's data and map a changed property to
+    the locators it dirties.
+  - Open stages with `moho::stage::stage_builder()`, which installs
+    openusd-schemas' registry, so schema fallbacks and typed views work.
+- **`NativeInstancing`** turns native instances into instancers over
+  prototypes re-rooted under `MohoNiPropagatedPrototypes`.
+  - Prototypes are named by openusd's instancing key, rebuilt with
+    stage-independent layer names, so chunks agree on them.
+- **`PointInstancing`** re-roots a point instancer's prototypes under
+  `<prototype>/ForInstancer<hash>`.
+- **`Flattening`** resolves inherited data: the world transform,
+  visibility, purpose, constant primvars, and binding opinions.
+- **The resolving filters** turn binding opinions, light-link collections
+  and render products into `materialBindings`, categories and
+  `renderSettings`.
+  - Collection membership comes from the stage index, through
+    `CollectionMembership`.
+- **`MergingSceneIndex`** combines several inputs over one namespace
+  (`add_input_scene(index, root)`, `remove_input_scene`).
+
+### Generic attribute data, Moho's one addition to Hydra
+
+Every prim also exposes `__usdAttributes` and `__usdRelationships`.
+Crust needs three things Hydra's schemas do not carry, so these containers
+provide them:
+- each value, and whether a layer authors it or it is a schema fallback;
+- the metadata a renderer reads (`colorSpace`, `interpolation`,
+  `elementSize`);
+- every renderer attribute (`crust:*`) without a schema of its own.
+
+The leading underscores follow Hydra's convention for private containers
+(`__usdPrimInfo`).
 
 ## Boundaries
 
@@ -71,16 +103,19 @@ per chunk (Crust's `subtree_roots`, from 4 chunks up). It does so in Hydra's
 way, by composing standard indices rather than giving `StageSceneIndex` a
 streaming mode:
 
-- a `StageSceneIndex` over the scene opened `LoadNone` is the weakest,
-  permanent input: render settings, products, cameras, passes and
-  everything else outside the payloads;
-- each chunk is a `StageSceneIndex` over its own masked stage, a stronger
+- the weakest, permanent input is a standard chain over the scene opened
+  `LoadNone`, with `set_include_unloaded_prims(true)` so each chunk's root
+  is present: render settings, products, cameras, passes and everything
+  else outside the payloads;
+- each chunk is a standard chain over its own masked stage, a stronger
   input of the same `MergingSceneIndex`, and adding or removing one adds or
   removes that chunk's payload contents;
 - the consumer decides when a chunk comes and goes: an offline import adds,
   pulls and removes each in turn, and a viewport keeps what it shows.
 
-Below 4 chunks, one stage index over one `LoadAll` stage serves the scene.
+Below 4 chunks, one standard chain over one `LoadAll` stage serves the scene.
+On the S0 fixture, the merged index exposes exactly what one chain over the
+fully loaded stage does (`crates/moho/tests/streaming.rs`).
 
 Payload `load_and_unload` on a single stage was rejected. On Moana its peak
 was 2.56× the masked stages' (5.05 against 1.97 GiB), because unloading does
