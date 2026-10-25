@@ -228,7 +228,20 @@ the root edit target (`crates/moho-spike/tests/probe.rs` asserts all of it):
   `orientationsf` preferred over `orientations` when non-empty (as
   `uses_orientationsf`).
 
-## Gaps
+## Scene index gaps (`scene-index-gaps`)
+
+- `Stage::has_authored_stage_metadata(field) -> Result<bool>`: whether the
+  session or root layer authors a pseudo-root metadata field (C++
+  `UsdStage::HasAuthoredMetadata`); a block counts, a fallback does not.
+  Behind `__usdStageMetadata/<field>/authored`.
+- `Stage::stage_metadata(field) -> Result<Option<sdf::Value>>`: composed
+  pseudo-root metadata, falling back to a registered field's default. Read
+  for `renderSettingsPrimPath`.
+- `Stage::frames_per_second() -> f64`, beside `start_time_code`,
+  `end_time_code` and `time_codes_per_second`.
+- `sdf::Path::new` parses relative paths (`geo`, `a/b`) and the `.` anchor,
+  which the prim origin's prototype-relative scene path uses.
+
 
 - Splines (`Ts`): a `.spline` block only round-trips as a dictionary. There
   are no typed knots, evaluation, authoring or usdc encoding.

@@ -313,7 +313,10 @@ impl StageSceneIndex {
             dirty
                 .entry(sdf::Path::abs_root())
                 .or_default()
-                .insert(Locator::new([crate::tokens::scene_globals::SCENE_GLOBALS]));
+                .insert_set(&LocatorSet::from_iter([
+                    Locator::new([crate::tokens::scene_globals::SCENE_GLOBALS]),
+                    Locator::new([crate::tokens::usd::STAGE_METADATA]),
+                ]));
         }
         // A shader or node graph resynced (added, removed, replaced) changes
         // the network of the material that represents it.
