@@ -37,7 +37,7 @@ read at `68a867a` and recorded in `docs/openusd-notes.md` in the same task.
 ## 5. Materials
 
 - [x] 5.1 Add the binding adapter (`usdMaterialBindings` per purpose, with the direct binding, collection bindings and strengths) through openusd-schemas' `MaterialBindingAPI`. Verify the direct and collection binding scenarios, and that a `material:binding*` edit dirties `usdMaterialBindings`.
-- [ ] 5.2 Implement `MaterialBindingResolvingSceneIndex`. Membership comes from openusd's collection queries (design D6). Verify the inherited, `strongerThanDescendants` and collection-beats-direct scenarios, and that the resolved paths equal openusd-schemas' `bound_material("full")` and `bound_material("")` on the fixture.
+- [x] 5.2 Implement `MaterialBindingResolvingSceneIndex`. Membership comes from openusd's collection queries (design D6). Verify the inherited, `strongerThanDescendants` and collection-beats-direct scenarios, and that the resolved paths equal openusd-schemas' `bound_material("full")` and `bound_material("")` on the fixture.
 - [ ] 5.3 Add the material adapter: networks per render context from the `outputs:*` namespaces; terminals; nodes relative to the material, with `nodeIdentifier`, parameters (value, type name, colour space) and input connections; node graphs followed through outputs and interface inputs. Verify the UsdPreviewSurface-with-texture and MaterialX scenarios on fixtures, and that an `inputs:*` edit on a shader dirties its material's `material`.
 - [ ] 5.4 Resolve asset-valued parameters (authored and resolved path, relative to the authoring layer). Verify the relative-texture scenario with a fixture in a subdirectory.
 

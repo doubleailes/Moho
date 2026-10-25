@@ -37,3 +37,6 @@ the steps that land in this repository or depend on it.
   rule changes resolution (e.g. `/world`) rather than the loaded or unloaded
   path, so taken as a subtree resync it covers every sibling subtree.
   [mxpv/openusd#174](https://github.com/mxpv/openusd/issues/174).
+- A rule-based collection's membership as one path expression (C++
+  `UsdComputePathExpressionFromCollectionMembershipQueryRuleMap`). Moho ports
+  it (`crates/moho/src/stage/collection.rs`) until openusd has it.

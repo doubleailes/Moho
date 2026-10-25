@@ -162,6 +162,21 @@ the root edit target (`crates/moho-spike/tests/probe.rs` asserts all of it):
   (`collection_path()` such as `/world.collection:metal`, `material_path()`,
   `strength()`). `MATERIAL_PURPOSES` is `["", "preview", "full"]`;
   `owns_property(name)` tells a binding property.
+- Collections: `CollectionAPI::from_prim_unchecked(prim, name)`,
+  `membership_query() -> Result<MembershipQuery>`, `MembershipQuery::is_included
+  (&Path) -> bool`, `uses_rule_map()`, `rule_map() -> &PathExpansionRuleMap`
+  (`HashMap<Path, PathRule>`; `PathRule` is ExplicitOnly, ExpandPrims,
+  ExpandPrimsAndProperties, Exclude). `complete_membership_expression` resolves
+  only an authored `membershipExpression` (as C++
+  `ResolveCompleteMembershipExpression`): it is empty for an includes/excludes
+  collection.
+- Stage-free matching: `sdf::path_expr::PathExpressionEval::<D>::build(&expr,
+  &PredicateLibrary::new())` then `match_path(&path, &domain).value`. With an
+  empty library, expressions with predicates do not compile.
+- Building expressions: `PathExpression::make_atom_pattern`, `make_op(SetOp,
+  ..)` (empty operands absorbed as in C++), `make_complement`,
+  `make_atom_reference(ExpressionReference::weaker())`, `compose_over`,
+  `parse`; `PathPattern::nothing()` + `set_prefix` + `append_stretch_if_possible`.
 
 ## Gaps
 
@@ -177,3 +192,7 @@ the root edit target (`crates/moho-spike/tests/probe.rs` asserts all of it):
   one `LoadNone` stage only grew across Moana's 22 load/unload rounds
   (0.73 to 4.81 GiB), and the final unload freed nothing measurable
   (mxpv/openusd#173).
+- No counterpart of C++ `UsdComputePathExpressionFromCollectionMembershipQueryRuleMap`
+  (a rule-based collection as one path expression, which UsdImaging's
+  collection adapter uses). Moho ports it in `stage/collection.rs`, checked
+  against `MembershipQuery::is_included`.

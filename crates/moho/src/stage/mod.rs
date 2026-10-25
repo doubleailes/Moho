@@ -10,6 +10,7 @@
 
 pub mod adapter;
 pub mod attribute;
+pub mod collection;
 pub mod curves;
 pub mod generic;
 pub mod globals;
@@ -32,7 +33,9 @@ use openusd::usd::{self, PrimPredicate, Stage, StageBuilder, StageSinkId, TimeCo
 
 use crate::data_source::{Container, DataSource};
 use crate::locator::{Locator, LocatorSet};
-use crate::scene_index::{Added, Dirtied, Observer, Observers, Prim, Removed, SceneIndex};
+use crate::scene_index::{
+    Added, CollectionMembership, Dirtied, Observer, Observers, Prim, Removed, SceneIndex,
+};
 
 use pending::{Pending, Recorder};
 
@@ -129,6 +132,8 @@ pub struct StageSceneIndex {
     cache: RefCell<HashMap<sdf::Path, Prim>>,
     /// Every prim announced to observers and not since removed.
     populated: RefCell<BTreeSet<sdf::Path>>,
+    /// Collection membership queries, until the stage changes.
+    memberships: RefCell<HashMap<(sdf::Path, String), Option<usd::MembershipQuery>>>,
     observers: Observers,
 }
 
@@ -146,6 +151,7 @@ impl StageSceneIndex {
             adapters,
             cache: RefCell::new(HashMap::new()),
             populated: RefCell::new(BTreeSet::new()),
+            memberships: RefCell::new(HashMap::new()),
             observers: Observers::default(),
         })
     }
@@ -167,6 +173,7 @@ impl StageSceneIndex {
         }
         self.cache.borrow_mut().clear();
         self.populated.borrow_mut().clear();
+        self.memberships.borrow_mut().clear();
         self.globals.forget_under(&sdf::Path::abs_root());
         if had_stage {
             self.observers.send_removed(
@@ -227,6 +234,7 @@ impl StageSceneIndex {
         else {
             return;
         };
+        self.memberships.borrow_mut().clear();
         let roots = pending.resync_roots();
         let mut removed = Vec::new();
         let mut added = Vec::new();
@@ -358,6 +366,25 @@ impl StageSceneIndex {
             .unwrap_or_default();
         let adapters = self.adapters.for_prim(usd_type.as_str(), &apis);
         Prim::new(ty, Rc::new(PrimContainer { ctx, adapters }))
+    }
+}
+
+impl CollectionMembership for StageSceneIndex {
+    fn includes(&self, collection_prim: &sdf::Path, name: &str, path: &sdf::Path) -> Option<bool> {
+        let key = (collection_prim.clone(), name.to_owned());
+        if !self.memberships.borrow().contains_key(&key) {
+            let query = self.stage().and_then(|stage| {
+                let prim = stage.prim(collection_prim).ok()?;
+                usd::CollectionAPI::from_prim_unchecked(prim, name)
+                    .membership_query()
+                    .ok()
+            });
+            self.memberships.borrow_mut().insert(key.clone(), query);
+        }
+        self.memberships
+            .borrow()
+            .get(&key)
+            .and_then(|q| q.as_ref().map(|q| q.is_included(path)))
     }
 }
 
