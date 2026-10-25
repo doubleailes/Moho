@@ -9,7 +9,8 @@
 # --out DIR keep each strategy's JSON lines and a meta.txt (machine, openusd
 #           rev, date, scene) in DIR.
 #
-# Needs cargo and jq. Builds the release binary first.
+# Needs cargo and jq. Builds the release binary first. Exits non-zero when a
+# digest differs from the reference or a strategy reports errors.
 set -euo pipefail
 
 usage() { echo "usage: $0 [--skip-c] [--out DIR] <scene>" >&2; exit 2; }
@@ -39,7 +40,8 @@ strategies=(a b c)
 if [[ -n "$out" ]]; then
     mkdir -p "$out"
     dir="$out"
-    rev="$(grep -m1 -o 'openusd", rev = "[0-9a-f]*' "$repo/Cargo.toml" | grep -o '[0-9a-f]*$' || true)"
+    rev="$(sed -n 's/^openusd = .*rev = "\([0-9a-f]*\)".*/\1/p' "$repo/Cargo.toml")"
+    [[ -n "$rev" ]] || { echo "$0: no openusd rev found in $repo/Cargo.toml" >&2; exit 1; }
     {
         echo "date: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
         echo "host: $(hostname)"
@@ -66,6 +68,7 @@ ref="$(jq -r 'select(.phase=="total") | .digest' "$dir/${strategies[-1]}.jsonl")
 
 gib() { jq -rn --arg k "$1" '$k | if test("^[0-9]+$") then (tonumber / 1048576 * 100 | round / 100 | tostring) else . end'; }
 
+failed=0
 printf '%-8s %6s %10s %10s %10s %10s %12s %18s %s\n' \
     strategy chunks open_s total_s peak_GiB final_GiB max_chunk_GiB digest match
 for s in "${strategies[@]}"; do
@@ -79,8 +82,15 @@ for s in "${strategies[@]}"; do
     digest="$(jq -r 'select(.phase=="total") | .digest' "$f")"
     errors="$(jq -r 'select(.phase=="total") | .errors + .mismatches' "$f")"
     match="yes"
-    [[ "$digest" == "$ref" ]] || match="NO"
-    [[ "$errors" == "0" ]] || match="$match (errors: $errors)"
+    [[ "$digest" == "$ref" ]] || { match="NO"; failed=1; }
+    [[ "$errors" == "0" ]] || { match="$match (errors: $errors)"; failed=1; }
     printf '%-8s %6s %10.2f %10.2f %10s %10s %12s %18s %s\n' \
         "$s" "$chunks" "$open_s" "$total_s" "$peak" "$final" "$max_chunk" "$digest" "$match"
 done
+
+# A digest that differs from the reference, or any read error or mismatch,
+# fails the run once the whole table is printed.
+if [[ $failed -ne 0 ]]; then
+    echo "$0: strategies disagree or reported errors" >&2
+    exit 1
+fi
