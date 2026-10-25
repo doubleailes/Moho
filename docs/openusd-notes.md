@@ -219,6 +219,11 @@ the root edit target (`crates/moho-spike/tests/probe.rs` asserts all of it):
   `has_specs()`, `map_to_root().time_offset()`; `Stage::node_layer_stack(node)`
   and `Stage::layer_identifier(LayerId)`.
 - `prim_stack()` of a `/__Prototype_N` prim is empty.
+- Point instancers: `geom::PointInstancer::get`, `mask_at(time, Some(&ids))`
+  (inactive and invisible ids folded together; the inactive-id helper is
+  private, so Moho separates them against `invisibleIds`), and
+  `orientationsf` preferred over `orientations` when non-empty (as
+  `uses_orientationsf`).
 
 ## Gaps
 
