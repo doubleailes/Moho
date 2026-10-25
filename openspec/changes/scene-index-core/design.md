@@ -116,6 +116,9 @@ The index follows `UsdImagingStageSceneIndex`.
   `apply_pending_updates()`.
 - `set_stage` removes everything and populates by the default traversal.
   Instances are traversed as prims; their content comes from D5.
+- Stages must carry openusd-schemas' registry, or schema fallbacks and typed
+  views are missing (`docs/openusd-notes.md`). `moho::stage::stage_builder()`
+  opens stages with it; the index reads whatever stage it is given.
 
 **Adapters.**
 - One adapter per USD prim type (and per applied API schema: binding,
