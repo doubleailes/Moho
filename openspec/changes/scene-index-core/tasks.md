@@ -84,4 +84,4 @@ read at `68a867a` and recorded in `docs/openusd-notes.md` in the same task.
   - the openusd rule covering openusd-schemas.
 
   Verify with `grep` that each document names the standard chain and the `__usdAttributes` container.
-- [ ] 12.2 Run the full checks, and run `cargo doc -p moho --no-deps` with no warnings. Confirm that every spec scenario has a test, by listing the scenario names against the test names.
+- [x] 12.2 Run the full checks, and run `cargo doc -p moho --no-deps` with no warnings. Confirm that every spec scenario has a test, by listing the scenario names against the test names.
