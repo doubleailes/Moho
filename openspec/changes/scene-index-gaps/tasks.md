@@ -18,7 +18,7 @@
 ## 5. Strategy (D) in the spike (M5)
 
 - [x] 5.1 Add strategy (D) to `moho-spike`: (B) read through a merging index of `chain::input` chains with `chain::merged`, digesting the index's prims, types and values. Verify on the spike fixture that (D)'s digest equals an index read over the fully loaded stage.
-- [ ] 5.2 Run (B) and (D) on Moana with `scripts/streaming-spike.sh` and record peak memory and time in `docs/streaming-spike.md`.
+- [x] 5.2 Run (B) and (D) on Moana with `scripts/streaming-spike.sh` and record peak memory and time in `docs/streaming-spike.md`.
 
 ## 6. Render pass collections (M6)
 
