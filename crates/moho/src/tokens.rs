@@ -57,3 +57,15 @@ pub mod usd {
     /// A relationship's forwarded targets.
     pub const FORWARDED_TARGETS: &str = "forwardedTargets";
 }
+
+/// Scene globals, at the absolute root (`HdSceneGlobalsSchema`, plus the
+/// stage metrics a consumer converts units with).
+pub mod scene_globals {
+    pub const SCENE_GLOBALS: &str = "sceneGlobals";
+    pub const START_TIME_CODE: &str = "startTimeCode";
+    pub const END_TIME_CODE: &str = "endTimeCode";
+    pub const TIME_CODES_PER_SECOND: &str = "timeCodesPerSecond";
+    pub const ACTIVE_RENDER_SETTINGS_PRIM: &str = "activeRenderSettingsPrim";
+    pub const METERS_PER_UNIT: &str = "metersPerUnit";
+    pub const UP_AXIS: &str = "upAxis";
+}
