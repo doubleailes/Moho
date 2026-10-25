@@ -47,7 +47,7 @@ Updates nested under a resynced prim SHALL be folded into that resync.
 
 #### Scenario: A value edit
 - **WHEN** a mesh's `points` are edited and updates are applied
-- **THEN** the mesh is notified dirtied for `primvars/points` alone
+- **THEN** the mesh is notified dirtied for `primvars/points` and its generic entry `__usdAttributes/points`, and nothing else
 
 #### Scenario: A prim defined and another removed
 - **WHEN** a prim is defined, another removed, and updates applied
@@ -64,8 +64,9 @@ Each property SHALL map to the locators of the data it feeds:
 - `primvars:<name>` to `primvars/<name>`;
 - the family attributes each schema reads to that schema's locators.
 
-A property the index exposes in no schema SHALL dirty only the generic
-attribute data that carries it.
+Every property change SHALL also dirty its own entry in the generic
+attribute data (`__usdAttributes/<name>`), and a property the index exposes
+in no schema SHALL dirty only that entry.
 
 #### Scenario: A transform op
 - **WHEN** `xformOp:translate` changes on a prim
