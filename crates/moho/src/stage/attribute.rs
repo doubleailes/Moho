@@ -6,7 +6,8 @@ use openusd::sdf::Value;
 use openusd::usd::{Attribute, TimeCode};
 
 use crate::data_source::{DataSource, Sampled, bracketing_sample_times};
-use crate::stage::Globals;
+use crate::locator::Locator;
+use crate::stage::{Globals, PrimContext};
 
 /// An attribute's resolved value, read at the index's time plus an offset.
 pub struct AttributeValue {
@@ -15,9 +16,17 @@ pub struct AttributeValue {
 }
 
 impl AttributeValue {
-    /// The value of `attribute`, as a data source.
-    pub fn data_source(attribute: Attribute, globals: Rc<Globals>) -> DataSource {
-        DataSource::Sampled(Rc::new(Self { attribute, globals }))
+    /// The value of `attribute`, as a data source at `locator` on the prim
+    /// `ctx` names. If the value may vary over time, the locator is flagged
+    /// time-varying, so a time change dirties it.
+    pub fn data_source(attribute: Attribute, ctx: &PrimContext, locator: Locator) -> DataSource {
+        if attribute.might_be_time_varying().unwrap_or(false) {
+            ctx.globals.flag_time_varying(&ctx.path, locator);
+        }
+        DataSource::Sampled(Rc::new(Self {
+            attribute,
+            globals: ctx.globals.clone(),
+        }))
     }
 }
 
