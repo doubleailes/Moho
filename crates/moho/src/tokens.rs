@@ -232,3 +232,42 @@ pub mod camera {
     pub const CAMERA: &str = "camera";
     pub const LINEAR_EXPOSURE_SCALE: &str = "linearExposureScale";
 }
+
+/// `UsdImagingUsdPrimInfoSchema` (`__usdPrimInfo`), plus Moho's stable
+/// prototype identity.
+pub mod usd_prim_info {
+    pub const USD_PRIM_INFO: &str = "__usdPrimInfo";
+    pub const NI_PROTOTYPE_PATH: &str = "niPrototypePath";
+    pub const IS_NI_PROTOTYPE: &str = "isNiPrototype";
+    /// The stable identity of the prototype an instance shares (Moho).
+    pub const NI_PROTOTYPE_IDENTITY: &str = "niPrototypeIdentity";
+}
+
+/// `HdInstancerTopologySchema`, `HdInstanceSchema`, `HdInstancedBySchema` and
+/// the instancer primvars.
+pub mod instancing {
+    pub const INSTANCER_TOPOLOGY: &str = "instancerTopology";
+    pub const PROTOTYPES: &str = "prototypes";
+    pub const INSTANCE_INDICES: &str = "instanceIndices";
+    pub const MASK: &str = "mask";
+    pub const INSTANCE_LOCATIONS: &str = "instanceLocations";
+
+    pub const INSTANCE: &str = "instance";
+    pub const INSTANCER: &str = "instancer";
+    pub const PROTOTYPE_INDEX: &str = "prototypeIndex";
+    pub const INSTANCE_INDEX: &str = "instanceIndex";
+
+    pub const INSTANCED_BY: &str = "instancedBy";
+    pub const PATHS: &str = "paths";
+    pub const PROTOTYPE_ROOTS: &str = "prototypeRoots";
+
+    pub const INSTANCE_TRANSFORMS: &str = "hydra:instanceTransforms";
+    pub const INSTANCE_TRANSLATIONS: &str = "hydra:instanceTranslations";
+    pub const INSTANCE_ROTATIONS: &str = "hydra:instanceRotations";
+    pub const INSTANCE_SCALES: &str = "hydra:instanceScales";
+
+    /// Where native prototypes are re-rooted.
+    pub const PROPAGATED_ROOT: &str = "MohoNiPropagatedPrototypes";
+    /// The re-rooted prototype, beside its instancer.
+    pub const PROTOTYPE: &str = "prototype";
+}

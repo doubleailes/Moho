@@ -210,7 +210,14 @@ the root edit target (`crates/moho-spike/tests/probe.rs` asserts all of it):
 - The instancing key (`pcp::instancing::InstanceKey`: instanceable arcs,
   variant selections, relative load rules and mask) and
   `PrimIndex::instanceable_nodes` are crate-private, and the key names layer
-  stacks by a stage-local `LayerStackId`.
+  stacks by a stage-local `LayerStackId`. The public graph is enough to
+  rebuild it: `PrimIndexRef::graph() -> Result<pcp::PrimIndex>`,
+  `PrimIndex::root()`, `node(id)`, `children(id)`, `all_nodes()` (strength
+  order, inert nodes skipped); `pcp::Node`: `arc() -> ArcType`, `parent()`,
+  `path()`, `namespace_depth()` (the parent site's prim-element count minus
+  it is `depth_below_introduction`), `is_inert()`, `is_culled()`,
+  `has_specs()`, `map_to_root().time_offset()`; `Stage::node_layer_stack(node)`
+  and `Stage::layer_identifier(LayerId)`.
 - `prim_stack()` of a `/__Prototype_N` prim is empty.
 
 ## Gaps
@@ -232,8 +239,8 @@ the root edit target (`crates/moho-spike/tests/probe.rs` asserts all of it):
   collection adapter uses). Moho ports it in `stage/collection.rs`, checked
   against `MembershipQuery::is_included`.
 
-- No public, stage-independent instancing key: Moho hashes an instance's
-  shared prim-stack sites and variant selections instead
-  (`stage/instancing.rs`).
+- No public, stage-independent instancing key: Moho rebuilds openusd's key
+  from the public prim-index graph, naming layer stacks by their layers'
+  identifiers (`stage/instancing.rs`).
 - `prim_stack()` of a prototype prim is empty (C++ `GetPrimStack` returns the
   prototype's specs).

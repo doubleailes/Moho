@@ -76,3 +76,25 @@ fn the_same_asset_agrees_across_stages() {
         "another variant differs"
     );
 }
+
+#[test]
+fn identity_groups_exactly_as_openusd_shares() {
+    let dir = TempDir::new().unwrap();
+    dir.write("a.usda", ASSET_A);
+    dir.write("b.usda", ASSET_B);
+    let root = dir.write("root.usda", ROOT);
+    let stage = open(&root);
+    let instances = [
+        "/world/chunk_a/x",
+        "/world/chunk_a/y",
+        "/world/chunk_a/blue",
+        "/world/chunk_b/z",
+    ];
+    for a in instances {
+        for b in instances {
+            let shared =
+                stage.prim(a).unwrap().prototype().unwrap() == stage.prim(b).unwrap().prototype().unwrap();
+            assert_eq!(identity(&stage, a) == identity(&stage, b), shared, "{a} vs {b}");
+        }
+    }
+}

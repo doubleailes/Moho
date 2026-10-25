@@ -43,5 +43,5 @@ the steps that land in this repository or depend on it.
 - A public instancing key that is stable across stages (today
   `pcp::instancing::InstanceKey` is crate-private and names layer stacks by
   a stage-local id), and a non-empty `prim_stack()` for prototype prims. Moho
-  keys native prototypes on an instance's shared prim-stack sites meanwhile
+  rebuilds the key from the public prim-index graph meanwhile
   (`crates/moho/src/stage/instancing.rs`).
