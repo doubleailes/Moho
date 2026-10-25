@@ -42,8 +42,8 @@ pub struct ChunkRead {
     /// The prims read in the chunk (instances counted once, not their
     /// prototypes' prims).
     pub prims: usize,
-    /// Reads that failed, folded into the hash as a marker rather than
-    /// aborting the run.
+    /// Reads that failed, the chunk's ancestors included, folded into the
+    /// hash as a marker rather than aborting the run.
     pub errors: usize,
     /// The prims read inside prototypes, each prototype once per reader.
     pub prototype_prims: usize,
@@ -125,13 +125,15 @@ impl<'s> Reader<'s> {
     /// root reads the whole stage, which is what every strategy does below
     /// the chunk threshold.
     pub fn read_chunk(&mut self, chunk: &sdf::Path, digest: &mut Digest) -> Result<ChunkRead> {
+        // Taken before the ancestors, so their failed reads count against
+        // the chunk that read them.
+        let errors_before = self.errors;
+        let prototype_prims_before = self.prototype_prims;
         for ancestor in chunk.strict_ancestors_below_root() {
             let prim = self.stage.prim(&ancestor)?;
             let hash = self.read_prim(&prim, ancestor.as_str())?;
             digest.record_outside(&ancestor, hash);
         }
-        let errors_before = self.errors;
-        let prototype_prims_before = self.prototype_prims;
         let mut h = DefaultHasher::new();
         let mut prims = 0;
         let starts = if chunk.is_abs_root() {
