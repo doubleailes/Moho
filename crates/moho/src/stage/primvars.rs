@@ -22,20 +22,39 @@ const PRIMVARS_PREFIX: &str = "primvars:";
 
 /// Plain attributes Hydra reads as primvars, the schema family they need,
 /// and their default interpolation.
-const CUSTOM: &[(&str, &str)] = &[
-    (t::POINTS, "PointBased"),
-    (t::NORMALS, "PointBased"),
-    (t::VELOCITIES, "PointBased"),
-    (t::ACCELERATIONS, "PointBased"),
-    (t::WIDTHS, "Curves"),
+/// `(primvar, attribute, family, default interpolation)`: the first entry
+/// for a primvar whose attribute holds a non-empty value wins, so
+/// `orientationsf` is preferred over `orientations`.
+const CUSTOM: &[(&str, &str, &str, &str)] = &[
+    (t::POINTS, "points", "PointBased", t::VERTEX),
+    (t::NORMALS, "normals", "PointBased", t::VERTEX),
+    (t::VELOCITIES, "velocities", "PointBased", t::VERTEX),
+    (t::ACCELERATIONS, "accelerations", "PointBased", t::VERTEX),
+    (t::WIDTHS, "widths", "Curves", t::VERTEX),
+    (INSTANCE_TRANSLATIONS, "positions", "PointInstancer", INSTANCE),
+    (INSTANCE_ROTATIONS, "orientationsf", "PointInstancer", INSTANCE),
+    (INSTANCE_ROTATIONS, "orientations", "PointInstancer", INSTANCE),
+    (INSTANCE_SCALES, "scales", "PointInstancer", INSTANCE),
+    (t::VELOCITIES, "velocities", "PointInstancer", INSTANCE),
+    (t::ACCELERATIONS, "accelerations", "PointInstancer", INSTANCE),
+    (
+        "angularVelocities",
+        "angularVelocities",
+        "PointInstancer",
+        INSTANCE,
+    ),
 ];
+
+const INSTANCE: &str = "instance";
+use crate::tokens::instancing::{INSTANCE_ROTATIONS, INSTANCE_SCALES, INSTANCE_TRANSLATIONS};
 
 /// Where one primvar's data comes from.
 enum Source {
     /// A `primvars:<name>` attribute.
     Primvar(Primvar),
-    /// A plain attribute read as a primvar (`points`, ...).
-    Custom(usd::Attribute),
+    /// A plain attribute read as a primvar (`points`, ...), with its default
+    /// interpolation.
+    Custom(usd::Attribute, &'static str),
 }
 
 fn sources(prim: &usd::Prim) -> Vec<(Token, Source)> {
@@ -46,14 +65,22 @@ fn sources(prim: &usd::Prim) -> Vec<(Token, Source)> {
             found.push((name, Source::Primvar(primvar)));
         }
     }
-    for (name, family) in CUSTOM {
+    for (name, attribute, family, interpolation) in CUSTOM {
         // `primvars:normals` takes precedence over `normals`.
         if found.iter().any(|(n, _)| n == *name) || !prim.is_a(*family).unwrap_or(false) {
             continue;
         }
-        let attribute = prim.attribute(*name);
-        if attribute.has_value().unwrap_or(false) {
-            found.push((Token::from(*name), Source::Custom(attribute)));
+        let attribute = prim.attribute(*attribute);
+        // A value that exists, and is not an empty array at the default
+        // time (a sampled-only value has none there and still counts).
+        let non_empty = attribute.has_value().unwrap_or(false)
+            && attribute
+                .get::<Value>()
+                .ok()
+                .flatten()
+                .is_none_or(|v| v.array_len().is_none_or(|n| n > 0));
+        if non_empty {
+            found.push((Token::from(*name), Source::Custom(attribute, interpolation)));
         }
     }
     found
@@ -82,8 +109,10 @@ impl Adapter for PrimvarsAdapter {
     fn invalidate(&self, _ctx: &PrimContext, name: &str) -> LocatorSet {
         let primvar = match name.strip_prefix(PRIMVARS_PREFIX) {
             Some(rest) => rest.strip_suffix(":indices").unwrap_or(rest),
-            None if CUSTOM.iter().any(|(n, _)| *n == name) => name,
-            None => return LocatorSet::new(),
+            None => match CUSTOM.iter().find(|(_, attribute, _, _)| *attribute == name) {
+                Some((primvar, ..)) => primvar,
+                None => return LocatorSet::new(),
+            },
         };
         LocatorSet::from(Locator::new([t::PRIMVARS, primvar]))
     }
@@ -122,7 +151,7 @@ impl PrimvarEntry {
     fn attribute(&self) -> &usd::Attribute {
         match &self.source {
             Source::Primvar(p) => p.attribute(),
-            Source::Custom(a) => a,
+            Source::Custom(a, _) => a,
         }
     }
 
@@ -139,7 +168,7 @@ impl PrimvarEntry {
             Source::Primvar(p) => p
                 .interpolation_token()
                 .unwrap_or_else(|_| Token::from(t::CONSTANT)),
-            Source::Custom(a) => a
+            Source::Custom(a, default) => a
                 .metadata::<Value>("interpolation")
                 .ok()
                 .flatten()
@@ -147,7 +176,7 @@ impl PrimvarEntry {
                     Value::Token(t) => Some(t),
                     _ => None,
                 })
-                .unwrap_or_else(|| Token::from(t::VERTEX)),
+                .unwrap_or_else(|| Token::from(*default)),
         }
     }
 
@@ -225,14 +254,14 @@ impl Container for PrimvarEntry {
                     &self.ctx,
                     self.locator(),
                 )),
-                Source::Custom(_) => None,
+                Source::Custom(..) => None,
             },
             t::INTERPOLATION => Some(value(Value::Token(self.interpolation()))),
             t::ROLE => self.role().map(|r| value(Value::Token(r))),
             t::ELEMENT_SIZE => {
                 let size = match &self.source {
                     Source::Primvar(p) => p.element_size().unwrap_or(1),
-                    Source::Custom(_) => 1,
+                    Source::Custom(..) => 1,
                 };
                 Some(value(size))
             }

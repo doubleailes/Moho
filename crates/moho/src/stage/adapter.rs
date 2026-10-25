@@ -92,6 +92,10 @@ impl AdapterRegistry {
         );
         registry.set_type("Mesh", Rc::new(crate::stage::mesh::MeshAdapter));
         registry.set_type("Camera", Rc::new(crate::stage::camera::CameraAdapter));
+        registry.set_type(
+            "PointInstancer",
+            Rc::new(crate::stage::point_instancer::PointInstancerAdapter),
+        );
         registry.set_type("Material", Rc::new(crate::stage::material::MaterialAdapter));
         registry.set_type("BasisCurves", Rc::new(crate::stage::curves::BASIS_CURVES));
         registry.set_type("NurbsCurves", Rc::new(crate::stage::curves::NURBS_CURVES));

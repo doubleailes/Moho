@@ -16,3 +16,6 @@ pub use light_linking::LightLinkingSceneIndex;
 pub mod native_instancing;
 
 pub use native_instancing::NativeInstancingSceneIndex;
+pub mod point_instancing;
+
+pub use point_instancing::PointInstancingSceneIndex;
