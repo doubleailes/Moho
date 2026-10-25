@@ -1,0 +1,152 @@
+#![allow(clippy::unwrap_used)]
+
+mod common;
+
+use std::rc::Rc;
+
+use common::{p, stage};
+use moho::data_source::{ContainerHandle, locate};
+use moho::filter::RenderSettingsFlatteningSceneIndex;
+use moho::locator::Locator;
+use moho::openusd::gf;
+use moho::openusd::sdf::Value;
+use moho::scene_index::SceneIndex;
+use moho::scene_index::testing::{Notice, RecordingObserver};
+use moho::stage::StageSceneIndex;
+
+fn setup() -> (
+    common::TempDir,
+    Rc<StageSceneIndex>,
+    Rc<RenderSettingsFlatteningSceneIndex>,
+) {
+    let (dir, usd) = stage(common::render::SCENE);
+    let stage_index = StageSceneIndex::new();
+    stage_index.set_stage(usd);
+    let flat = RenderSettingsFlatteningSceneIndex::new(stage_index.clone());
+    (dir, stage_index, flat)
+}
+
+fn settings(flat: &RenderSettingsFlatteningSceneIndex) -> ContainerHandle {
+    let data = flat.prim(&p("/Render/settings")).data.unwrap();
+    locate(&data, &Locator::parse("renderSettings"))
+        .unwrap()
+        .as_container()
+        .unwrap()
+        .clone()
+}
+
+fn element(container: &ContainerHandle, vector: &str, i: usize) -> ContainerHandle {
+    let v = locate(container, &Locator::parse(vector)).unwrap();
+    v.as_vector()
+        .unwrap()
+        .get(i)
+        .unwrap()
+        .as_container()
+        .unwrap()
+        .clone()
+}
+
+fn read(container: &ContainerHandle, locator: &str) -> Option<Value> {
+    locate(container, &Locator::parse(locator)).and_then(|d| d.value())
+}
+
+#[test]
+fn settings_with_products() {
+    let (_dir, _stage, flat) = setup();
+    let s = settings(&flat);
+    assert_eq!(read(&s, "camera"), Some(Value::PathVec(vec![p("/cam")])));
+    assert_eq!(
+        read(&s, "resolution"),
+        Some(Value::Vec2i(gf::Vec2i { x: 1920, y: 1080 }))
+    );
+    assert_eq!(
+        read(&s, "namespacedSettings/crust:samplesPerPixel"),
+        Some(Value::Int(64))
+    );
+    assert_eq!(
+        locate(&s, &Locator::parse("renderProducts"))
+            .unwrap()
+            .as_vector()
+            .unwrap()
+            .len(),
+        2
+    );
+
+    let beauty = element(&s, "renderProducts", 0);
+    assert_eq!(
+        read(&beauty, "path"),
+        Some(Value::PathVec(vec![p("/Render/beauty")]))
+    );
+    assert_eq!(
+        read(&beauty, "cameraPrim"),
+        Some(Value::PathVec(vec![p("/cam")])),
+        "the settings' camera"
+    );
+    assert_eq!(
+        read(&beauty, "resolution"),
+        Some(Value::Vec2i(gf::Vec2i { x: 1920, y: 1080 })),
+        "the settings' resolution"
+    );
+    assert_eq!(read(&beauty, "name"), Some(Value::Token("beauty.exr".into())));
+    assert_eq!(
+        read(&beauty, "namespacedSettings/driver:parameters:artist"),
+        Some(Value::String("phil".into()))
+    );
+}
+
+#[test]
+fn a_product_overrides_the_camera_and_resolution() {
+    let (_dir, _stage, flat) = setup();
+    let aovs = element(&settings(&flat), "renderProducts", 1);
+    assert_eq!(read(&aovs, "cameraPrim"), Some(Value::PathVec(vec![p("/cam2")])));
+    assert_eq!(
+        read(&aovs, "resolution"),
+        Some(Value::Vec2i(gf::Vec2i { x: 960, y: 540 }))
+    );
+}
+
+#[test]
+fn vars_in_order() {
+    let (_dir, _stage, flat) = setup();
+    let beauty = element(&settings(&flat), "renderProducts", 0);
+    let color = element(&beauty, "renderVars", 0);
+    let depth = element(&beauty, "renderVars", 1);
+    assert_eq!(read(&color, "sourceName"), Some(Value::String("Ci".into())));
+    assert_eq!(read(&color, "dataType"), Some(Value::Token("color3f".into())));
+    assert_eq!(read(&depth, "sourceName"), Some(Value::String("z".into())));
+    assert_eq!(
+        read(&color, "path"),
+        Some(Value::PathVec(vec![p("/Render/color")]))
+    );
+}
+
+#[test]
+fn a_var_change_dirties_its_settings() {
+    let (_dir, stage_index, flat) = setup();
+    let recorder = RecordingObserver::on(flat.as_ref());
+    stage_index
+        .stage()
+        .unwrap()
+        .attribute("/Render/depth.sourceName")
+        .unwrap()
+        .set("Z".to_owned())
+        .unwrap();
+    stage_index.apply_pending_updates();
+    let notices = recorder.take();
+    assert!(
+        notices.iter().any(|n| matches!(n, Notice::Dirtied(d) if d.path == p("/Render/settings") && d.locators.contains(&Locator::parse("renderSettings")))),
+        "{notices:?}"
+    );
+    let depth = element(&element(&settings(&flat), "renderProducts", 0), "renderVars", 1);
+    assert_eq!(read(&depth, "sourceName"), Some(Value::String("Z".into())));
+}
+
+#[test]
+fn a_pass_and_its_source() {
+    let (_dir, _stage, flat) = setup();
+    let data = flat.prim(&p("/Render/pass")).data.unwrap();
+    assert_eq!(
+        read(&data, "renderPass/renderSource"),
+        Some(Value::PathVec(vec![p("/Render/settings")]))
+    );
+}
