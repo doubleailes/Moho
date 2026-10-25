@@ -12,7 +12,7 @@
 //! predicates.
 
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::rc::{Rc, Weak};
 
 use openusd::sdf::path_expr::{PathExpressionEval, PredicateLibrary};
@@ -37,6 +37,9 @@ pub struct MaterialBindingResolvingSceneIndex {
     membership: Option<Rc<dyn CollectionMembership>>,
     me: Weak<MaterialBindingResolvingSceneIndex>,
     cache: RefCell<HashMap<sdf::Path, Prim>>,
+    /// Collection owner to the prims whose resolution consulted one of its
+    /// collections (UsdImaging declares these as `__dependencies`).
+    dependents: RefCell<HashMap<sdf::Path, BTreeSet<sdf::Path>>>,
     observers: Observers,
 }
 
@@ -49,6 +52,7 @@ impl MaterialBindingResolvingSceneIndex {
             membership,
             me: me.clone(),
             cache: RefCell::new(HashMap::new()),
+            dependents: RefCell::new(HashMap::new()),
             observers: Observers::default(),
         });
         let observer: Weak<dyn Observer> = index.me.clone();
@@ -58,6 +62,9 @@ impl MaterialBindingResolvingSceneIndex {
 
     fn forget_under(&self, root: &sdf::Path) {
         self.cache.borrow_mut().retain(|p, _| !p.has_prefix(root));
+        for dependents in self.dependents.borrow_mut().values_mut() {
+            dependents.retain(|p| !p.has_prefix(root));
+        }
     }
 }
 
@@ -102,6 +109,14 @@ impl Resolved {
     fn includes(&self, binding: &ContainerHandle) -> bool {
         let collection_prim = member_value(binding, t::COLLECTION_PRIM_PATH).and_then(single_path);
         let name = member_value(binding, t::COLLECTION_NAME).and_then(as_token);
+        if let (Some(index), Some(prim)) = (self.index.upgrade(), &collection_prim) {
+            index
+                .dependents
+                .borrow_mut()
+                .entry(prim.clone())
+                .or_default()
+                .insert(self.path.clone());
+        }
         if let (Some(index), Some(prim), Some(name)) = (self.index.upgrade(), &collection_prim, &name)
             && let Some(membership) = &index.membership
             && let Some(included) = membership.includes(prim, name.as_str(), &self.path)
@@ -229,7 +244,7 @@ impl Observer for MaterialBindingResolvingSceneIndex {
     fn dirtied(&self, _: &dyn SceneIndex, entries: &[Dirtied]) {
         let opinions = Locator::new([t::USD_MATERIAL_BINDINGS]);
         let resolved = Locator::new([t::MATERIAL_BINDINGS]);
-        let out: Vec<Dirtied> = entries
+        let mut out: Vec<Dirtied> = entries
             .iter()
             .map(|e| {
                 let mut locators = e.locators.clone();
@@ -242,6 +257,24 @@ impl Observer for MaterialBindingResolvingSceneIndex {
                 }
             })
             .collect();
+        // A collection's owner changed its collections (or its bindings,
+        // which a membership edit on a bound owner dirties): the prims bound
+        // through it re-resolve.
+        let collections = Locator::new([crate::tokens::collections::COLLECTIONS]);
+        let mut reached: BTreeSet<sdf::Path> = BTreeSet::new();
+        {
+            let dependents = self.dependents.borrow();
+            for e in entries
+                .iter()
+                .filter(|e| e.locators.intersects(&opinions) || e.locators.intersects(&collections))
+            {
+                reached.extend(dependents.get(&e.path).into_iter().flatten().cloned());
+            }
+        }
+        out.extend(reached.into_iter().map(|path| Dirtied {
+            path,
+            locators: resolved.clone().into(),
+        }));
         self.observers.send_dirtied(self, &out);
     }
 

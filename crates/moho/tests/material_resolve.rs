@@ -186,3 +186,64 @@ fn a_collection_edit_reresolves() {
     );
     assert_eq!(bound(&chain, "/coll/other", ""), Some(p("/Looks/chrome")));
 }
+
+/// The collection lives on a prim unrelated to the bound one: editing it
+/// reaches the prims bound through it.
+#[test]
+fn editing_a_collection_elsewhere_reresolves() {
+    let (dir, usd) = stage(
+        r#"#usda 1.0
+def Xform "World" (
+    prepend apiSchemas = ["MaterialBindingAPI"]
+)
+{
+    rel material:binding = </Looks/red>
+    rel material:binding:collection:metal = [</Sets.collection:metal>, </Looks/chrome>]
+    def Mesh "geo"
+    {
+    }
+}
+def Scope "Sets" (
+    prepend apiSchemas = ["CollectionAPI:metal"]
+)
+{
+}
+def Scope "Looks"
+{
+    def Material "red"
+    {
+    }
+    def Material "chrome"
+    {
+    }
+}
+"#,
+    );
+    let stage_index = StageSceneIndex::new();
+    stage_index.set_stage(usd);
+    let flat = FlatteningSceneIndex::new(stage_index.clone());
+    let oracle: Rc<dyn CollectionMembership> = stage_index.clone();
+    let resolved = MaterialBindingResolvingSceneIndex::new(flat, Some(oracle));
+    let chain = Chain {
+        _dir: dir,
+        stage: stage_index,
+        resolved,
+    };
+    assert_eq!(bound(&chain, "/World/geo", ""), Some(p("/Looks/red")));
+    let recorder = RecordingObserver::on(chain.resolved.as_ref());
+    chain
+        .stage
+        .stage()
+        .unwrap()
+        .relationship("/Sets.collection:metal:includes")
+        .unwrap()
+        .set_targets([p("/World/geo")])
+        .unwrap();
+    chain.stage.apply_pending_updates();
+    let notices = recorder.take();
+    assert!(
+        notices.iter().any(|n| matches!(n, Notice::Dirtied(d) if d.path == p("/World/geo") && d.locators.contains(&Locator::parse("materialBindings")))),
+        "{notices:?}"
+    );
+    assert_eq!(bound(&chain, "/World/geo", ""), Some(p("/Looks/chrome")));
+}
