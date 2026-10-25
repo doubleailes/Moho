@@ -13,3 +13,6 @@ pub use material_binding::MaterialBindingResolvingSceneIndex;
 pub mod light_linking;
 
 pub use light_linking::LightLinkingSceneIndex;
+pub mod native_instancing;
+
+pub use native_instancing::NativeInstancingSceneIndex;

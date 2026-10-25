@@ -212,12 +212,9 @@ needed for `crust:*` on geometry, lights and volumes.
     `/MohoNiPropagatedPrototypes/<bindings>/<prototype>/instancer`.
   - It re-roots the prototype's prims there.
   - Nested instances recurse.
-- **Stable paths.** The `<prototype>` segment is a hash of the prototype's
-  identity, never openusd's numbering:
-  - the asset path and prim path its prim index composes from;
-  - the variant selections.
-
-  So two chunk stages agree on it.
+- **Stable paths.** The `<prototype>` segment is a hash of openusd's
+  instancing key, rebuilt with stage-independent layer names, never
+  openusd's numbering. So two chunk stages agree on it.
 - **Point instancers.**
   - Expose `instancerTopology` and the `hydra:instance*` primvars.
   - A point-instancer filter re-roots each targeted prototype under
@@ -309,10 +306,13 @@ reads anchors an unresolved relative asset path on the layer that authors it
 
 - ~~The exact identity that keys a stable native prototype (D5).~~ Settled
   by task 8.1. openusd's instancing key is crate-private and stage-local, and
-  a prototype prim's `prim_stack()` is empty. So the identity hashes the
-  instance's prim-stack sites outside its own local opinions (layer
-  identifier, spec path, offset) and its variant selections. It is equal
-  across chunk stages and the full stage. Both gaps are upstream candidates.
+  a prototype prim's `prim_stack()` is empty. So Moho rebuilds openusd's key
+  from the public prim-index graph: the instanceable nodes (by openusd's own
+  instance-local partition) with layer stacks named by their layers'
+  identifiers, plus the variant selections. It is equal across chunk stages
+  and the full stage, and groups exactly as openusd shares on one stage. A
+  first version hashed prim-stack sites, which split nested instances. Both
+  gaps are upstream candidates.
 - ~~Whether the native-instancing filter's binding hash also needs light
   linking categories.~~ Settled by the light linking task: no. Categories
   travel per instance in the instancer's `instanceCategories`, judged at each

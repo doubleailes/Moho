@@ -23,6 +23,7 @@ pub mod material;
 pub mod material_binding;
 pub mod mesh;
 pub mod pending;
+pub mod prim_info;
 pub mod primvars;
 pub mod table;
 pub mod xform;
@@ -205,6 +206,29 @@ impl StageSceneIndex {
             // A traversal error leaves the prims found so far: the index
             // shows what the stage could compose.
             let _ = stage.traverse(PrimPredicate::DEFAULT, |path| paths.push(path.clone()));
+            // Then the prototypes, which the traversal composes by visiting
+            // their instances: each prototype's subtree may hold nested
+            // instances, registering more prototypes, until none is new.
+            let mut done: BTreeSet<sdf::Path> = BTreeSet::new();
+            loop {
+                let fresh: Vec<sdf::Path> = stage
+                    .prototypes()
+                    .unwrap_or_default()
+                    .into_iter()
+                    .filter(|p| !done.contains(p))
+                    .collect();
+                if fresh.is_empty() {
+                    break;
+                }
+                for prototype in fresh {
+                    if let Ok(prim) = stage.prim(&prototype)
+                        && let Ok(range) = prim.filtered_subtree(PrimPredicate::DEFAULT)
+                    {
+                        paths.extend(range.filter_map(Result::ok).map(|p| p.path().clone()));
+                    }
+                    done.insert(prototype);
+                }
+            }
         } else if self.prim(root).is_defined()
             && let Ok(start) = stage.prim(root)
             && let Ok(range) = start.filtered_subtree(PrimPredicate::DEFAULT)
@@ -440,12 +464,18 @@ impl SceneIndex for StageSceneIndex {
         if !path.is_abs_root() && !self.prim(path).is_defined() {
             return Vec::new();
         }
-        stage
+        let mut children: Vec<sdf::Path> = stage
             .prim(path)
             .ok()
             .and_then(|p| p.filtered_children(PrimPredicate::DEFAULT).ok())
             .map(|children| children.iter().map(|c| c.path().clone()).collect())
-            .unwrap_or_default()
+            .unwrap_or_default();
+        if path.is_abs_root() {
+            // Prototypes are prims of this index too, as in UsdImaging; the
+            // native-instancing filter re-roots them.
+            children.extend(stage.prototypes().unwrap_or_default());
+        }
+        children
     }
 
     fn add_observer(&self, observer: Weak<dyn Observer>) {
