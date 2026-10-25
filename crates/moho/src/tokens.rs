@@ -185,3 +185,25 @@ pub mod material_bindings {
     pub const STRONGER_THAN_DESCENDANTS: &str = "strongerThanDescendants";
     pub const WEAKER_THAN_DESCENDANTS: &str = "weakerThanDescendants";
 }
+
+/// `HdMaterialSchema`, `HdMaterialNetworkSchema`, `HdMaterialNodeSchema`,
+/// `HdMaterialNodeParameterSchema` and `HdMaterialConnectionSchema`.
+pub mod material {
+    pub const MATERIAL: &str = "material";
+    pub const NODES: &str = "nodes";
+    pub const TERMINALS: &str = "terminals";
+    pub const NODE_IDENTIFIER: &str = "nodeIdentifier";
+    pub const PARAMETERS: &str = "parameters";
+    pub const INPUT_CONNECTIONS: &str = "inputConnections";
+    pub const VALUE: &str = "value";
+    pub const TYPE_NAME: &str = "typeName";
+    pub const COLOR_SPACE: &str = "colorSpace";
+    pub const UPSTREAM_NODE_PATH: &str = "upstreamNodePath";
+    pub const UPSTREAM_NODE_OUTPUT_NAME: &str = "upstreamNodeOutputName";
+
+    pub const SURFACE: &str = "surface";
+    pub const DISPLACEMENT: &str = "displacement";
+    pub const VOLUME: &str = "volume";
+    /// The universal render context.
+    pub const UNIVERSAL: &str = "";
+}

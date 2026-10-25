@@ -16,6 +16,7 @@ pub mod generic;
 pub mod globals;
 pub mod imageable;
 pub mod implicit;
+pub mod material;
 pub mod material_binding;
 pub mod mesh;
 pub mod pending;
@@ -253,7 +254,7 @@ impl StageSceneIndex {
             }
             added.extend(now);
         }
-        let mut dirtied: Vec<Dirtied> = Vec::new();
+        let mut dirty: BTreeMap<sdf::Path, LocatorSet> = BTreeMap::new();
         let properties = pending
             .resynced_properties
             .into_iter()
@@ -268,12 +269,36 @@ impl StageSceneIndex {
             }
             let locators = self.invalidate(&prim, &names);
             if !locators.is_empty() {
-                dirtied.push(Dirtied { path: prim, locators });
+                dirty.entry(prim.clone()).or_default().insert_set(&locators);
+            }
+            // A shader or node graph is represented by its material.
+            if let Some(material) = self.representing_material(&prim) {
+                dirty
+                    .entry(material)
+                    .or_default()
+                    .insert(Locator::new([crate::tokens::material::MATERIAL]));
             }
         }
+        let dirtied: Vec<Dirtied> = dirty
+            .into_iter()
+            .map(|(path, locators)| Dirtied { path, locators })
+            .collect();
         self.observers.send_removed(self, &removed);
         self.observers.send_added(self, &added);
         self.observers.send_dirtied(self, &dirtied);
+    }
+
+    /// The nearest `Material` ancestor of a `Shader` or `NodeGraph` prim,
+    /// which represents it.
+    fn representing_material(&self, path: &sdf::Path) -> Option<sdf::Path> {
+        let stage = self.stage()?;
+        let usd_type = |p: &sdf::Path| -> Option<Token> { stage.prim(p).ok()?.type_name().ok().flatten() };
+        let ty = usd_type(path)?;
+        if ty != "Shader" && ty != "NodeGraph" {
+            return None;
+        }
+        path.strict_ancestors_below_root()
+            .find(|a| usd_type(a).is_some_and(|t| t == "Material"))
     }
 
     /// The index's current time, `None` for the default time.

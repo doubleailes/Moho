@@ -170,6 +170,14 @@ the root edit target (`crates/moho-spike/tests/probe.rs` asserts all of it):
   only an authored `membershipExpression` (as C++
   `ResolveCompleteMembershipExpression`): it is empty for an includes/excludes
   collection.
+- Material networks: `shade::Material::get(&Stage, path)`; `Connectable::outputs()`
+  lists declared outputs too (Moho keeps those with authored connections or
+  values); `Shader::get`, `Shader::id() -> Result<Option<String>>` (`info:id`
+  in id mode), `Connectable::authored_inputs()`; `Input`/`Output::
+  value_producing_attributes(ProducerFilter::{Any, ShaderOutputsOnly}) ->
+  Vec<ShadingAttribute>` follows node-graph outputs and interface inputs (C++
+  `UsdShadeUtils::GetValueProducingAttributes`); `ShadingAttribute::{Input,
+  Output}` and `attribute()`.
 - Stage-free matching: `sdf::path_expr::PathExpressionEval::<D>::build(&expr,
   &PredicateLibrary::new())` then `match_path(&path, &domain).value`. With an
   empty library, expressions with predicates do not compile.
