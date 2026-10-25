@@ -10,7 +10,8 @@ the steps that land in this repository or depend on it.
   stage, and streaming is one stage index per chunk under a
   `MergingSceneIndex` (`docs/streaming-spike.md`).
   `crates/moho-spike` stays as a regression benchmark for S2.
-- **S1: core (Moho side). Done** (OpenSpec change `scene-index-core`). Scene
+- **S1: core (Moho side). Done** (OpenSpec change `scene-index-core`, archived;
+  its requirements are the specs in `openspec/specs/`). Scene
   index traits, observers, data sources, locators, `StageSceneIndex` (queued
   notices, time, the time-varying set, generic attribute data in
   `__usdAttributes`), the
