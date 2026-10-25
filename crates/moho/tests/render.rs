@@ -111,3 +111,34 @@ fn namespaced_settings_and_pass_collections() {
         "{collections:?}"
     );
 }
+
+#[test]
+fn a_pass_exposes_every_collection() {
+    let (_dir, usd) = stage(
+        r#"#usda 1.0
+def RenderPass "pass" (
+    prepend apiSchemas = ["CollectionAPI:prune"]
+)
+{
+    rel collection:prune:includes = </world/hidden>
+    rel collection:matte:includes = </world/matte>
+}
+"#,
+    );
+    let index = StageSceneIndex::new();
+    index.set_stage(usd);
+    let pass = index.prim(&p("/pass")).data.unwrap();
+    let collections = locate(&pass, &Locator::parse("collections"))
+        .unwrap()
+        .as_container()
+        .unwrap()
+        .clone();
+    let names = collections.names();
+    for name in ["renderVisibility", "prune", "matte", "cameraVisibility"] {
+        assert!(names.contains(&Token::from(name)), "{name}: {names:?}");
+        assert!(
+            locate(&collections, &Locator::new([name, "membershipExpression"])).is_some(),
+            "{name}'s expression"
+        );
+    }
+}
