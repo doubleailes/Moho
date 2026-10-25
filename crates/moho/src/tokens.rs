@@ -118,3 +118,18 @@ pub mod primvars {
     pub const CONSTANT: &str = "constant";
     pub const VERTEX: &str = "vertex";
 }
+
+/// `HdVisibilitySchema`, `HdPurposeSchema` and `HdExtentSchema`.
+pub mod imageable {
+    pub const VISIBILITY: &str = "visibility";
+    pub const PURPOSE: &str = "purpose";
+    pub const INHERITABLE: &str = "inheritable";
+    pub const FALLBACK: &str = "fallback";
+    pub const EXTENT: &str = "extent";
+    pub const MIN: &str = "min";
+    pub const MAX: &str = "max";
+
+    pub const INVISIBLE: &str = "invisible";
+    pub const DEFAULT: &str = "default";
+    pub const GEOMETRY: &str = "geometry";
+}
