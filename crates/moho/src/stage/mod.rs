@@ -15,6 +15,7 @@ pub mod generic;
 pub mod globals;
 pub mod imageable;
 pub mod implicit;
+pub mod material_binding;
 pub mod mesh;
 pub mod pending;
 pub mod primvars;

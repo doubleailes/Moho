@@ -169,4 +169,16 @@ pub mod implicit {
 pub mod material_bindings {
     pub const USD_MATERIAL_BINDINGS: &str = "usdMaterialBindings";
     pub const MATERIAL_BINDINGS: &str = "materialBindings";
+
+    pub const DIRECT_MATERIAL_BINDING: &str = "directMaterialBinding";
+    pub const COLLECTION_MATERIAL_BINDINGS: &str = "collectionMaterialBindings";
+    pub const MATERIAL_PATH: &str = "materialPath";
+    pub const BINDING_STRENGTH: &str = "bindingStrength";
+    pub const COLLECTION_PRIM_PATH: &str = "collectionPrimPath";
+    pub const COLLECTION_NAME: &str = "collectionName";
+    /// The resolved binding's material (`HdMaterialBindingSchema`).
+    pub const PATH: &str = "path";
+
+    pub const STRONGER_THAN_DESCENDANTS: &str = "strongerThanDescendants";
+    pub const WEAKER_THAN_DESCENDANTS: &str = "weakerThanDescendants";
 }

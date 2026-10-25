@@ -152,6 +152,17 @@ the root edit target (`crates/moho-spike/tests/probe.rs` asserts all of it):
   Result<Option<sdf::Role>>` gives the Hydra role. `Prim::is_a("PointBased")`
   and `is_a("Curves")` select the plain attributes Hydra reads as primvars.
 
+## Material schemas (S1)
+
+- `openusd_schemas::shade::MaterialBindingAPI::get(&Stage, path) ->
+  Result<Option<_>>` (only where the API is applied, as UsdImaging's binding
+  adapter requires). `direct_binding(purpose) -> Result<Option<DirectBinding>>`
+  (`material_path()`, `strength() -> Result<BindingStrength>`) and
+  `collection_bindings(purpose) -> Result<Vec<CollectionBinding>>`
+  (`collection_path()` such as `/world.collection:metal`, `material_path()`,
+  `strength()`). `MATERIAL_PURPOSES` is `["", "preview", "full"]`;
+  `owns_property(name)` tells a binding property.
+
 ## Gaps
 
 - Splines (`Ts`): a `.spline` block only round-trips as a dictionary. There
