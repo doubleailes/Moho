@@ -162,13 +162,25 @@ impl StageSceneIndex {
 
 - **The stage index reads one stage**, whatever its load set and mask.
   Choosing them is the caller's job, as it is in `usdImaging`.
-- **Streaming composes standard indices.** The chunks come from Crust's rule
-  on a `LoadNone` stage. Each chunk is a `StageSceneIndex` over a `LoadAll`
-  stage masked to that chunk. A `MergingSceneIndex` combines them:
-  `add_input_scene(chunk_index, chunk_root)` adds a chunk, and
-  `remove_input_scene` drops it, which observers see as the chunk's prims
-  added or removed. Below 4 chunks, one stage index over one `LoadAll` stage
-  serves the whole scene, as in Crust's import.
+- **Streaming composes standard indices under a `MergingSceneIndex`.**
+  - **A scene input, always present and weakest:** a `StageSceneIndex` over
+    the scene opened `LoadNone`, added at `/`. It carries everything outside
+    the payloads: render settings, products, cameras, passes, the chunks'
+    ancestors and roots, and materials authored outside payloads. Crust's
+    import reads exactly these from its `LoadNone` index stage before
+    streaming.
+  - **Chunk inputs, stronger:** each chunk (Crust's rule) is a
+    `StageSceneIndex` over a `LoadAll` stage masked to it, added with
+    `add_input_scene(chunk_index, chunk_root)` and dropped with
+    `remove_input_scene`. Observers see the chunk's payload contents added
+    or removed. The scene input's prims stay.
+
+  Below 4 chunks, one stage index over one `LoadAll` stage serves the whole
+  scene, as in Crust's import.
+- **References into another chunk's payload** (a material bound from
+  elsewhere) resolve only while that chunk is in. Crust opens such materials
+  on their own today (`materials.outside`). S1 specifies how a consumer asks
+  for them.
 - **The consumer decides when chunks come and go.** An offline import
   (Crust) adds a chunk, pulls it, and removes it, in turn. That is S0's
   strategy (B) and its memory bound. A viewport (Obsidian) keeps the chunks
@@ -176,9 +188,10 @@ impl StageSceneIndex {
 - **Edits apply at an explicit flush.** Stage notices are queued and become
   scene index notices in `apply_pending_updates`, so the IPR can replay a
   whole change and flush once before its delegate syncs.
-- **A `LoadNone` stage hears edits under payloads it has not loaded** (the
-  probe). The S1 specs decide whether a merging setup keeps a hierarchy stage
-  for that, or forwards edits to the chunk stages that are open.
+- **The scene input's `LoadNone` stage hears edits under payloads it has
+  not loaded** (the probe). The S1 specs decide whether that is how edits
+  reach open chunk stages (the consumer replaces the dirty chunks), or
+  whether the stages share layers instead.
 - **Prototype paths are numbered per stage**, so `/__Prototype_N` is never
   stable identity across chunks. S1 should place prototypes the way Hydra's
   native-instancing filter does, under paths derived from the instancer.
