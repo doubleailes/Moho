@@ -1,0 +1,10 @@
+date: 2026-10-25T10:59:35Z
+host: cdg2-phil-01
+kernel: Linux 5.14.0-687.15.1.el9_8.x86_64 x86_64
+cpu: Intel(R) Xeon(R) CPU E5-2699 v4 @ 2.20GHz (72 threads)
+memory: 94.0 GiB
+openusd rev: 68a867a69f3fb429a30f9e1155a0a30a3d2cdf9f
+moho rev: 23c0fc5
+scene: /home/philippe.llerena/Workspace/samples/island/usd/island.usda
+strategies: a b
+extra: strategy c run separately on 2026-10-25T11:01:51Z, same binary and machine, as a reference (not part of the planned --skip-c run)

@@ -3,10 +3,13 @@
 The program is planned in Mantle's OpenSpec change `scene-index`. These are
 the steps that land in this repository or depend on it.
 
-- **S0: streaming spike.** Stream ALab and Moana through a single stage with
-  payload `load_and_unload` per subtree, against Crust's population-masked
-  stage per chunk. Measure memory and time, and choose `StageSceneIndex`'s
-  constructor.
+- **S0: streaming spike. Done.** Streamed ALab and Moana through a single
+  stage with payload `load_and_unload` per subtree, against Crust's
+  population-masked stage per chunk. Masked stages won on memory (Moana peak
+  1.97 against 5.05 GiB). `StageSceneIndex` keeps Hydra's shape over one
+  stage, and streaming is one stage index per chunk under a
+  `MergingSceneIndex` (`docs/streaming-spike.md`).
+  `crates/moho-spike` stays as a regression benchmark for S2.
 - **S1: core.** Scene index traits, observers, data sources, locators,
   `StageSceneIndex` (change notices, time, the time-varying set) and
   `FlatteningSceneIndex`, with typed schemas for every family Crust imports:
@@ -26,3 +29,11 @@ the steps that land in this repository or depend on it.
 ## Upstream candidates (openusd)
 
 - Splines (`Ts`): typed knots, evaluation, authoring, usdc encoding.
+- Unloading a payload does not free what composing it took (no layer
+  eviction). On Moana, RSS under one stage only grew across 22 load/unload
+  rounds. This is what rules out single-stage streaming (S0).
+  [mxpv/openusd#173](https://github.com/mxpv/openusd/issues/173).
+- `StageSink::load_rules_changed` reports the nearest ancestor whose load
+  rule changes resolution (e.g. `/world`) rather than the loaded or unloaded
+  path, so taken as a subtree resync it covers every sibling subtree.
+  [mxpv/openusd#174](https://github.com/mxpv/openusd/issues/174).
