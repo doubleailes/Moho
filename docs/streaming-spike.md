@@ -86,6 +86,40 @@ primvars, curves, materials) at an older openusd. The comparison between
 strategies is what this spike decides on, and it holds either way: (A) keeps
 78% of (C)'s peak, while (B) keeps 30%.
 
+### (D): (B) read through Moho (`scene-index-gaps`, M5)
+
+(D) streams as (B) does, but reads through Moho: a `LoadNone` scene input
+under a `MergingSceneIndex`, each chunk a `chain::input` over its masked
+`LoadAll` stage, added, read through `chain::merged` and removed in turn.
+It reads every data source of every prim down to its leaves, generic data
+included, so it is an upper bound on what a consumer reads, not (B)'s read
+set. Its digest hashes index data; `crates/moho-spike/tests/strategy.rs`
+checks that it equals an index read of the fully loaded stage.
+
+One run of (D), (A) and (B) on Moana, same machine, openusd `68a867a`, Moho
+`5574673` (`scripts/streaming-spike.sh --skip-c --with-d`; raw output in
+`streaming-spike/moana-d/`):
+
+| strategy | total | peak | after last chunk | digest |
+|---|---|---|---|---|
+| d | 279.31 s | **2.35 GiB** | 1.78 GiB | `ac3bf7f95a9a2537` (index) |
+| a | 44.88 s | 5.05 GiB | 2.43 GiB | `d8de81f228c46b76` |
+| b | 42.22 s | **1.97 GiB** | 1.69 GiB | `d8de81f228c46b76` |
+
+- **Memory.** (D) keeps (B)'s bound: 1.19× (B)'s peak, still bounded by the
+  largest chunk (1.55 GiB after `isCoral`, 1.78 after `isDunesB`), against
+  (A)'s growth to 5.05 GiB. Moho's own overhead on top of the stages is
+  about 0.4 GiB.
+- **Time.** 6.6× (B). Two chunks carry it: `isCoral` (113 967 prims, 192 s
+  against 13 s) and `isPalmRig` (20 546 prims, 50 s against 1.7 s), about
+  1.7 ms and 2.5 ms per prim, every data source formatted into the digest.
+  A consumer reading only what it imports pays less; the per-prim cost of
+  the full chain is a follow-up to profile (ROADMAP.md).
+- **A fix found on the way.** The first run spent hours in `isCoral`: light
+  linking rebuilt every light's links for each instance of a point
+  instancer, and listing a prim's names judged its categories. Links are
+  now cached and compiled once (`5574673`).
+
 ### What (A) costs, and why
 
 Each `load_and_unload` drops a bounded set of cached indices (the loaded and

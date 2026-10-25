@@ -36,6 +36,9 @@ the steps that land in this repository or depend on it.
 ## Later
 
 - Instancing and material-network-resolve filters beyond what S2 needs.
+- Profile the standard chain's per-prim cost. Strategy (D), which reads every
+  data source, took 6.6× (B)'s time on Moana (`docs/streaming-spike.md`),
+  about 2 ms per prim on its two largest chunks.
 - Light-link predicates across merged inputs: after a merge, linking judges
   complete membership expressions, so a collection whose membership needs a
   predicate is not judged (the expression fallback's limit).
