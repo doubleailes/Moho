@@ -76,3 +76,4 @@ pub fn stage(text: &str) -> (TempDir, Stage) {
 pub fn p(s: &str) -> sdf::Path {
     sdf::path(s).unwrap()
 }
+pub mod render;
