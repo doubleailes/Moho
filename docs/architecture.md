@@ -71,9 +71,12 @@ per chunk (Crust's `subtree_roots`, from 4 chunks up). It does so in Hydra's
 way, by composing standard indices rather than giving `StageSceneIndex` a
 streaming mode:
 
-- each chunk is a `StageSceneIndex` over its own masked stage;
-- a `MergingSceneIndex` combines them, and adding or removing an input adds
-  or removes that chunk's prims;
+- a `StageSceneIndex` over the scene opened `LoadNone` is the weakest,
+  permanent input: render settings, products, cameras, passes and
+  everything else outside the payloads;
+- each chunk is a `StageSceneIndex` over its own masked stage, a stronger
+  input of the same `MergingSceneIndex`, and adding or removing one adds or
+  removes that chunk's payload contents;
 - the consumer decides when a chunk comes and goes: an offline import adds,
   pulls and removes each in turn, and a viewport keeps what it shows.
 
