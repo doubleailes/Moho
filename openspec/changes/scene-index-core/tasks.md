@@ -64,7 +64,7 @@ read at `68a867a` and recorded in `docs/openusd-notes.md` in the same task.
 
 ## 10. Render settings
 
-- [ ] 10.1 Add the render settings, product, var and pass adapters, with every member in the `render-settings-schemas` spec. Non-schema attributes go to `namespacedSettings`; passes get their `matte` and `cameraVisibility` collections. Verify parity on a fixture with settings, two products, three vars and a pass.
+- [x] 10.1 Add the render settings, product, var and pass adapters, with every member in the `render-settings-schemas` spec. Non-schema attributes go to `namespacedSettings`; passes get their `matte` and `cameraVisibility` collections. Verify parity on a fixture with settings, two products, three vars and a pass.
 - [ ] 10.2 Implement `RenderSettingsFlatteningSceneIndex`: products and vars flattened into `renderSettings`, product overrides, var order, and dependencies so that a product or var edit dirties its settings. Verify the settings-with-a-product, product-overrides-camera, vars-in-order, pass and var-changes scenarios.
 
 ## 11. The standard chain and streaming

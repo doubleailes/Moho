@@ -26,6 +26,7 @@ pub mod pending;
 pub mod point_instancer;
 pub mod prim_info;
 pub mod primvars;
+pub mod render;
 pub mod table;
 pub mod volume;
 pub mod xform;

@@ -282,3 +282,23 @@ pub mod volume {
     pub const FIELD_DATA_TYPE: &str = "fieldDataType";
     pub const VECTOR_DATA_ROLE_HINT: &str = "vectorDataRoleHint";
 }
+
+/// UsdRender as Moho's stage index exposes it (`renderSettings`,
+/// `renderProduct`, `renderVar`, `renderPass`), and the flattened
+/// `HdRenderSettingsSchema`.
+pub mod render {
+    pub const RENDER_SETTINGS: &str = "renderSettings";
+    pub const RENDER_PRODUCT: &str = "renderProduct";
+    pub const RENDER_VAR: &str = "renderVar";
+    pub const RENDER_PASS: &str = "renderPass";
+    pub const NAMESPACED_SETTINGS: &str = "namespacedSettings";
+    pub const RENDER_PRODUCTS: &str = "renderProducts";
+    pub const RENDER_VARS: &str = "renderVars";
+    pub const PRODUCTS: &str = "products";
+    pub const ORDERED_VARS: &str = "orderedVars";
+    pub const CAMERA: &str = "camera";
+    pub const CAMERA_PRIM: &str = "cameraPrim";
+    pub const PATH: &str = "path";
+    pub const TYPE: &str = "type";
+    pub const NAME: &str = "name";
+}
