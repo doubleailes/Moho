@@ -60,7 +60,7 @@ read at `68a867a` and recorded in `docs/openusd-notes.md` in the same task.
 
 ## 9. Volumes
 
-- [ ] 9.1 Add the volume and field asset adapters (`volumeFieldBinding` from `field:*`; `volumeField` with resolved `filePath`, `fieldName`, `fieldIndex`, `fieldDataType` and `vectorDataRoleHint`; types `volume`, `openvdbAsset` and `field3dAsset`). Verify the density-field and OpenVDB scenarios, and that a `crust:volume:*` prim reads through generic attribute data.
+- [x] 9.1 Add the volume and field asset adapters (`volumeFieldBinding` from `field:*`; `volumeField` with resolved `filePath`, `fieldName`, `fieldIndex`, `fieldDataType` and `vectorDataRoleHint`; types `volume`, `openvdbAsset` and `field3dAsset`). Verify the density-field and OpenVDB scenarios, and that a `crust:volume:*` prim reads through generic attribute data.
 
 ## 10. Render settings
 

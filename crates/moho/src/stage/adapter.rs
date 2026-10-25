@@ -92,6 +92,9 @@ impl AdapterRegistry {
         );
         registry.set_type("Mesh", Rc::new(crate::stage::mesh::MeshAdapter));
         registry.set_type("Camera", Rc::new(crate::stage::camera::CameraAdapter));
+        registry.set_type("Volume", Rc::new(crate::stage::volume::VolumeAdapter));
+        registry.set_type("OpenVDBAsset", Rc::new(crate::stage::volume::OPENVDB_ASSET));
+        registry.set_type("Field3DAsset", Rc::new(crate::stage::volume::FIELD3D_ASSET));
         registry.set_type(
             "PointInstancer",
             Rc::new(crate::stage::point_instancer::PointInstancerAdapter),
