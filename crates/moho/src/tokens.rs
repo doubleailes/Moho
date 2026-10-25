@@ -271,3 +271,14 @@ pub mod instancing {
     /// The re-rooted prototype, beside its instancer.
     pub const PROTOTYPE: &str = "prototype";
 }
+
+/// `HdVolumeFieldBindingSchema` and `HdVolumeFieldSchema`.
+pub mod volume {
+    pub const VOLUME_FIELD_BINDING: &str = "volumeFieldBinding";
+    pub const VOLUME_FIELD: &str = "volumeField";
+    pub const FILE_PATH: &str = "filePath";
+    pub const FIELD_NAME: &str = "fieldName";
+    pub const FIELD_INDEX: &str = "fieldIndex";
+    pub const FIELD_DATA_TYPE: &str = "fieldDataType";
+    pub const VECTOR_DATA_ROLE_HINT: &str = "vectorDataRoleHint";
+}

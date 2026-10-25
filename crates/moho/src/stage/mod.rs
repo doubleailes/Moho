@@ -27,6 +27,7 @@ pub mod point_instancer;
 pub mod prim_info;
 pub mod primvars;
 pub mod table;
+pub mod volume;
 pub mod xform;
 
 use std::cell::{Cell, RefCell};
