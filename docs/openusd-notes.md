@@ -101,6 +101,23 @@ the root edit target (`crates/moho-spike/tests/probe.rs` asserts all of it):
   constructors answer `None`, and `Attribute::fallback_value` finds no schema
   fallback.
 
+## Stage scene index (S1)
+
+- `Stage::traverse(&self, PrimPredicate, impl FnMut(&sdf::Path)) -> Result<()>`:
+  depth-first, children in composed order; `PrimPredicate::DEFAULT` (active,
+  loaded, defined, not abstract) stops at instances, which it still visits.
+- `Stage::prim_matches(&self, &sdf::Path, PrimPredicate) -> Result<bool>`: the
+  prim's status composed with its ancestors', so it answers for any path,
+  masked or not.
+- `Prim::filtered_children(&self, PrimPredicate) -> Result<Vec<Prim>>`: an
+  instance has none under `DEFAULT`.
+- `Prim::type_name(&self) -> Result<Option<Token>>` and
+  `Prim::api_schemas(&self) -> Result<Vec<Token>>` (the prim definition's
+  applied schemas, built-in ones included; a multiple-apply instance reads
+  `CollectionAPI:lightLink`). `Prim::is_instance(&self) -> Result<bool>`.
+- `StageBuilder::schema_registry(Arc<SchemaRegistry>)`: see openusd-schemas
+  above; `moho::stage::stage_builder()` installs it.
+
 ## Gaps
 
 - Splines (`Ts`): a `.spline` block only round-trips as a dictionary. There
