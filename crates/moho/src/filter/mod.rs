@@ -4,3 +4,6 @@
 pub mod flattening;
 
 pub use flattening::FlatteningSceneIndex;
+pub mod merging;
+
+pub use merging::MergingSceneIndex;

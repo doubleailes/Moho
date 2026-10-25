@@ -32,7 +32,7 @@ read at `68a867a` and recorded in `docs/openusd-notes.md` in the same task.
 ## 4. Filters
 
 - [x] 4.1 Implement `FlatteningSceneIndex` with providers for `xform`, `visibility`, `purpose`, constant `primvars` and `usdMaterialBindings`, and descendant dirtying (design D4). Verify each `filtering-scene-indices` flattening scenario, plus a parent move dirtying its whole subtree.
-- [ ] 4.2 Implement `MergingSceneIndex`: inputs at roots, the stronger first; overlaid data; the first non-empty type; unioned children; add and remove notices; forwarded and corrected input notices. Verify the merging scenarios on `RetainedSceneIndex` inputs, including removing a weaker input's prim that a stronger one still holds.
+- [x] 4.2 Implement `MergingSceneIndex`: inputs at roots, the stronger first; overlaid data; the first non-empty type; unioned children; add and remove notices; forwarded and corrected input notices. Verify the merging scenarios on `RetainedSceneIndex` inputs, including removing a weaker input's prim that a stronger one still holds.
 
 ## 5. Materials
 
