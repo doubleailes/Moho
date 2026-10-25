@@ -163,3 +163,10 @@ pub mod implicit {
     pub const LENGTH: &str = "length";
     pub const DOUBLE_SIDED: &str = "doubleSided";
 }
+
+/// Material bindings as USD authors them (`UsdImagingMaterialBindingsSchema`)
+/// and as resolved (`HdMaterialBindingsSchema`).
+pub mod material_bindings {
+    pub const USD_MATERIAL_BINDINGS: &str = "usdMaterialBindings";
+    pub const MATERIAL_BINDINGS: &str = "materialBindings";
+}
