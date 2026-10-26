@@ -15,13 +15,13 @@
 //! population-masked stages.
 
 use std::cell::RefCell;
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::rc::{Rc, Weak};
 
 use openusd::sdf::{self, Value};
 use openusd::tf::Token;
 
-use crate::data_source::retained::container;
+use crate::data_source::retained::{RetainedVector, container, value};
 use crate::data_source::{Container, ContainerHandle, DataSource, locate};
 use crate::locator::{Locator, LocatorSet};
 use crate::scene_index::{
@@ -30,14 +30,25 @@ use crate::scene_index::{
 use crate::schema::member_container;
 use crate::tokens::material as t;
 
+/// One network of one material: what asked for a node.
+type Asker = (sdf::Path, Token);
+
 /// A scene index filling material networks' dangling nodes.
 pub struct MaterialNodeResolvingSceneIndex {
     input: SceneIndexHandle,
     me: Weak<MaterialNodeResolvingSceneIndex>,
-    /// A dangling node's path to the materials whose networks asked for it.
-    dependents: RefCell<HashMap<sdf::Path, BTreeSet<sdf::Path>>>,
+    /// Per network, the absolute paths its last resolution read: the
+    /// dangling nodes, every node their subgraphs brought, and the node
+    /// graphs it went through.
+    asks: RefCell<HashMap<Asker, BTreeSet<sdf::Path>>>,
+    /// The reverse of `asks`: a path to the networks that read it.
+    dependents: RefCell<HashMap<sdf::Path, BTreeSet<Asker>>>,
     observers: Observers,
 }
+
+/// Connection rewrites through node graphs: `(graph path, output)` to the
+/// `(node path, output)` the graph's output reads.
+type Rewrites = HashMap<(String, String), (String, String)>;
 
 impl MaterialNodeResolvingSceneIndex {
     /// A resolving index over `input`.
@@ -45,6 +56,7 @@ impl MaterialNodeResolvingSceneIndex {
         let index = Rc::new_cyclic(|me| Self {
             input: input.clone(),
             me: me.clone(),
+            asks: RefCell::new(HashMap::new()),
             dependents: RefCell::new(HashMap::new()),
             observers: Observers::default(),
         });
@@ -53,76 +65,133 @@ impl MaterialNodeResolvingSceneIndex {
         index
     }
 
-    /// `network` with its dangling nodes filled from the input, recording
-    /// `material` as depending on each node it asked for.
-    fn resolve(&self, material: &sdf::Path, network: &ContainerHandle) -> Option<DataSource> {
+    /// Replaces what `asker` read with `paths`.
+    fn record(&self, asker: &Asker, paths: BTreeSet<sdf::Path>) {
+        let mut dependents = self.dependents.borrow_mut();
+        let mut asks = self.asks.borrow_mut();
+        if let Some(old) = asks.remove(asker) {
+            for path in old {
+                if let Some(set) = dependents.get_mut(&path) {
+                    set.remove(asker);
+                    if set.is_empty() {
+                        dependents.remove(&path);
+                    }
+                }
+            }
+        }
+        for path in &paths {
+            dependents.entry(path.clone()).or_default().insert(asker.clone());
+        }
+        if !paths.is_empty() {
+            asks.insert(asker.clone(), paths);
+        }
+    }
+
+    /// `network` with its dangling nodes filled from the input, and its
+    /// connections through node graphs rewritten to the nodes they read.
+    fn resolve(&self, asker: &Asker, network: &ContainerHandle) -> Option<DataSource> {
         let held = member_container(network, t::NODES)?;
         let mut nodes: BTreeMap<String, DataSource> = held
             .names()
             .into_iter()
             .filter_map(|n| Some((n.as_str().to_owned(), held.get(&n)?)))
             .collect();
-        let mut asked: BTreeSet<String> = BTreeSet::new();
+        let terminals: Vec<(Token, DataSource)> = member_container(network, t::TERMINALS)
+            .map(|c| {
+                c.names()
+                    .into_iter()
+                    .filter_map(|n| Some((n.clone(), c.get(&n)?)))
+                    .collect()
+            })
+            .unwrap_or_default();
+        let mut read: BTreeSet<sdf::Path> = BTreeSet::new();
+        let mut rewrites: Rewrites = HashMap::new();
         loop {
             let mut missing: BTreeSet<String> = upstream_paths(&nodes);
-            if let Some(terminals) = member_container(network, t::TERMINALS) {
-                for name in terminals.names() {
-                    if let Some(path) = terminals.get(&name).and_then(|d| upstream_of(&d)) {
-                        missing.insert(path);
-                    }
-                }
-            }
-            missing.retain(|p| p.starts_with('/') && !nodes.contains_key(p) && !asked.contains(p));
+            missing.extend(
+                terminals
+                    .iter()
+                    .filter_map(|(_, d)| upstream_of(d).map(|(p, _)| p)),
+            );
+            missing.extend(rewrites.values().map(|(p, _)| p.clone()));
+            missing.retain(|p| {
+                p.starts_with('/')
+                    && !nodes.contains_key(p)
+                    && sdf::Path::new(p).is_ok_and(|path| !read.contains(&path))
+            });
             if missing.is_empty() {
                 break;
             }
             for name in missing {
-                asked.insert(name.clone());
                 let Ok(path) = sdf::Path::new(&name) else {
                     continue;
                 };
-                self.dependents
-                    .borrow_mut()
-                    .entry(path.clone())
-                    .or_default()
-                    .insert(material.clone());
-                let Some(found) = self
-                    .input
-                    .prim(&path)
-                    .data
-                    .and_then(|d| member_container(&d, t::MATERIAL_NODES))
-                else {
+                read.insert(path.clone());
+                let Some(data) = self.input.prim(&path).data else {
                     continue;
                 };
-                for node in found.names() {
-                    if let Some(source) = found.get(&node) {
+                if let Some(found) = member_container(&data, t::MATERIAL_NODES) {
+                    for node in found.names() {
+                        let Some(source) = found.get(&node) else {
+                            continue;
+                        };
+                        if let Ok(p) = sdf::Path::new(node.as_str()) {
+                            read.insert(p);
+                        }
                         nodes.entry(node.as_str().to_owned()).or_insert(source);
+                    }
+                }
+                let outputs = member_container(&data, t::MATERIAL_NODE_GRAPH)
+                    .and_then(|g| member_container(&g, t::OUTPUTS));
+                for (output, link) in outputs.iter().flat_map(|o| {
+                    o.names()
+                        .into_iter()
+                        .filter_map(|n| Some((n.clone(), o.get(&n)?)))
+                }) {
+                    if let Some(target) = upstream_of(&link) {
+                        rewrites.insert((name.clone(), output.as_str().to_owned()), target);
                     }
                 }
             }
         }
-        if asked.is_empty() {
+        let touched = !read.is_empty();
+        self.record(asker, read);
+        if !touched {
             return None;
         }
+        // Connections to a node graph read what its output reads.
+        let nodes: BTreeMap<String, DataSource> = nodes
+            .into_iter()
+            .map(|(name, node)| (name, rewrite_node(&node, &rewrites)))
+            .collect();
+        let terminals: Vec<(Token, DataSource)> = terminals
+            .into_iter()
+            .map(|(name, link)| (name, rewrite_link(&link, &rewrites)))
+            .collect();
         let mut entries: Vec<(Token, DataSource)> = network
             .names()
             .into_iter()
-            .filter(|n| n != t::NODES)
+            .filter(|n| n != t::NODES && n != t::TERMINALS)
             .filter_map(|n| Some((n.clone(), network.get(&n)?)))
             .collect();
         entries.push((Token::from(t::NODES), container(nodes)));
+        entries.push((Token::from(t::TERMINALS), container(terminals)));
         Some(container(entries))
     }
 
-    /// The materials that asked for a node at or under one of `paths`.
+    /// The materials whose networks read a path at or under one of `paths`.
+    /// One pass over the recorded paths, each checked through its ancestors
+    /// against the batch.
     fn dependents_of<'p>(&self, paths: impl IntoIterator<Item = &'p sdf::Path>) -> Vec<Dirtied> {
         let dependents = self.dependents.borrow();
+        if dependents.is_empty() {
+            return Vec::new();
+        }
+        let batch: HashSet<&sdf::Path> = paths.into_iter().collect();
         let mut materials: BTreeSet<sdf::Path> = BTreeSet::new();
-        for path in paths {
-            for (node, asking) in dependents.iter() {
-                if node.has_prefix(path) {
-                    materials.extend(asking.iter().cloned());
-                }
+        for (path, askers) in dependents.iter() {
+            if path.ancestors().any(|a| batch.contains(&a)) {
+                materials.extend(askers.iter().map(|(m, _)| m.clone()));
             }
         }
         materials
@@ -134,22 +203,97 @@ impl MaterialNodeResolvingSceneIndex {
             .collect()
     }
 
+    /// Forgets the networks of the materials at or under `root`.
     fn forget_under(&self, root: &sdf::Path) {
-        let mut dependents = self.dependents.borrow_mut();
-        for asking in dependents.values_mut() {
-            asking.retain(|m| !m.has_prefix(root));
+        let gone: Vec<Asker> = self
+            .asks
+            .borrow()
+            .keys()
+            .filter(|(m, _)| m.has_prefix(root))
+            .cloned()
+            .collect();
+        for asker in gone {
+            self.record(&asker, BTreeSet::new());
         }
-        dependents.retain(|_, asking| !asking.is_empty());
     }
 }
 
-/// The upstream node path of a connection container.
-fn upstream_of(connection: &DataSource) -> Option<String> {
+/// `link` with its upstream rewritten through node graphs, following graphs
+/// that read other graphs.
+fn rewrite_link(link: &DataSource, rewrites: &Rewrites) -> DataSource {
+    let Some(mut target) = upstream_of(link) else {
+        return link.clone();
+    };
+    let mut steps = 0;
+    while let Some(next) = rewrites.get(&target) {
+        target = next.clone();
+        steps += 1;
+        if steps > rewrites.len() {
+            break;
+        }
+    }
+    if Some(&target) == upstream_of(link).as_ref() {
+        return link.clone();
+    }
+    container([
+        (
+            t::UPSTREAM_NODE_PATH,
+            value(Value::Token(Token::from(target.0.as_str()))),
+        ),
+        (
+            t::UPSTREAM_NODE_OUTPUT_NAME,
+            value(Value::Token(Token::from(target.1.as_str()))),
+        ),
+    ])
+}
+
+/// `node` with every input connection rewritten through node graphs.
+fn rewrite_node(node: &DataSource, rewrites: &Rewrites) -> DataSource {
+    if rewrites.is_empty() {
+        return node.clone();
+    }
+    let Some(container_handle) = node.as_container() else {
+        return node.clone();
+    };
+    let Some(connections) = member_container(container_handle, t::INPUT_CONNECTIONS) else {
+        return node.clone();
+    };
+    let rewritten: Vec<(Token, DataSource)> = connections
+        .names()
+        .into_iter()
+        .filter_map(|input| {
+            let links = connections.get(&input)?;
+            let Some(vector) = links.as_vector() else {
+                return Some((input, links));
+            };
+            let links: Vec<DataSource> = (0..vector.len())
+                .filter_map(|i| vector.get(i))
+                .map(|l| rewrite_link(&l, rewrites))
+                .collect();
+            Some((input, RetainedVector::new(links).into_data_source()))
+        })
+        .collect();
+    let mut entries: Vec<(Token, DataSource)> = container_handle
+        .names()
+        .into_iter()
+        .filter(|n| n != t::INPUT_CONNECTIONS)
+        .filter_map(|n| Some((n.clone(), container_handle.get(&n)?)))
+        .collect();
+    entries.push((Token::from(t::INPUT_CONNECTIONS), container(rewritten)));
+    container(entries)
+}
+
+/// The upstream node path and output of a connection container.
+fn upstream_of(connection: &DataSource) -> Option<(String, String)> {
     let c = connection.as_container()?;
-    match locate(c, &Locator::new([t::UPSTREAM_NODE_PATH]))?.value()? {
+    let token = |name: &str| match locate(c, &Locator::new([name]))?.value()? {
         Value::Token(t) => Some(t.as_str().to_owned()),
         _ => None,
-    }
+    };
+    Some((
+        token(t::UPSTREAM_NODE_PATH)?,
+        token(t::UPSTREAM_NODE_OUTPUT_NAME).unwrap_or_default(),
+    ))
 }
 
 /// Every upstream node path the nodes' input connections name.
@@ -167,7 +311,7 @@ fn upstream_paths(nodes: &BTreeMap<String, DataSource>) -> BTreeSet<String> {
                 continue;
             };
             for i in 0..links.len() {
-                if let Some(path) = links.get(i).and_then(|l| upstream_of(&l)) {
+                if let Some((path, _)) = links.get(i).and_then(|l| upstream_of(&l)) {
                     out.insert(path);
                 }
             }
@@ -190,10 +334,11 @@ impl Container for Networks {
 
     fn get(&self, name: &Token) -> Option<DataSource> {
         let network = self.local.get(name)?;
+        let asker = (self.path.clone(), name.clone());
         let resolved = network
             .as_container()
             .zip(self.index.upgrade())
-            .and_then(|(n, index)| index.resolve(&self.path, n));
+            .and_then(|(n, index)| index.resolve(&asker, n));
         Some(resolved.unwrap_or(network))
     }
 }
@@ -266,10 +411,11 @@ impl Observer for MaterialNodeResolvingSceneIndex {
 
     fn dirtied(&self, _: &dyn SceneIndex, entries: &[Dirtied]) {
         let nodes = Locator::new([t::MATERIAL_NODES]);
+        let graph = Locator::new([t::MATERIAL_NODE_GRAPH]);
         let mut out: Vec<Dirtied> = entries.to_vec();
         let changed: Vec<&sdf::Path> = entries
             .iter()
-            .filter(|e| e.locators.intersects(&nodes))
+            .filter(|e| e.locators.intersects(&nodes) || e.locators.intersects(&graph))
             .map(|e| &e.path)
             .collect();
         out.extend(self.dependents_of(changed));
