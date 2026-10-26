@@ -47,6 +47,11 @@ the steps that land in this repository or depend on it.
 
 ## Upstream candidates (openusd)
 
+- Clip files opened for no reason by `might_be_time_varying` and an
+  `AttributeQuery`'s value source (ALab: 26.0 → 11.1 GiB on a raw read):
+  [mxpv/openusd#175](https://github.com/mxpv/openusd/pull/175). Moho pins
+  doubleailes/openusd at `d7d2a29` until it merges.
+
 - Splines (`Ts`): typed knots, evaluation, authoring, usdc encoding.
 - Unloading a payload does not free what composing it took (no layer
   eviction). On Moana, RSS under one stage only grew across 22 load/unload
