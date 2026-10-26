@@ -532,7 +532,10 @@ impl Observer for NativeInstancingSceneIndex {
         let regroup = [
             Locator::new([material_bindings::USD_MATERIAL_BINDINGS]),
             Locator::new([imageable::PURPOSE]),
-            Locator::new([usd_prim_info::USD_PRIM_INFO]),
+            // The instancing fields only: a kind change regroups nothing.
+            Locator::new([usd_prim_info::USD_PRIM_INFO, usd_prim_info::NI_PROTOTYPE_PATH]),
+            Locator::new([usd_prim_info::USD_PRIM_INFO, usd_prim_info::NI_PROTOTYPE_IDENTITY]),
+            Locator::new([usd_prim_info::USD_PRIM_INFO, usd_prim_info::IS_NI_PROTOTYPE]),
         ];
         if entries
             .iter()
