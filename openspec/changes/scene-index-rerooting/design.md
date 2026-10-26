@@ -22,7 +22,17 @@ computed until read.
 is an `OriginPath`, not a path data source, so rerooting leaves it alone;
 Moho skips it at the prim's top level for the same result.
 
-### D3. Where it applies
+### D3. Nested point instancers
+
+The point instancing model is built over the output namespace. After the
+top-level instancers' copies, each copy's subtree is walked (through the
+input, re-rooted) for point instancers; each one found gets copies of its own
+prototypes, named by its output path, and its copies are walked in turn. A
+path resolves through its copies innermost first to its input path, its data
+is re-rooted outermost first, edits map forward through every copy, and a
+prim under an instancer but in none of its copies stays typeless.
+
+### D4. Where it applies
 
 Native instancing wraps every prim served through a remap (output root,
 `/__Prototype_N` root). Point instancing wraps every prim of a copy, from
