@@ -18,6 +18,10 @@ prototype propagation re-roots path values with the prims
   same from the original prototype to its `ForInstancer` copy.
 - Paths outside the source root are left alone, as Hydra leaves them, and
   `primOrigin` keeps naming the USD prim.
+- Re-rooting a copied nested point instancer's prototypes made it name prims
+  inside the enclosing copy that it never instanced (review of this change).
+  Nested point instancers are now re-instanced in every copy, as Hydra's
+  propagation does, which S1 had left out.
 
 ## Capabilities
 
