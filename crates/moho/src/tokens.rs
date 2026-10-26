@@ -45,6 +45,9 @@ pub mod usd {
     pub const VALUE: &str = "value";
     /// Whether a layer authors the attribute's value.
     pub const AUTHORED: &str = "authored";
+    /// Whether the attribute's value might vary over time (USD's
+    /// `ValueMightBeTimeVarying`), whatever the index's time.
+    pub const MIGHT_BE_TIME_VARYING: &str = "mightBeTimeVarying";
     /// The attribute's value type name.
     pub const TYPE_NAME: &str = "typeName";
     /// The `colorSpace` metadata, when authored.

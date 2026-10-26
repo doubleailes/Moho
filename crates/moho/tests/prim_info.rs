@@ -1,6 +1,7 @@
 #![allow(clippy::unwrap_used)]
 
-//! `__usdPrimInfo` as `UsdImagingUsdPrimInfoSchema` has it.
+//! `__usdPrimInfo` as `UsdImagingUsdPrimInfoSchema` has it, and the generic
+//! attribute data's time variance.
 
 mod common;
 
@@ -80,4 +81,21 @@ fn prim_info_names_the_usd_prim() {
         None,
         "kind only when authored"
     );
+}
+
+#[test]
+fn time_variance_does_not_depend_on_the_index_time() {
+    let (_dir, usd) = stage(SCENE);
+    let index = StageSceneIndex::new();
+    index.set_stage(usd);
+    // At the default time: no time was ever set.
+    let varying = |path: &str| {
+        read(
+            &index,
+            path,
+            &["__usdAttributes", "xformOp:translate", "mightBeTimeVarying"],
+        )
+    };
+    assert_eq!(varying("/world/moving"), Some(Value::Bool(true)));
+    assert_eq!(varying("/world/still"), Some(Value::Bool(false)));
 }

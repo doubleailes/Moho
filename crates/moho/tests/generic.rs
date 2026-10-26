@@ -122,6 +122,7 @@ fn metadata_only_when_authored() {
         [
             Token::from("value"),
             Token::from("authored"),
+            Token::from("mightBeTimeVarying"),
             Token::from("typeName")
         ]
     );

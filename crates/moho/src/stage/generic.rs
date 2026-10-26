@@ -116,6 +116,7 @@ impl Container for AttributeEntry {
         let mut names = vec![
             Token::from(t::VALUE),
             Token::from(t::AUTHORED),
+            Token::from(t::MIGHT_BE_TIME_VARYING),
             Token::from(t::TYPE_NAME),
         ];
         for key in [t::COLOR_SPACE, t::INTERPOLATION, t::ELEMENT_SIZE] {
@@ -138,6 +139,9 @@ impl Container for AttributeEntry {
                 Locator::new([t::ATTRIBUTES, self.name.as_str()]),
             )),
             t::AUTHORED => Some(value(attribute.has_authored_value().unwrap_or(false))),
+            // From the attribute's opinions, not from sampling at the index's
+            // time: at the default time a sampled value reports no samples.
+            t::MIGHT_BE_TIME_VARYING => Some(value(attribute.might_be_time_varying().unwrap_or(false))),
             t::TYPE_NAME => attribute
                 .type_name()
                 .ok()
