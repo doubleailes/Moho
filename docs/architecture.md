@@ -49,7 +49,7 @@ appends `HdsiLightLinkingSceneIndex` after scenes are merged:
 ```
 StageSceneIndex --> NativeInstancing --> PointInstancing --> Flattening
   --> MaterialBindingResolving --> RenderSettingsFlattening      (chain::input)
-  --> LightLinking                                               (chain::merged)
+  --> LightLinking --> MaterialNodeResolving                     (chain::merged)
 ```
 
 `chain::input(stage_index)` is the chain without light linking, what each
@@ -134,7 +134,10 @@ streaming mode:
   inside another chunk's payload, or a network node outside the material.
   `streaming::unresolved(index)` lists them; the consumer adds a side input
   (a `chain::input` over a stage masked to them, payloads loaded), weaker
-  than the chunks and stronger than the scene input;
+  than the chunks and stronger than the scene input. A network node outside
+  the chunk's mask keeps its connection, named by its absolute path;
+  `MaterialNodeResolvingSceneIndex`, in `chain::merged`, fills it from the
+  side input's shader (`__materialNodes`, the shader's own subgraph);
 - the consumer decides when a chunk comes and goes: an offline import adds,
   pulls and removes each in turn, and a viewport keeps what it shows.
 
