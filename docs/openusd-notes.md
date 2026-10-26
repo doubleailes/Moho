@@ -1,8 +1,23 @@
 # openusd notes
 
 The openusd APIs Moho relies on, read from the source at the pinned rev
-(`68a867a`, `crates/openusd/src/usd/...`). openusd's API is not stable: re-read
-these before every bump, and add any API Moho starts relying on.
+(`crates/openusd/src/usd/...`). openusd's API is not stable: re-read these
+before every bump, and add any API Moho starts relying on. Sections written
+before the bump to `d7d2a29` (doubleailes/openusd, upstream `0a4bb1b` plus
+mxpv/openusd#175) were read at `68a867a`.
+
+## Bump to `d7d2a29`
+
+- `has_authored_metadata(key)` moved onto the `usd::Object` trait (with the
+  other `UsdObject` queries), so callers import it (`use openusd::usd::Object
+  as _`).
+- `Shader::id()` is gone: the identifier is
+  `shader.node_def().shader_id() -> Result<Option<Token>>` (C++
+  `UsdShadeNodeDefAPI::GetShaderId`), `None` outside identifier mode.
+- mxpv/openusd#175: `Attribute::might_be_time_varying` answers from a clip
+  set's manifest and schedule without opening its clips, and an
+  `AttributeQuery`'s value source no longer opens every clip. On ALab, a raw
+  read with time-variance checks fell from 26.0 to 11.1 GiB peak.
 
 ## Change tracking
 

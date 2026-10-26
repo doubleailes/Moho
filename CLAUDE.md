@@ -74,7 +74,9 @@ cargo test --workspace        # everything
 
 - Pure-Rust USD (https://github.com/mxpv/openusd). **Its API is not stable.**
   It is pinned by git `rev` in the root `Cargo.toml`. `openusd` and
-  `openusd-schemas` must use the same rev.
+  `openusd-schemas` must use the same rev. Until mxpv/openusd#175 merges, the
+  pin is on doubleailes/openusd's `perf/clip-time-varying` (upstream plus the
+  clip fixes); move back to mxpv/openusd at its merge.
 - **One rev across the stack.** Mantle depends on the same git source at the
   same rev, and crust-render patches its crates.io `openusd` to it. Bump in
   order: Moho, then crust-render, then Mantle.

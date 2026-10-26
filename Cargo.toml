@@ -15,8 +15,12 @@ repository = "https://github.com/doubleailes/moho"
 # consumers (Mantle, crust-render) must resolve the same revision: Mantle
 # depends on this git source at the same `rev`, crust-render patches its
 # crates.io `openusd` to it. Bump in order: Moho, then crust-render, then Mantle.
-openusd = { git = "https://github.com/mxpv/openusd", rev = "68a867a69f3fb429a30f9e1155a0a30a3d2cdf9f" }
-openusd-schemas = { git = "https://github.com/mxpv/openusd", rev = "68a867a69f3fb429a30f9e1155a0a30a3d2cdf9f" }
+#
+# Pinned to doubleailes/openusd's `perf/clip-time-varying` (upstream main at
+# 0a4bb1b plus the clip fixes of mxpv/openusd#175) until that PR merges; then
+# back to mxpv/openusd at the merge.
+openusd = { git = "https://github.com/doubleailes/openusd", rev = "d7d2a29406871508b6ec3ffe9173a5941b1c6123" }
+openusd-schemas = { git = "https://github.com/doubleailes/openusd", rev = "d7d2a29406871508b6ec3ffe9173a5941b1c6123" }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

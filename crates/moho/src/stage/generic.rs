@@ -6,6 +6,7 @@ use std::rc::Rc;
 
 use openusd::sdf::Value;
 use openusd::tf::Token;
+use openusd::usd::Object as _;
 
 use crate::data_source::retained::value;
 use crate::data_source::{Container, DataSource};

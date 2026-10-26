@@ -14,6 +14,7 @@ use std::rc::Rc;
 
 use openusd::sdf::{self, Value};
 use openusd::tf::Token;
+use openusd::usd::Object as _;
 use openusd::usd::{self, Stage};
 use openusd_schemas::shade::{Connectable, Material, ProducerFilter, Shader, ShadingAttribute};
 
@@ -197,7 +198,13 @@ impl<'a> Network<'a> {
             self.nodes.remove(&name);
             return;
         };
-        let identifier = shader.id().ok().flatten().unwrap_or_default();
+        let identifier = shader
+            .node_def()
+            .shader_id()
+            .ok()
+            .flatten()
+            .map(|id| id.as_str().to_owned())
+            .unwrap_or_default();
         let mut parameters = Vec::new();
         let mut connections = Vec::new();
         for input in shader.authored_inputs().unwrap_or_default() {
