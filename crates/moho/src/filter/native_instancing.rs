@@ -82,6 +82,15 @@ impl Model {
         }
     }
 
+    /// The `(output root, input root)` the output path is served from, for
+    /// prims inside a propagated prototype.
+    fn remap_of(&self, out: &sdf::Path) -> Option<&(sdf::Path, sdf::Path)> {
+        self.remaps
+            .iter()
+            .filter(|(o, _)| out.has_prefix(o))
+            .max_by_key(|(o, _)| o.element_count())
+    }
+
     /// Every output path an input path appears at.
     fn to_outputs(&self, input: &sdf::Path) -> Vec<sdf::Path> {
         if !is_prototype(input) {
@@ -426,6 +435,13 @@ impl SceneIndex for NativeInstancingSceneIndex {
         let input = self.input.prim(&input_path);
         let Some(local) = input.data else {
             return input;
+        };
+        // A prototype prim's path values (binding targets, connections)
+        // name the propagated prototype, as Hydra's rerooting data source
+        // makes them.
+        let local = match model.remap_of(path) {
+            Some((out_root, in_root)) => crate::filter::rerooting::rerooted(local, in_root, out_root),
+            None => local,
         };
         let is_root = model.remaps.iter().any(|(o, _)| o == path);
         let instance = model.instance_of.get(path).and_then(|&(group, index)| {
