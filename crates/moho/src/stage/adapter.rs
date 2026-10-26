@@ -105,6 +105,7 @@ impl AdapterRegistry {
             Rc::new(crate::stage::point_instancer::PointInstancerAdapter),
         );
         registry.set_type("Material", Rc::new(crate::stage::material::MaterialAdapter));
+        registry.set_type("Shader", Rc::new(crate::stage::material::ShaderNodesAdapter));
         registry.set_type("BasisCurves", Rc::new(crate::stage::curves::BASIS_CURVES));
         registry.set_type("NurbsCurves", Rc::new(crate::stage::curves::NURBS_CURVES));
         {
