@@ -141,6 +141,7 @@ dependencies = [
  "cfg-if",
  "crunchy",
  "num-traits",
+ "serde",
  "zerocopy",
 ]
 
@@ -248,6 +249,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
 
 [[package]]
+name = "memmap2"
+version = "0.9.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6b0ca1155a9ecc25aa12e8313a119f32edf0255fea2f44839c4ac0a12b2ac157"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "moho"
 version = "0.1.0"
 dependencies = [
@@ -303,9 +313,11 @@ dependencies = [
  "half",
  "logos",
  "lz4_flex",
+ "memmap2",
  "num-traits",
  "regex-lite",
  "rustc-hash",
+ "serde",
  "strum",
  "thiserror",
  "windows-sys",
@@ -332,6 +344,7 @@ name = "openusd-schemas"
 version = "0.8.0"
 source = "git+https://github.com/doubleailes/openusd?rev=d7d2a29406871508b6ec3ffe9173a5941b1c6123#d7d2a29406871508b6ec3ffe9173a5941b1c6123"
 dependencies = [
+ "bitflags",
  "derive_more",
  "openusd",
  "openusd-build",
@@ -429,6 +442,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4148590afebada386688f18773da617792bf2ef03ffc1e4cbd2b1d45b023e0ba"
 dependencies = [
  "serde_core",
+ "serde_derive",
 ]
 
 [[package]]

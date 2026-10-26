@@ -111,6 +111,12 @@ The leading underscores follow Hydra's convention for private containers
 
 - Moho depends on **openusd only**. It holds no Mantle type (`CookedStage`,
   `ChangeSet`) and no Crust or Obsidian type. Adapters live in the consumers.
+- **Moho is the stack's openusd.** Its consumers take openusd only through
+  `moho::openusd` and `moho::openusd_schemas`, and turn openusd features on
+  through Moho's (`mmap`, `serde`, and the schema families Moho does not
+  read). One pin guarantees one openusd in every build, where a `[patch]`
+  per consumer and a check used to: in OpenUSD, imaging and core ship as one
+  build, and Moho plays that role for a pure-Rust stack.
 - Moho is shaped to be offered upstream (as an `openusd-imaging` crate) once
   its API has settled.
 
