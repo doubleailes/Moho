@@ -197,6 +197,8 @@ pub mod material_bindings {
 pub mod material {
     pub const MATERIAL: &str = "material";
     pub const NODES: &str = "nodes";
+    /// A `Shader` prim's node and upstream subgraph, by absolute path (Moho).
+    pub const MATERIAL_NODES: &str = "__materialNodes";
     pub const TERMINALS: &str = "terminals";
     pub const NODE_IDENTIFIER: &str = "nodeIdentifier";
     pub const PARAMETERS: &str = "parameters";

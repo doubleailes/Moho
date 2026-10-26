@@ -70,27 +70,60 @@ fn bound_materials(data: &ContainerHandle) -> Vec<sdf::Path> {
         .collect()
 }
 
-/// The nodes of a material's networks named by an absolute path: the
+/// The nodes of a material's networks named by an absolute path, and the
+/// absolute upstream nodes their connections and terminals name: the
 /// material adapter names a node inside the material by its relative path,
-/// and one outside it by its stage path.
+/// one outside it by its stage path, and keeps a connection to a node its
+/// stage does not hold (outside a chunk's mask) by that path.
 fn outside_nodes(data: &ContainerHandle) -> Vec<sdf::Path> {
     let Some(networks) = member_container(data, material::MATERIAL) else {
         return Vec::new();
     };
-    let mut nodes = Vec::new();
+    let mut names: Vec<String> = Vec::new();
+    let upstream = |connection: &crate::data_source::DataSource| -> Option<String> {
+        match locate(
+            connection.as_container()?,
+            &Locator::new([material::UPSTREAM_NODE_PATH]),
+        )?
+        .value()?
+        {
+            Value::Token(t) => Some(t.as_str().to_owned()),
+            _ => None,
+        }
+    };
     for context in networks.names() {
         let Some(network) = networks.get(&context).and_then(|d| d.as_container().cloned()) else {
             continue;
         };
-        let Some(names) = member_container(&network, material::NODES).map(|n| n.names()) else {
-            continue;
-        };
-        nodes.extend(
-            names
-                .iter()
-                .filter(|n| n.as_str().starts_with('/'))
-                .filter_map(|n| sdf::Path::new(n.as_str()).ok()),
-        );
+        if let Some(nodes) = member_container(&network, material::NODES) {
+            for name in nodes.names() {
+                names.push(name.as_str().to_owned());
+                let connections = nodes
+                    .get(&name)
+                    .and_then(|n| n.as_container().cloned())
+                    .and_then(|n| member_container(&n, material::INPUT_CONNECTIONS));
+                for links in connections.iter().flat_map(|c| {
+                    c.names()
+                        .into_iter()
+                        .filter_map(|i| c.get(&i).and_then(|d| d.as_vector().cloned()))
+                        .collect::<Vec<_>>()
+                }) {
+                    names.extend((0..links.len()).filter_map(|i| links.get(i).and_then(|l| upstream(&l))));
+                }
+            }
+        }
+        if let Some(terminals) = member_container(&network, material::TERMINALS) {
+            names.extend(
+                terminals
+                    .names()
+                    .iter()
+                    .filter_map(|t| terminals.get(t).and_then(|d| upstream(&d))),
+            );
+        }
     }
-    nodes
+    names
+        .iter()
+        .filter(|n| n.starts_with('/'))
+        .filter_map(|n| sdf::Path::new(n).ok())
+        .collect()
 }
