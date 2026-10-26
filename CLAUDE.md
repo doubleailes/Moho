@@ -77,16 +77,22 @@ cargo test --workspace        # everything
   `openusd-schemas` must use the same rev. Until mxpv/openusd#175 merges, the
   pin is on doubleailes/openusd's `perf/clip-time-varying` (upstream plus the
   clip fixes); move back to mxpv/openusd at its merge.
-- **One rev across the stack.** Mantle depends on the same git source at the
-  same rev, and crust-render patches its crates.io `openusd` to it. Bump in
-  order: Moho, then crust-render, then Mantle.
+- **One rev across the stack, through Moho.** Mantle, crust-render and
+  Obsidian take openusd only through `moho::openusd` and
+  `moho::openusd_schemas`, never as a dependency of their own, so Moho's pin
+  is the stack's: bumping openusd is bumping Moho in each consumer. Moho's
+  features forward the openusd ones they need (`mmap`, `serde`, and the
+  schema families Moho does not read: `media`, `physics`, `proc`,
+  `semantics`, `skel`, `ui`); add one here before a consumer reaches for
+  openusd directly. Until every consumer has moved, the old rule holds for
+  the ones that haven't: the same git source and rev, bumped Moho first.
 - **Never guess a signature.** Read the source at the pinned rev
   (`~/.cargo/git/checkouts/openusd-*/<rev>/crates/...`) and record any API you
   start relying on in `docs/openusd-notes.md`.
 - If openusd lacks something, don't work around it silently: add it to
   "Upstream candidates" in `ROADMAP.md` (and to the gaps in
   `docs/openusd-notes.md`), and comment the workaround in code.
-- `moho` re-exports `openusd` (`moho::openusd`), so consumers build against
-  exactly the pinned version, and `openusd-schemas` (`moho::openusd_schemas`)
-  from the same rev. openusd-schemas is part of the openusd project, so
-  depending on it keeps Moho "openusd only".
+- `moho` re-exports `openusd` (`moho::openusd`) and `openusd-schemas`
+  (`moho::openusd_schemas`) from the same rev: the only way consumers reach
+  openusd. openusd-schemas is part of the openusd project, so depending on it
+  keeps Moho "openusd only".

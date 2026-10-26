@@ -26,7 +26,13 @@ pub mod streaming;
 pub mod tokens;
 
 /// The pinned openusd, re-exported so consumers build against exactly the
-/// revision Moho does.
+/// revision Moho does. Moho's consumers (Mantle, crust-render, Obsidian)
+/// take openusd only through this re-export, never as a dependency of their
+/// own, so bumping Moho bumps openusd for the whole stack. Moho's features
+/// forward openusd's (`mmap`, `serde`).
 pub use openusd;
-/// The pinned openusd-schemas, from the same openusd revision.
+/// The pinned openusd-schemas, from the same openusd revision. The families
+/// Moho reads (`geom`, `lux`, `render`, `shade`, `vol`) are always on; the
+/// others are Moho features of the same name (`media`, `physics`, `proc`,
+/// `semantics`, `skel`, `ui`).
 pub use openusd_schemas;

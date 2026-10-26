@@ -11,6 +11,21 @@ repository.workspace = true
 openusd.workspace = true
 openusd-schemas = { workspace = true, features = ["geom", "lux", "render", "shade", "vol"] }
 
+# Moho's consumers take openusd only through `moho::openusd` and
+# `moho::openusd_schemas`, so Moho's pin is the stack's. These forward the
+# openusd features they may need; the schema families Moho reads are always
+# on.
+[features]
+# openusd's read-only file mapping (`ar::DefaultResolver::map_files`).
+mmap = ["openusd/mmap"]
+serde = ["openusd/serde"]
+media = ["openusd-schemas/media"]
+physics = ["openusd-schemas/physics"]
+proc = ["openusd-schemas/proc"]
+semantics = ["openusd-schemas/semantics"]
+skel = ["openusd-schemas/skel"]
+ui = ["openusd-schemas/ui"]
+
 [dev-dependencies]
 moho-spike = { path = "../moho-spike" }
 
