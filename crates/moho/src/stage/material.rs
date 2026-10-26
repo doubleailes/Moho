@@ -16,7 +16,7 @@ use openusd::sdf::{self, Value};
 use openusd::tf::Token;
 use openusd::usd::Object as _;
 use openusd::usd::{self, Stage};
-use openusd_schemas::shade::{Connectable, Material, ProducerFilter, Shader, ShadingAttribute};
+use openusd_schemas::shade::{Connectable, Material, NodeGraph, ProducerFilter, Shader, ShadingAttribute};
 
 use crate::data_source::retained::{RetainedVector, container, value};
 use crate::data_source::{Container, DataSource};
@@ -144,29 +144,46 @@ struct Network<'a> {
     /// The prim nodes are named relative to (the material), or `None` to
     /// name every node by its absolute path.
     scope: Option<&'a sdf::Path>,
+    /// Where the prim's time-varying parameters are flagged: `material` on a
+    /// material, `__materialNodes` on a shader or node graph.
+    locator: Locator,
     nodes: BTreeMap<String, DataSource>,
 }
 
-/// The connections of `attribute` whose source prim is not on `stage` (it
-/// lies outside the population mask), as `(absolute node path, output
-/// name)`. openusd's producer walk cannot follow them; they are kept so that
-/// `streaming::unresolved` lists the node and a merged index can resolve it
-/// (`MaterialNodeResolvingSceneIndex`).
-fn off_stage(stage: &Stage, attribute: &usd::Attribute) -> Vec<(String, String)> {
+/// One authored connection of an attribute, in authored order.
+enum Source {
+    /// Its source prim is on the stage: openusd's producer walk follows it.
+    OnStage,
+    /// Its source prim lies outside the stage's population mask: `(absolute
+    /// node path, output name)`. The producer walk cannot follow it; it is
+    /// kept so that `streaming::unresolved` lists the node and a merged index
+    /// resolves it (`MaterialNodeResolvingSceneIndex`).
+    OffStage(String, String),
+}
+
+/// `attribute`'s authored connections, in order. A target the mask includes
+/// but the stage does not hold is broken, and dropped as the producer walk
+/// drops it.
+fn sources(stage: &Stage, attribute: &usd::Attribute) -> Vec<Source> {
+    let mask = stage.mask();
     attribute
         .connections()
         .unwrap_or_default()
         .into_iter()
         .filter_map(|target| {
             let (prim, property) = target.split_property()?;
-            let on_stage = stage
+            let held = stage
                 .prim(&prim)
                 .ok()
                 .is_some_and(|p| p.is_valid().unwrap_or(false));
-            (!on_stage).then(|| {
-                let output = property.strip_prefix("outputs:").unwrap_or(property);
-                (prim.as_str().to_owned(), output.to_owned())
-            })
+            if held {
+                return Some(Source::OnStage);
+            }
+            if mask.includes(&prim) {
+                return None;
+            }
+            let output = property.strip_prefix("outputs:").unwrap_or(property);
+            Some(Source::OffStage(prim.as_str().to_owned(), output.to_owned()))
         })
         .collect()
 }
@@ -179,24 +196,13 @@ impl<'a> Network<'a> {
         let mut network = Network {
             ctx,
             scope: Some(&ctx.path),
+            locator: Locator::new([t::MATERIAL]),
             nodes: BTreeMap::new(),
         };
         let mut terminal_entries = Vec::new();
         for (terminal, output) in terminals {
-            let attribute = output.attribute().clone();
-            // A terminal reads one output, the first.
-            if let Some(Producer::Node(prim, output_name)) = producers(
-                ShadingAttribute::Output(output),
-                ProducerFilter::ShaderOutputsOnly,
-            )
-            .into_iter()
-            .next()
-            {
-                let node = network.node_name(prim.path());
-                network.walk(&ctx.stage, &prim);
-                terminal_entries.push((terminal, connection(&node, &output_name)));
-            } else if let Some((node, output_name)) = off_stage(&ctx.stage, &attribute).into_iter().next() {
-                terminal_entries.push((terminal, connection(&node, &output_name)));
+            if let Some(link) = network.output_link(output) {
+                terminal_entries.push((terminal, link));
             }
         }
         let nodes = network.nodes;
@@ -209,13 +215,62 @@ impl<'a> Network<'a> {
     /// The nodes a shader's own subgraph holds, every one named by its
     /// absolute path: what a merged index fills a dangling connection with.
     fn nodes_from(ctx: &'a PrimContext, shader: &usd::Prim) -> DataSource {
-        let mut network = Network {
-            ctx,
-            scope: None,
-            nodes: BTreeMap::new(),
-        };
+        let mut network = Network::unscoped(ctx);
         network.walk(&ctx.stage, shader);
         container(network.nodes)
+    }
+
+    /// A network naming every node by its absolute path, flagging time
+    /// variance at `__materialNodes`.
+    fn unscoped(ctx: &'a PrimContext) -> Self {
+        Network {
+            ctx,
+            scope: None,
+            locator: Locator::new([t::MATERIAL_NODES]),
+            nodes: BTreeMap::new(),
+        }
+    }
+
+    /// A node graph's outputs, each the connection to the shader output it
+    /// reads (or to a node outside the mask), and the nodes behind them.
+    fn graph(ctx: &'a PrimContext, graph: &NodeGraph) -> (DataSource, DataSource) {
+        let mut network = Network::unscoped(ctx);
+        let mut outputs = Vec::new();
+        for output in graph.outputs().unwrap_or_default() {
+            let name = output.attribute().name().to_owned();
+            let base = name.strip_prefix("outputs:").unwrap_or(&name).to_owned();
+            if let Some(link) = network.output_link(output) {
+                outputs.push((base, link));
+            }
+        }
+        (
+            container(network.nodes),
+            container([(t::OUTPUTS, container(outputs))]),
+        )
+    }
+
+    /// The connection an output (a material terminal, a node graph output)
+    /// reads: its first authored source, in authored order, so that a masked
+    /// stage picks what the fully loaded stage picks.
+    fn output_link(&mut self, output: openusd_schemas::shade::Output) -> Option<DataSource> {
+        let attribute = output.attribute().clone();
+        match sources(&self.ctx.stage, &attribute).into_iter().next()? {
+            Source::OffStage(node, output_name) => Some(connection(&node, &output_name)),
+            Source::OnStage => {
+                let Producer::Node(prim, output_name) = producers(
+                    ShadingAttribute::Output(output),
+                    ProducerFilter::ShaderOutputsOnly,
+                )
+                .into_iter()
+                .next()?
+                else {
+                    return None;
+                };
+                let node = self.node_name(prim.path());
+                self.walk(&self.ctx.stage.clone(), &prim);
+                Some(connection(&node, &output_name))
+            }
+        }
     }
 
     /// A node's name: its path relative to the material, or its absolute
@@ -268,13 +323,35 @@ impl<'a> Network<'a> {
                     }
                 }
             }
-            let outside = off_stage(stage, input.attribute());
-            if !upstream_nodes.is_empty() || !outside.is_empty() {
-                let links: Vec<DataSource> = upstream_nodes
-                    .iter()
-                    .map(|(upstream, output)| connection(&self.node_name(upstream.path()), output))
-                    .chain(outside.iter().map(|(node, output)| connection(node, output)))
-                    .collect();
+            let authored = sources(stage, input.attribute());
+            let outside = authored.iter().any(|s| matches!(s, Source::OffStage(..)));
+            if !upstream_nodes.is_empty() || outside {
+                // In authored order: the producers stand where the first
+                // on-stage connection is (they may resolve through a node
+                // graph, so one target need not be one producer), and each
+                // off-stage connection where it was authored.
+                let mut links: Vec<DataSource> = Vec::new();
+                let mut producers_placed = false;
+                let place_producers = |links: &mut Vec<DataSource>| {
+                    links.extend(
+                        upstream_nodes
+                            .iter()
+                            .map(|(upstream, output)| connection(&self.node_name(upstream.path()), output)),
+                    );
+                };
+                for source in &authored {
+                    match source {
+                        Source::OnStage if !producers_placed => {
+                            place_producers(&mut links);
+                            producers_placed = true;
+                        }
+                        Source::OnStage => {}
+                        Source::OffStage(node, output) => links.push(connection(node, output)),
+                    }
+                }
+                if !producers_placed {
+                    place_producers(&mut links);
+                }
                 connections.push((base, RetainedVector::new(links).into_data_source()));
                 for (upstream, _) in &upstream_nodes {
                     self.walk(stage, upstream);
@@ -300,7 +377,7 @@ impl<'a> Network<'a> {
     }
 
     fn parameter(&self, attribute: usd::Attribute) -> DataSource {
-        let locator = Locator::new([t::MATERIAL]);
+        let locator = self.locator.clone();
         let mut entries = vec![(
             t::VALUE,
             AttributeValue::data_source(attribute.clone(), self.ctx, locator),
@@ -337,6 +414,39 @@ impl Adapter for ShaderNodesAdapter {
 
     fn invalidate(&self, _ctx: &PrimContext, _name: &str) -> LocatorSet {
         LocatorSet::from(Locator::new([t::MATERIAL_NODES]))
+    }
+}
+
+/// The adapter of `NodeGraph` prims: `__materialNodes`, the nodes behind
+/// the graph's outputs, and `__materialNodeGraph/outputs`, the connection
+/// each output reads, both by absolute paths. A merged index rewrites a
+/// connection to a node graph outside a chunk's mask through them.
+pub struct NodeGraphNodesAdapter;
+
+impl Adapter for NodeGraphNodesAdapter {
+    fn names(&self, _ctx: &PrimContext) -> Vec<Token> {
+        vec![
+            Token::from(t::MATERIAL_NODES),
+            Token::from(t::MATERIAL_NODE_GRAPH),
+        ]
+    }
+
+    fn get(&self, ctx: &PrimContext, name: &Token) -> Option<DataSource> {
+        if name != t::MATERIAL_NODES && name != t::MATERIAL_NODE_GRAPH {
+            return None;
+        }
+        let graph = NodeGraph::get(&ctx.stage, ctx.path.clone()).ok().flatten()?;
+        let (nodes, outputs) = Network::graph(ctx, &graph);
+        Some(if name == t::MATERIAL_NODES { nodes } else { outputs })
+    }
+
+    fn invalidate(&self, _ctx: &PrimContext, _name: &str) -> LocatorSet {
+        [
+            Locator::new([t::MATERIAL_NODES]),
+            Locator::new([t::MATERIAL_NODE_GRAPH]),
+        ]
+        .into_iter()
+        .collect()
     }
 }
 

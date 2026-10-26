@@ -8,7 +8,13 @@
 //! material. Moho never chooses what is loaded. [`unresolved`] lists those
 //! paths; the consumer opens a stage masked to them, payloads loaded, and
 //! adds a side input over it with `chain::input`, weaker than the chunks and
-//! stronger than the scene input, until nothing is unresolved.
+//! stronger than the scene input, until a round resolves nothing new.
+//!
+//! A connection to a prim that exists nowhere looks, on a chunk's masked
+//! stage, like one to a prim outside the mask: it is listed too, and a side
+//! input masked to it holds nothing. So the consumer stops when a round adds
+//! no prim, not when the list is empty. (On a fully loaded stage, a broken
+//! connection is dropped, as openusd's producer walk drops it.)
 //!
 //! [`MergingSceneIndex`]: crate::filter::MergingSceneIndex
 
