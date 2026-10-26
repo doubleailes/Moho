@@ -164,6 +164,12 @@ impl SceneIndex for PointInstancingSceneIndex {
             let Some(local) = input.data else {
                 return input;
             };
+            // The copy's path values name the copy, as Hydra's point
+            // instancer propagation re-roots them.
+            let local = match instancer.copies.iter().find(|(c, _)| c == copy) {
+                Some((_, prototype)) => crate::filter::rerooting::rerooted(local, prototype, copy),
+                None => local,
+            };
             let mut overrides: Vec<(Token, DataSource)> = vec![(
                 Token::from(t::INSTANCED_BY),
                 container([

@@ -23,5 +23,6 @@ pub mod point_instancing;
 
 pub use point_instancing::PointInstancingSceneIndex;
 pub mod render_settings;
+pub mod rerooting;
 
 pub use render_settings::RenderSettingsFlatteningSceneIndex;
