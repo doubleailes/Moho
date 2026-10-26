@@ -246,6 +246,14 @@ pub mod prim_origin {
 /// prototype identity.
 pub mod usd_prim_info {
     pub const USD_PRIM_INFO: &str = "__usdPrimInfo";
+    pub const SPECIFIER: &str = "specifier";
+    pub const TYPE_NAME: &str = "typeName";
+    pub const IS_LOADED: &str = "isLoaded";
+    pub const API_SCHEMAS: &str = "apiSchemas";
+    pub const KIND: &str = "kind";
+    pub const DEF: &str = "def";
+    pub const OVER: &str = "over";
+    pub const CLASS: &str = "class";
     pub const NI_PROTOTYPE_PATH: &str = "niPrototypePath";
     pub const IS_NI_PROTOTYPE: &str = "isNiPrototype";
     /// The stable identity of the prototype an instance shares (Moho).

@@ -1,7 +1,9 @@
-//! `__usdPrimInfo`: what the native-instancing filter needs to know about
-//! instances and prototypes, as `UsdImagingUsdPrimInfoSchema`.
+//! `__usdPrimInfo`, as `UsdImagingUsdPrimInfoSchema`: the USD prim's
+//! specifier, type name, applied API schemas, kind and load state, and what
+//! the native-instancing filter needs to know about instances and
+//! prototypes.
 
-use openusd::sdf::Value;
+use openusd::sdf::{self, Value};
 use openusd::tf::Token;
 
 use crate::data_source::DataSource;
@@ -11,7 +13,7 @@ use crate::stage::adapter::Adapter;
 use crate::stage::instancing::prototype_identity;
 use crate::tokens::usd_prim_info as t;
 
-/// Contributes `__usdPrimInfo` to instances and prototype roots.
+/// Contributes `__usdPrimInfo` to every prim.
 pub struct PrimInfoAdapter;
 
 fn entries(ctx: &PrimContext) -> Vec<(&'static str, DataSource)> {
@@ -19,6 +21,26 @@ fn entries(ctx: &PrimContext) -> Vec<(&'static str, DataSource)> {
         return Vec::new();
     };
     let mut entries = Vec::new();
+    if let Ok(Some(specifier)) = prim.specifier() {
+        let token = match specifier {
+            sdf::Specifier::Def => t::DEF,
+            sdf::Specifier::Over => t::OVER,
+            sdf::Specifier::Class => t::CLASS,
+        };
+        entries.push((t::SPECIFIER, value(Value::Token(Token::from(token)))));
+    }
+    let type_name = prim.type_name().ok().flatten().unwrap_or_default();
+    entries.push((t::TYPE_NAME, value(Value::Token(type_name))));
+    entries.push((t::IS_LOADED, value(prim.is_loaded().unwrap_or(false))));
+    // Composed, the typed schema's built-in API schemas included, as
+    // `UsdPrim::GetAppliedSchemas`.
+    entries.push((
+        t::API_SCHEMAS,
+        value(Value::TokenVec(prim.api_schemas().unwrap_or_default())),
+    ));
+    if let Ok(Some(kind)) = prim.kind() {
+        entries.push((t::KIND, value(Value::Token(kind))));
+    }
     if prim.is_instance().unwrap_or(false)
         && let Ok(Some(prototype)) = prim.prototype()
     {
@@ -38,7 +60,7 @@ fn entries(ctx: &PrimContext) -> Vec<(&'static str, DataSource)> {
 
 impl Adapter for PrimInfoAdapter {
     fn names(&self, ctx: &PrimContext) -> Vec<Token> {
-        if ctx.path.is_abs_root() || entries(ctx).is_empty() {
+        if ctx.path.is_abs_root() || ctx.prim().is_none() {
             Vec::new()
         } else {
             vec![Token::from(t::USD_PRIM_INFO)]
