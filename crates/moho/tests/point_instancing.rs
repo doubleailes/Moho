@@ -243,3 +243,75 @@ fn prototype_copies_keep_their_origin() {
         "the original prototype prim"
     );
 }
+
+/// A point instancer inside another's prototype: every copy of the outer
+/// prototype re-instances the inner instancer with copies of its own.
+const NESTED: &str = r#"#usda 1.0
+def Xform "world"
+{
+    def PointInstancer "outer"
+    {
+        rel prototypes = [</world/outer/protos/tree>]
+        int[] protoIndices = [0, 0]
+        point3f[] positions = [(0, 0, 0), (10, 0, 0)]
+        def Scope "protos"
+        {
+            def Xform "tree"
+            {
+                def PointInstancer "leaves"
+                {
+                    rel prototypes = [</world/outer/protos/tree/leaves/protos/leaf>]
+                    int[] protoIndices = [0, 0, 0]
+                    point3f[] positions = [(0, 1, 0), (0, 2, 0), (0, 3, 0)]
+                    def Scope "protos"
+                    {
+                        def Mesh "leaf"
+                        {
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+"#;
+
+#[test]
+fn a_nested_instancer_is_reinstanced_in_every_copy() {
+    let (_dir, usd) = stage(NESTED);
+    let stage_index = StageSceneIndex::new();
+    stage_index.set_stage(usd);
+    let index = PointInstancingSceneIndex::new(stage_index);
+    let Some(Value::PathVec(outer)) =
+        read(index.as_ref(), &p("/world/outer"), "instancerTopology/prototypes")
+    else {
+        panic!()
+    };
+    let tree = &outer[0];
+    let leaves = tree.append_path("leaves").unwrap();
+    assert_eq!(index.prim(&leaves).ty, "instancer", "the copied inner instancer");
+    let Some(Value::PathVec(inner)) = read(index.as_ref(), &leaves, "instancerTopology/prototypes") else {
+        panic!()
+    };
+    assert_eq!(inner.len(), 1);
+    let leaf = &inner[0];
+    assert!(
+        leaf.has_prefix(&leaves) && leaf.as_str().contains("ForInstancer"),
+        "the inner copy lives inside the outer copy, under its own instancer: {leaf}"
+    );
+    assert_eq!(index.prim(leaf).ty, "mesh");
+    assert!(index.children(&leaf.parent().unwrap()).contains(leaf));
+    assert_eq!(
+        read(index.as_ref(), leaf, "instancedBy/paths"),
+        Some(Value::PathVec(vec![leaves.clone()]))
+    );
+    // The inner original inside the outer copy is drawn only through it.
+    let original = leaf.parent().unwrap();
+    assert_eq!(index.prim(&original).ty, "", "{original}");
+    assert_eq!(
+        read(index.as_ref(), leaf, "primOrigin/scenePath"),
+        Some(Value::PathVec(vec![p(
+            "/world/outer/protos/tree/leaves/protos/leaf"
+        )]))
+    );
+}
