@@ -68,5 +68,9 @@ the steps that land in this repository or depend on it.
   complete expression, predicates included, against the receiver's own input
   stage; today it judges path patterns only
   (`crates/moho/src/chain.rs`, `merged`).
+- The changed fields of an info-only path in `StageSink::after_commit` (C++
+  `UsdNotice::ObjectsChanged::GetChangedFields`). Moho dirties every prim
+  with an info-only change for its `kind` meanwhile
+  (`crates/moho/src/stage/mod.rs`).
 - `SdfPath::MakeRelativePath`. Moho builds a prototype-relative prim origin
   from the path's text meanwhile (`crates/moho/src/stage/prim_origin.rs`).

@@ -19,6 +19,8 @@ pub struct Pending {
     pub updated_properties: BTreeMap<sdf::Path, BTreeSet<String>>,
     /// Whether the stage's own metadata (the pseudo-root's) changed.
     pub stage_metadata: bool,
+    /// Prims whose own metadata changed without a resync.
+    pub updated_prims: BTreeSet<sdf::Path>,
 }
 
 impl Pending {
@@ -37,16 +39,18 @@ impl Pending {
             }
         }
         for path in changed_info_only {
-            // A prim's own info-only change (kind, documentation...) changes
-            // nothing Moho exposes; a change that does (active, instanceable,
-            // apiSchemas) arrives as a resync. The pseudo-root's is the
-            // stage's metadata.
+            // A prim's own info-only change (kind, documentation...) can
+            // change its `kind`; a change to anything else Moho exposes
+            // (active, instanceable, typeName, apiSchemas) arrives as a
+            // resync. The pseudo-root's is the stage's metadata.
             if path.is_property() {
                 Self::property(&mut self.updated_properties, path);
             } else if path.is_abs_root() {
                 // Time range, rate, render settings, metrics: the scene
                 // globals.
                 self.stage_metadata = true;
+            } else {
+                self.updated_prims.insert(path.prim_path());
             }
         }
     }

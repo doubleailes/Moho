@@ -282,6 +282,9 @@ the root edit target (`crates/moho-spike/tests/probe.rs` asserts all of it):
   (`MembershipQuery`). Light linking after a merge, whose lights and
   receivers sit on different input stages, therefore judges expressions
   without predicates (`PathExpressionEval` with an empty library).
+- `CommittedChange::changed_info_only` names the paths, not the fields that
+  changed on them (C++ `GetChangedFields`). A prim's info-only change is
+  taken as a possible `kind` change (`stage/mod.rs`).
 - No `SdfPath::MakeRelativePath`: the prim origin's prototype-relative scene
   path (`stage/prim_origin.rs`) is built from the path's text, parsed back
   with `sdf::Path::new`, which accepts relative paths and `.`.

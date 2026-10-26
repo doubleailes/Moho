@@ -99,3 +99,27 @@ fn time_variance_does_not_depend_on_the_index_time() {
     assert_eq!(varying("/world/moving"), Some(Value::Bool(true)));
     assert_eq!(varying("/world/still"), Some(Value::Bool(false)));
 }
+
+#[test]
+fn a_kind_edit_dirties_the_prim_info() {
+    use moho::scene_index::testing::{Notice, RecordingObserver};
+
+    let (_dir, usd) = stage(SCENE);
+    let index = StageSceneIndex::new();
+    index.set_stage(usd);
+    let recorder = RecordingObserver::on(index.as_ref());
+    index
+        .stage()
+        .unwrap()
+        .prim("/world")
+        .unwrap()
+        .set_metadata("kind", Token::from("assembly"))
+        .unwrap();
+    index.apply_pending_updates();
+    let notices = recorder.take();
+    assert!(
+        notices.iter().any(|n| matches!(n, Notice::Dirtied(d) if d.path == p("/world") && d.locators.contains(&Locator::parse("__usdPrimInfo/kind")))),
+        "{notices:?}"
+    );
+    assert_eq!(info(&index, "/world", "kind"), token("assembly"));
+}
