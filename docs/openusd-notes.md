@@ -242,6 +242,18 @@ the root edit target (`crates/moho-spike/tests/probe.rs` asserts all of it):
 - `sdf::Path::new` parses relative paths (`geo`, `a/b`) and the `.` anchor,
   which the prim origin's prototype-relative scene path uses.
 
+## Prim info (`scene-index-prim-info`)
+
+- `Prim::specifier() -> Result<Option<sdf::Specifier>>` (`Def`, `Over`,
+  `Class`), `Prim::type_name() -> Result<Option<Token>>` (as authored, so
+  `DomeLight_1` stays versioned), `Prim::kind() -> Result<Option<Token>>`
+  (authored only) and `Prim::is_loaded() -> Result<bool>`.
+- `Prim::api_schemas() -> Result<Vec<Token>>`: composed, the prim
+  definition's built-in schemas first (C++ `GetAppliedSchemas`).
+- `Attribute::might_be_time_varying() -> Result<bool>`, also exposed as
+  `__usdAttributes/<name>/mightBeTimeVarying`.
+
+## Gaps
 
 - Splines (`Ts`): a `.spline` block only round-trips as a dictionary. There
   are no typed knots, evaluation, authoring or usdc encoding.
