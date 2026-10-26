@@ -6,14 +6,15 @@ use std::rc::Rc;
 
 use crate::filter::{
     FlatteningSceneIndex, LightLinkingSceneIndex, MaterialBindingResolvingSceneIndex,
-    NativeInstancingSceneIndex, PointInstancingSceneIndex, RenderSettingsFlatteningSceneIndex,
+    MaterialNodeResolvingSceneIndex, NativeInstancingSceneIndex, PointInstancingSceneIndex,
+    RenderSettingsFlatteningSceneIndex,
 };
 use crate::scene_index::{CollectionMembership, SceneIndexHandle};
 use crate::stage::StageSceneIndex;
 
 /// The standard chain over `stage`: native instancing, point instancing,
 /// flattening, material binding resolving, render settings flattening, then
-/// light linking. The stage index answers collection membership for the
+/// light linking and material node resolving. The stage index answers collection membership for the
 /// resolving filters.
 ///
 /// It is [`input`] followed by light linking. A streamed scene puts one
@@ -22,7 +23,7 @@ use crate::stage::StageSceneIndex;
 /// over it.
 pub fn standard(stage: Rc<StageSceneIndex>) -> SceneIndexHandle {
     let membership: Rc<dyn CollectionMembership> = stage.clone();
-    LightLinkingSceneIndex::new(input(stage), Some(membership))
+    MaterialNodeResolvingSceneIndex::new(LightLinkingSceneIndex::new(input(stage), Some(membership)))
 }
 
 /// The standard chain over `stage` without light linking: what each input
@@ -46,6 +47,9 @@ pub fn input(stage: Rc<StageSceneIndex>) -> SceneIndexHandle {
 /// Workaround, an upstream candidate in `ROADMAP.md`: openusd's
 /// `CollectionEvaluator::build` is not public, so a light's expression
 /// cannot be judged, predicates included, on the receiver's input stage.
+///
+/// It then fills material networks' nodes that a chunk's stage could not
+/// hold from the merged index (`MaterialNodeResolvingSceneIndex`).
 pub fn merged(index: SceneIndexHandle) -> SceneIndexHandle {
-    LightLinkingSceneIndex::new(index, None)
+    MaterialNodeResolvingSceneIndex::new(LightLinkingSceneIndex::new(index, None))
 }

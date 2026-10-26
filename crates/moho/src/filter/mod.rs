@@ -13,6 +13,9 @@ pub use material_binding::MaterialBindingResolvingSceneIndex;
 pub mod light_linking;
 
 pub use light_linking::LightLinkingSceneIndex;
+pub mod material_nodes;
+
+pub use material_nodes::MaterialNodeResolvingSceneIndex;
 pub mod native_instancing;
 
 pub use native_instancing::NativeInstancingSceneIndex;
