@@ -18,8 +18,8 @@
 
 ## 3. Chain and renderer filters
 
-- [ ] 3.1 `chain::standard` in Hydra's order (spec "The standard chain"); document its configuration and what it leaves out
-- [ ] 3.2 Add `chain::renderer_filters` with `RendererFilter { phase, order, build }`, ordered as `HdSceneIndexPluginRegistry`; provide light linking (phase 4, `AtStart`) and dependency forwarding (phase 1000, `AtEnd`) constructors
+- [x] 3.1 `chain::standard` in Hydra's order (spec "The standard chain"); document its configuration and what it leaves out
+- [x] 3.2 Add `chain::renderer_filters` with `RendererFilter { phase, order, build }`, ordered as `HdSceneIndexPluginRegistry`; provide light linking (phase 4, `AtStart`) and dependency forwarding (phase 1000, `AtEnd`) constructors
 
 ## 4. Hydra 2.0 consumer path
 
