@@ -16,6 +16,7 @@
 #![forbid(unsafe_code)]
 
 pub mod chain;
+pub mod collection;
 pub mod data_source;
 pub mod filter;
 pub mod locator;

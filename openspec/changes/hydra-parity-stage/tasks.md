@@ -7,8 +7,8 @@
 
 - [x] 1.1 Document in `data_source.rs` and `docs/architecture.md` that a single Hydra `SdfPath` field is a one-element `Value::PathVec`, absent when empty; add `Value::Path` to ROADMAP's upstream candidates and to the gaps in `docs/openusd-notes.md`
 - [x] 1.2 Add `DataSource::Block` and move the overlay container out of `filter/merging.rs` into `data_source.rs`, honouring blocks; `locate` treats a block as absent; tests: a block hides weaker data, siblings still read through
-- [ ] 1.3 Add the `collection` module: Hydra's collection expression evaluator over a `&dyn SceneIndex`, with `hdType`/`type`, `hdVisible`/`visible` (default `true`), `hdPurpose`/`purpose`, `hdHasDataSource`/`hasDataSource`, `hdHasPrimvar`/`hasPrimvar`, `hdHasMaterialBinding`/`hasMaterialBinding`; an unlinkable expression matches nothing
-- [ ] 1.4 Tests for 1.3: each predicate on a retained scene index, both names, the `hdVisible` default and missing-visibility cases, and an unknown predicate matching nothing
+- [x] 1.3 Add the `collection` module: Hydra's collection expression evaluator over a `&dyn SceneIndex`, with `hdType`/`type`, `hdVisible`/`visible` (default `true`), `hdPurpose`/`purpose`, `hdHasDataSource`/`hasDataSource`, `hdHasPrimvar`/`hasPrimvar`, `hdHasMaterialBinding`/`hasMaterialBinding`; an unlinkable expression matches nothing
+- [x] 1.4 Tests for 1.3: each predicate on a retained scene index, both names, the `hdVisible` default and missing-visibility cases, and an unknown predicate matching nothing
 
 ## 2. Stage scene index
 
