@@ -17,16 +17,28 @@ use crate::stage::attribute::AttributeValue;
 
 /// One member of a schema table.
 pub enum Member {
-    /// A Hydra member read from a USD attribute: `(member, attribute)`.
+    /// A Hydra member read from a USD attribute: `(member, attribute)`,
+    /// flagged time-varying when its value may vary.
     Attr(&'static str, &'static str),
-    /// A nested container of members.
+    /// A member read like [`Attr`](Member::Attr) but never flagged
+    /// time-varying, where UsdImaging builds its attribute data source
+    /// without a locator.
+    Unflagged(&'static str, &'static str),
+    /// A nested container of members; a change to one of them dirties the
+    /// whole container.
     Nested(&'static str, &'static [Member]),
+    /// A nested container of members; a change to one of them dirties that
+    /// member alone.
+    LeafNested(&'static str, &'static [Member]),
 }
 
 impl Member {
     fn name(&self) -> &'static str {
         match self {
-            Member::Attr(name, _) | Member::Nested(name, _) => name,
+            Member::Attr(name, _)
+            | Member::Unflagged(name, _)
+            | Member::Nested(name, _)
+            | Member::LeafNested(name, _) => name,
         }
     }
 }
@@ -63,7 +75,13 @@ impl Container for TableContainer {
                 let attribute = self.ctx.prim()?.attribute(*attribute);
                 Some(AttributeValue::data_source(attribute, &self.ctx, locator))
             }
-            Member::Nested(_, members) => Some(TableContainer::data_source(&self.ctx, locator, members)),
+            Member::Unflagged(_, attribute) => {
+                let attribute = self.ctx.prim()?.attribute(*attribute);
+                Some(AttributeValue::unflagged(attribute, &self.ctx))
+            }
+            Member::Nested(_, members) | Member::LeafNested(_, members) => {
+                Some(TableContainer::data_source(&self.ctx, locator, members))
+            }
         }
     }
 }
@@ -100,9 +118,14 @@ pub fn invalidate(base: &Locator, members: &[Member], attribute: &str) -> Locato
     let mut locators = LocatorSet::new();
     for member in members {
         match member {
-            Member::Attr(name, attr) if *attr == attribute => locators.insert(base.append(*name)),
+            Member::Attr(name, attr) | Member::Unflagged(name, attr) if *attr == attribute => {
+                locators.insert(base.append(*name))
+            }
             Member::Nested(name, nested) if contains(nested, attribute) => {
                 locators.insert(base.append(*name))
+            }
+            Member::LeafNested(name, nested) => {
+                locators.insert_set(&invalidate(&base.append(*name), nested, attribute))
             }
             _ => {}
         }
@@ -112,8 +135,8 @@ pub fn invalidate(base: &Locator, members: &[Member], attribute: &str) -> Locato
 
 fn contains(members: &[Member], attribute: &str) -> bool {
     members.iter().any(|m| match m {
-        Member::Attr(_, attr) => *attr == attribute,
-        Member::Nested(_, nested) => contains(nested, attribute),
+        Member::Attr(_, attr) | Member::Unflagged(_, attr) => *attr == attribute,
+        Member::Nested(_, nested) | Member::LeafNested(_, nested) => contains(nested, attribute),
     })
 }
 

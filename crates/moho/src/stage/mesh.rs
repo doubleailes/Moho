@@ -1,5 +1,7 @@
 //! The `mesh` data of `Mesh` prims: topology, subdivision scheme and tags,
-//! and sidedness, as UsdImaging's mesh data source.
+//! and sidedness, as UsdImaging's mesh data source: only the topology's
+//! arrays are flagged time-varying, and a topology or subdivision tag edit
+//! dirties its whole container.
 
 use openusd::tf::Token;
 
@@ -18,27 +20,27 @@ const MESH: &[Member] = &[
             Member::Attr(t::FACE_VERTEX_COUNTS, "faceVertexCounts"),
             Member::Attr(t::FACE_VERTEX_INDICES, "faceVertexIndices"),
             Member::Attr(t::HOLE_INDICES, "holeIndices"),
-            Member::Attr(t::ORIENTATION, "orientation"),
+            Member::Unflagged(t::ORIENTATION, "orientation"),
         ],
     ),
-    Member::Attr(t::SUBDIVISION_SCHEME, "subdivisionScheme"),
+    Member::Unflagged(t::SUBDIVISION_SCHEME, "subdivisionScheme"),
     Member::Nested(
         t::SUBDIVISION_TAGS,
         &[
-            Member::Attr(t::INTERPOLATE_BOUNDARY, "interpolateBoundary"),
-            Member::Attr(
+            Member::Unflagged(t::INTERPOLATE_BOUNDARY, "interpolateBoundary"),
+            Member::Unflagged(
                 t::FACE_VARYING_LINEAR_INTERPOLATION,
                 "faceVaryingLinearInterpolation",
             ),
-            Member::Attr(t::TRIANGLE_SUBDIVISION_RULE, "triangleSubdivisionRule"),
-            Member::Attr(t::CORNER_INDICES, "cornerIndices"),
-            Member::Attr(t::CORNER_SHARPNESSES, "cornerSharpnesses"),
-            Member::Attr(t::CREASE_INDICES, "creaseIndices"),
-            Member::Attr(t::CREASE_LENGTHS, "creaseLengths"),
-            Member::Attr(t::CREASE_SHARPNESSES, "creaseSharpnesses"),
+            Member::Unflagged(t::TRIANGLE_SUBDIVISION_RULE, "triangleSubdivisionRule"),
+            Member::Unflagged(t::CORNER_INDICES, "cornerIndices"),
+            Member::Unflagged(t::CORNER_SHARPNESSES, "cornerSharpnesses"),
+            Member::Unflagged(t::CREASE_INDICES, "creaseIndices"),
+            Member::Unflagged(t::CREASE_LENGTHS, "creaseLengths"),
+            Member::Unflagged(t::CREASE_SHARPNESSES, "creaseSharpnesses"),
         ],
     ),
-    Member::Attr(t::DOUBLE_SIDED, "doubleSided"),
+    Member::Unflagged(t::DOUBLE_SIDED, "doubleSided"),
 ];
 
 /// The adapter of `Mesh` prims.
