@@ -41,10 +41,10 @@ impl Pending {
             // resyncs the prim for a plugin field (such as
             // `renderSettingsPrimPath`).
             //
-            // Workaround, an upstream candidate in `ROADMAP.md`: openusd's
-            // commit notice names info-only paths but not their changed
-            // fields (C++ `GetChangedFields`), so every such change is taken
-            // as a built-in field's, and a plugin field's resync is missed.
+            // Workaround, an upstream candidate in `ROADMAP.md`: but for
+            // `typeName` (`Recorder::after_commit`), every such change is
+            // taken as a built-in field's, and a plugin field's resync is
+            // missed.
             if path.is_property() {
                 Self::property(&mut self.updated_properties, path);
             }
@@ -68,9 +68,21 @@ pub struct Recorder(pub Rc<RefCell<Pending>>);
 
 impl StageSink for Recorder {
     fn after_commit(&self, _stage: &Stage, change: &CommittedChange<'_>) {
-        self.0
-            .borrow_mut()
-            .record(change.resynced, change.changed_info_only);
+        // Workaround, an upstream candidate in `ROADMAP.md`: openusd reports
+        // a prim's `typeName` edit as info-only, where USD treats a prim type
+        // info change as a resync for notification (`stage.cpp`,
+        // `_ProcessPendingChanges`), so UsdImaging repopulates a retyped
+        // prim. Promote it here.
+        let retyped: Vec<sdf::Path> = change
+            .changed_info_only
+            .iter()
+            .filter(|path| !path.is_property() && !path.is_abs_root())
+            .filter(|path| change.changed_fields(path).any(|f| f.as_str() == "typeName"))
+            .cloned()
+            .collect();
+        let mut pending = self.0.borrow_mut();
+        pending.record(change.resynced, change.changed_info_only);
+        pending.record(&retyped, &[]);
     }
 
     fn load_rules_changed(&self, _stage: &Stage, resynced: &[sdf::Path]) {

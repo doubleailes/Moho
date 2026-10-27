@@ -108,6 +108,27 @@ fn a_prim_defined_and_another_removed() {
 }
 
 #[test]
+fn a_retyped_prim_is_resynced() {
+    // USD notifies a `typeName` edit as a resync, and UsdImaging re-adds the
+    // prim as its new type (checked against USD 26.08).
+    let (_dir, index, recorder) = setup();
+    index
+        .stage()
+        .unwrap()
+        .define_typed_prim("/world/geo", "Sphere")
+        .unwrap();
+    index.apply_pending_updates();
+    assert_eq!(
+        recorder.take(),
+        [Notice::Added(Added {
+            path: p("/world/geo"),
+            ty: Token::from("sphere")
+        })]
+    );
+    assert_eq!(index.prim(&p("/world/geo")).ty, "sphere");
+}
+
+#[test]
 fn several_edits_one_application() {
     let (_dir, index, recorder) = setup();
     set_int(&index, "/world/geo.crust:rayMask", 7);
