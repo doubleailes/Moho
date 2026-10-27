@@ -105,3 +105,25 @@ fn nurbs_point_weights_are_a_primvar() {
         "basis curves have no point weights"
     );
 }
+
+#[test]
+fn a_basis_curves_edit_dirties_its_topology_member() {
+    use moho::scene_index::testing::{Notice, RecordingObserver};
+
+    let (_dir, stage) = stage(SCENE);
+    let index = StageSceneIndex::new();
+    index.set_stage(stage.clone());
+    let recorder = RecordingObserver::on(index.as_ref());
+    stage
+        .attribute("/hair.wrap")
+        .unwrap()
+        .set(moho::openusd::tf::Token::from("periodic"))
+        .unwrap();
+    index.apply_pending_updates();
+    let notices = recorder.take();
+    let Some(Notice::Dirtied(d)) = notices.first() else {
+        panic!("{notices:?}")
+    };
+    assert!(d.locators.contains(&Locator::parse("basisCurves/topology/wrap")));
+    assert!(!d.locators.contains(&Locator::parse("basisCurves/topology/basis")));
+}

@@ -236,7 +236,7 @@ fn each_family_edit_dirties_its_locators() {
             "/world/hair",
             "basis",
             Value::Token("bezier".into()),
-            "basisCurves/topology",
+            "basisCurves/topology/basis",
         ),
         ("/world/ball", "radius", Value::Double(3.0), "sphere/radius"),
         ("/world/key", "inputs:intensity", Value::Float(9.0), "light"),
