@@ -20,9 +20,9 @@
 
 ## 3. Lights
 
-- [ ] 3.1 `stage/light.rs`: `light` lists `filters`, `isLight`, `materialSyncMode`; other names through a port of `LookupLightParamAttribute`
-- [ ] 3.2 Add `material` to lights: fixed terminal `light`, one node keyed by the light's absolute path, `nodeIdentifier` and `renderContextNodeIdentifiers` from `light:shaderId` and `<context>:light:shaderId`, contexts `""`, `__all` and those named
-- [ ] 3.3 Invalidation: `inputs:*` → `light`, `material`; `light:*` → `light`
+- [x] 3.1 `stage/light.rs`: `light` lists `filters`, `isLight`, `materialSyncMode`; other names through a port of `LookupLightParamAttribute`
+- [x] 3.2 Add `material` to lights: fixed terminal `light`, one node keyed by the light's absolute path, `nodeIdentifier` and `renderContextNodeIdentifiers` from `light:shaderId` and `<context>:light:shaderId`, contexts `""`, `__all` and those named
+- [x] 3.3 Invalidation: `inputs:*` → `light`, `material`; `light:*` → `light`
 
 ## 4. Tests
 
