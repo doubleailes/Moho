@@ -1,6 +1,7 @@
 //! The `primvars` data of a prim: every authored `primvars:*` with a value,
 //! plus the point-based and curve attributes Hydra reads as primvars
-//! (`points`, `normals`, `velocities`, `accelerations`, `widths`), as
+//! (`points`, `normals`, `velocities`, `accelerations`, `widths`, a NURBS
+//! curve's `pointWeights`), as
 //! UsdImaging's primvars data sources.
 
 use std::rc::Rc;
@@ -32,6 +33,7 @@ const CUSTOM: &[(&str, &str, &str, &str)] = &[
     (t::VELOCITIES, "velocities", "PointBased", t::VERTEX),
     (t::ACCELERATIONS, "accelerations", "PointBased", t::VERTEX),
     (t::WIDTHS, "widths", "Curves", t::VERTEX),
+    (t::POINT_WEIGHTS, "pointWeights", "NurbsCurves", t::VERTEX),
     (INSTANCE_TRANSLATIONS, "positions", "PointInstancer", INSTANCE),
     (INSTANCE_ROTATIONS, "orientationsf", "PointInstancer", INSTANCE),
     (INSTANCE_ROTATIONS, "orientations", "PointInstancer", INSTANCE),

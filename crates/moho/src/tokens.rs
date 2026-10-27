@@ -121,6 +121,8 @@ pub mod primvars {
     pub const VELOCITIES: &str = "velocities";
     pub const ACCELERATIONS: &str = "accelerations";
     pub const WIDTHS: &str = "widths";
+    /// A NURBS curve's `pointWeights`, a primvar in UsdImaging.
+    pub const POINT_WEIGHTS: &str = "pointWeights";
 
     pub const CONSTANT: &str = "constant";
     pub const VERTEX: &str = "vertex";
@@ -142,7 +144,7 @@ pub mod imageable {
 }
 
 /// `HdBasisCurvesSchema`, `HdBasisCurvesTopologySchema` and
-/// `HdNurbsCurvesSchema` (plus `pointWeights`, which Hydra does not carry).
+/// `HdNurbsCurvesSchema`.
 pub mod curves {
     pub const BASIS_CURVES: &str = "basisCurves";
     pub const NURBS_CURVES: &str = "nurbsCurves";
@@ -154,7 +156,6 @@ pub mod curves {
     pub const ORDER: &str = "order";
     pub const KNOTS: &str = "knots";
     pub const RANGES: &str = "ranges";
-    pub const POINT_WEIGHTS: &str = "pointWeights";
 }
 
 /// The implicit shape schemas (`HdSphereSchema`, `HdCubeSchema`, ...): each
