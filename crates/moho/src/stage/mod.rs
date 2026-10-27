@@ -22,6 +22,7 @@ pub mod light;
 pub mod material;
 pub mod material_binding;
 pub mod mesh;
+pub mod model;
 pub mod pending;
 pub mod point_instancer;
 pub mod prim_info;

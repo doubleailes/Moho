@@ -91,7 +91,7 @@ impl Sampled for AttributeValue {
 /// [`AttributeValue`].
 pub struct MappedAttributeValue {
     inner: AttributeValue,
-    map: fn(Value) -> Option<Value>,
+    map: Box<dyn Fn(Value) -> Option<Value>>,
 }
 
 impl MappedAttributeValue {
@@ -101,7 +101,7 @@ impl MappedAttributeValue {
         attribute: Attribute,
         ctx: &PrimContext,
         locator: Locator,
-        map: fn(Value) -> Option<Value>,
+        map: impl Fn(Value) -> Option<Value> + 'static,
     ) -> DataSource {
         if attribute.might_be_time_varying().unwrap_or(false) {
             ctx.globals.flag_time_varying(&ctx.path, locator);
@@ -111,14 +111,14 @@ impl MappedAttributeValue {
                 attribute,
                 globals: ctx.globals.clone(),
             },
-            map,
+            map: Box::new(map),
         }))
     }
 }
 
 impl Sampled for MappedAttributeValue {
     fn value(&self, offset: f32) -> Option<Value> {
-        self.inner.value(offset).and_then(self.map)
+        self.inner.value(offset).and_then(&self.map)
     }
 
     fn sample_times(&self, start: f32, end: f32) -> Option<Vec<f32>> {

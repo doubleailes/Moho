@@ -17,7 +17,7 @@
 - [x] 2.3 Resync notices: keep the populated path set, send `Added` for a resynced subtree and explicit `Removed` only for populated paths not re-added (`stage/mod.rs`, `pending.rs`)
 - [x] 2.4 Ignore every prim-level and root info-only change; delete the `kind` dirtying workaround and comment the gap (no changed fields in openusd); move the ROADMAP upstream candidate for changed fields to say Hydra resyncs on plugin fields
 - [x] 2.5 `__usdPrimInfo`: add `variantSelections` (absent when empty), drop `apiSchemas` when empty as UsdImaging does, remove `niPrototypeIdentity` from the container (native instancing reads the key through a crate-private accessor until `hydra-parity-instancing` deletes it)
-- [ ] 2.6 Add `extentsHint`, `model` and `geomModel` to the prims UsdImaging gives them to, with their invalidation (`stage/imageable.rs` or a new adapter)
+- [x] 2.6 Add `extentsHint`, `model` and `geomModel` to the prims UsdImaging gives them to, with their invalidation (`stage/imageable.rs` or a new adapter)
 - [x] 2.7 Root: `sceneGlobals` with four fields (`activeRenderSettingsPrim` only when authored and non-empty) and `__usdUpAxis/upAxis`; delete `__usdStageMetadata` and the `metersPerUnit`/`upAxis` scene globals (`stage/globals.rs`, `tokens.rs`)
 - [x] 2.8 Render prims: `__usdRenderSettings`, `__usdRenderProduct`, `__usdRenderVar` with UsdImaging's field names; delete `instantaneousShutter`; the render settings flattening filter reads the new tokens and writes `HdRenderSettingsSchema`'s fields only, settings-level resolution, aspect and data window reaching products
 - [x] 2.9 NURBS curves: `pointWeights` as `primvars/pointWeights`, removed from `nurbsCurves` (`stage/curves.rs`, `tokens.rs`)

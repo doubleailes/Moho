@@ -270,6 +270,17 @@ pub mod usd_prim_info {
     pub(crate) const NI_PROTOTYPE_IDENTITY: &str = "niPrototypeIdentity";
 }
 
+/// `UsdImagingModelSchema` (`model`) and `UsdImagingExtentsHintSchema`
+/// (`extentsHint`).
+pub mod model {
+    pub const MODEL: &str = "model";
+    pub const MODEL_PATH: &str = "modelPath";
+    pub const ASSET_IDENTIFIER: &str = "assetIdentifier";
+    pub const ASSET_NAME: &str = "assetName";
+    pub const ASSET_VERSION: &str = "assetVersion";
+    pub const EXTENTS_HINT: &str = "extentsHint";
+}
+
 /// `UsdImagingGeomModelSchema` (`geomModel`): `GeomModelAPI`'s draw mode
 /// data.
 pub mod geom_model {
@@ -278,6 +289,7 @@ pub mod geom_model {
     pub const DRAW_MODE: &str = "drawMode";
     pub const DRAW_MODE_COLOR: &str = "drawModeColor";
     pub const CARD_GEOMETRY: &str = "cardGeometry";
+    pub const CARD_VISIBILITY: &str = "cardVisibility";
     pub const CARD_TEXTURE_X_POS: &str = "cardTextureXPos";
     pub const CARD_TEXTURE_Y_POS: &str = "cardTextureYPos";
     pub const CARD_TEXTURE_Z_POS: &str = "cardTextureZPos";

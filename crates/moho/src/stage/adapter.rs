@@ -79,6 +79,7 @@ impl AdapterRegistry {
         registry.add_base(Rc::new(crate::stage::imageable::ImageableAdapter));
         registry.add_base(Rc::new(crate::stage::prim_info::PrimInfoAdapter));
         registry.add_base(Rc::new(crate::stage::prim_origin::PrimOriginAdapter));
+        registry.add_base(Rc::new(crate::stage::model::ModelAdapter));
         for (usd, hydra) in USD_TO_HYDRA_TYPES {
             registry.set_type(usd, Rc::new(Typed(Token::from(*hydra))));
         }
@@ -86,6 +87,7 @@ impl AdapterRegistry {
             "MaterialBindingAPI",
             Rc::new(crate::stage::material_binding::MaterialBindingAdapter),
         );
+        registry.add_api("GeomModelAPI", Rc::new(crate::stage::model::GeomModelAdapter));
         registry.add_api("LightAPI", Rc::new(crate::stage::light::LightAdapter));
         registry.add_api(
             "CollectionAPI",
