@@ -239,3 +239,21 @@ new prototype paths.
 - **`__Prototype_N` numbers** are openusd's (from 0, in composition order),
   so propagated prototype paths differ from UsdImaging's by that number,
   as the design's risks foresaw.
+
+## Cost measured (task 6.4)
+
+Strategy (D) of moho-spike (one `chain::standard` over a `LoadAll` stage,
+every data source read), same machine (Xeon E5-2699 v4, 94 GiB), openusd
+`d7d2a29`, before (`ee8167f`) and after this change:
+
+| scene | rev | open (chain built) | read | total | peak RSS | prims |
+|---|---|---|---|---|---|---|
+| ALab | before | 19 s | 319 s | 340 s | 26.4 GiB | 32 816 |
+| ALab | after | 41 s | 365 s | 409 s | 26.5 GiB | 33 391 |
+| Moana | before | 62 s | 2 363 s | 2 438 s | 8.13 GiB | 357 239 |
+| Moana | after | 247 s | 2 283 s | 2 595 s | 8.50 GiB | 356 601 |
+
+Building the chain costs more (the propagations populate their scene
+indices eagerly, as Hydra's do: about 3 minutes more on Moana), reading
+about the same (ALab +14 %, Moana -3 %, its coral prototypes now empty).
+Memory grows by under 0.4 GiB.
