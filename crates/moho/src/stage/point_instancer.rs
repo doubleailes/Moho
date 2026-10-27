@@ -17,7 +17,6 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use openusd::sdf::Value;
 use openusd::tf::Token;
-use openusd::usd::TimeCode;
 use openusd_schemas::geom::{PointInstancer, PrimMetadata};
 
 use crate::data_source::DataSource;
@@ -128,7 +127,7 @@ impl crate::data_source::Vector for InstanceIndices {
 
 fn topology(ctx: &PrimContext, name: &str) -> Option<DataSource> {
     let prim = ctx.prim()?;
-    let time = ctx.globals.time().map(|t| TimeCode::new(t.value()));
+    let time = ctx.globals.time();
     let read = |name: &str| prim.attribute(name).get_at::<Value>(time).ok().flatten();
     let has_inactive = prim.inactive_ids().ok().flatten().is_some();
     match name {

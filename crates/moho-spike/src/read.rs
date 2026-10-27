@@ -5,7 +5,8 @@
 //! names, `points`, `faceVertexCounts`, `faceVertexIndices`, the
 //! `material:binding` targets, and `might_be_time_varying` on `points` and on
 //! the ops. Values are read at the stage's start time code when it authors a
-//! range, else at the default time. An instance is read like any prim, plus
+//! range, else at time code 0 (where a Moho stage index starts, as
+//! UsdImaging's does). An instance is read like any prim, plus
 //! the digest of its prototype's subtree, read once per stage as an import
 //! reads it (prototype paths are renumbered per stage, so a prototype's prims
 //! are hashed by their path relative to its root, and relationship targets
@@ -107,11 +108,14 @@ impl Digest {
 }
 
 impl<'s> Reader<'s> {
-    /// A reader of `stage`, at its start time code if it authors a range.
+    /// A reader of `stage`, at its start time code if it authors a range,
+    /// else at time code 0.
     pub fn new(stage: &'s Stage) -> Self {
-        let time = stage
-            .has_authored_time_code_range()
-            .then(|| TimeCode::new(stage.start_time_code()));
+        let time = Some(if stage.has_authored_time_code_range() {
+            TimeCode::new(stage.start_time_code())
+        } else {
+            TimeCode::new(0.0)
+        });
         Self {
             stage,
             time,

@@ -183,7 +183,7 @@ fn time_variance_does_not_depend_on_the_index_time() {
     let (_dir, usd) = stage(SCENE);
     let index = StageSceneIndex::new();
     index.set_stage(usd);
-    // At the default time: no time was ever set.
+    // No time was ever set: the index reads at time code 0.
     let varying = |path: &str| {
         read(
             &index,
