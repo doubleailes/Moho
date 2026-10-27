@@ -94,14 +94,20 @@ fn a_masked_stage_holds_only_the_mask() {
 #[test]
 fn inactive_and_abstract_prims_are_not_exposed() {
     let (_dir, stage) = stage(
-        "#usda 1.0\ndef Xform \"world\"\n{\n    def Mesh \"off\" (\n        active = false\n    )\n    {\n    }\n}\nclass Xform \"_class\"\n{\n}\nover \"undefined\"\n{\n}\n",
+        "#usda 1.0\ndef Xform \"world\"\n{\n    def Mesh \"off\" (\n        active = false\n    )\n    {\n    }\n}\nclass Xform \"_class\"\n{\n}\nover \"undefined\"\n{\n    def Mesh \"pebble\"\n    {\n    }\n}\n",
     );
     let index = StageSceneIndex::new();
     index.set_stage(stage);
     assert!(!index.prim(&p("/world/off")).is_defined());
     assert!(!index.prim(&p("/_class")).is_defined());
-    assert!(!index.prim(&p("/undefined")).is_defined());
-    assert_eq!(index.children(&sdf::Path::abs_root()), [p("/world")]);
+    // Overs are exposed, as UsdImaging's traversal does not require a
+    // defining specifier.
+    assert!(index.prim(&p("/undefined")).is_defined());
+    assert_eq!(index.prim(&p("/undefined/pebble")).ty, "mesh");
+    assert_eq!(
+        index.children(&sdf::Path::abs_root()),
+        [p("/world"), p("/undefined")]
+    );
 }
 
 #[test]

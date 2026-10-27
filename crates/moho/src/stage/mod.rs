@@ -4,9 +4,9 @@
 //! The index is built empty and handed a stage with
 //! [`set_stage`](StageSceneIndex::set_stage). It reads whatever load set and
 //! population mask the stage was opened with, and never loads or unloads
-//! anything itself. Prims are those the default traversal reaches (active,
-//! loaded, defined, not abstract); the contents of native instances are not
-//! exposed here (the native-instancing filter does that).
+//! anything itself. Prims are those UsdImaging's traversal reaches (active,
+//! loaded, not abstract; `over` prims included); the contents of native
+//! instances are not exposed here (the native-instancing filter does that).
 
 pub mod adapter;
 pub mod attribute;
@@ -178,13 +178,16 @@ impl StageSceneIndex {
         self.include_unloaded.set(include);
     }
 
-    /// The traversal predicate: active, defined, not abstract, and loaded
-    /// unless unloaded prims are included.
+    /// UsdImaging's traversal predicate: active, not abstract, and loaded
+    /// unless unloaded prims are included. A prim need not be defined, so
+    /// `over` prims and their descendants are exposed (prototypes a point
+    /// instancer targets often live under one); the point instancing
+    /// filter makes what lies under an `over` unrenderable.
     fn predicate(&self) -> PrimPredicate {
         if self.include_unloaded.get() {
-            PrimPredicate::new(PrimStatus::ACTIVE | PrimStatus::DEFINED, PrimStatus::ABSTRACT)
+            PrimPredicate::new(PrimStatus::ACTIVE, PrimStatus::ABSTRACT)
         } else {
-            PrimPredicate::DEFAULT
+            PrimPredicate::new(PrimStatus::ACTIVE | PrimStatus::LOADED, PrimStatus::ABSTRACT)
         }
     }
 
