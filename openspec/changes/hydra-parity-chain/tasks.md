@@ -23,7 +23,7 @@
 
 ## 4. Hydra 2.0 consumer path
 
-- [ ] 4.1 Add `filter/prim_type_notice_batching.rs`, a port of `HdsiPrimTypeNoticeBatchingSceneIndex` (priority trait, consolidation, `flush`)
+- [x] 4.1 Add `filter/prim_type_notice_batching.rs`, a port of `HdsiPrimTypeNoticeBatchingSceneIndex` (priority trait, consolidation, `flush`)
 - [ ] 4.2 Add a prim managing observer, a port of `HdsiPrimManagingSceneIndexObserver` (prim factory trait, managed prims receiving dirties, release on removal, lookup by path)
 - [ ] 4.3 An example or doc test: `chain::standard` → renderer filters → prim type batching → managing observer, as hdPrman's `renderDelegate.cpp` builds it
 
