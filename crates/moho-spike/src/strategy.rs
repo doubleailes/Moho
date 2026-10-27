@@ -26,11 +26,10 @@ pub enum Strategy {
     B,
     /// One stage with every payload loaded: the reference.
     C,
-    /// (B) read through Moho: a `LoadNone` scene input under a merging
-    /// index, each chunk a `chain::input` over its masked `LoadAll` stage,
-    /// added, read through `chain::merged` and removed in turn. Its digest
-    /// hashes index data, not raw reads, and equals the full-stage index's
-    /// when no light links across chunks (`index`).
+    /// (C) read through Moho: one `chain::standard` over a `LoadAll` stage,
+    /// read whole, the benchmark of Moho's per-prim cost against (C). Moho
+    /// does not stream (chunking is a consumer's business), so (D) is not
+    /// chunked. Its digest hashes index data, not raw reads (`index`).
     D,
 }
 
@@ -159,50 +158,20 @@ fn open_moho(scene: &str, load: InitialLoadSet, mask: Option<&sdf::Path>) -> Res
 }
 
 fn run_d(scene: &str, observe: &mut dyn FnMut(Phase<'_>)) -> Result<Outcome> {
-    let hierarchy = open_moho(scene, InitialLoadSet::LoadNone, None)?;
-    let chunks = chunks::stream_roots(&hierarchy)?;
-    if chunks.is_empty() {
-        drop(hierarchy);
-        let stage = open_moho(scene, InitialLoadSet::LoadAll, None)?;
-        let terminal = moho::chain::standard(stage_index(stage, false));
-        observe(Phase::Open {
-            chunks: 1,
-            streamed: false,
-        });
-        let root = sdf::Path::abs_root();
-        let mut digest = Digest::default();
-        let read = crate::index::read_chunk(terminal.as_ref(), &root, &mut digest);
-        observe(Phase::Chunk { path: &root, read });
-        return Ok(Outcome {
-            digest,
-            chunks: 1,
-            streamed: false,
-        });
-    }
+    let stage = open_moho(scene, InitialLoadSet::LoadAll, None)?;
+    let terminal = moho::chain::standard(stage_index(stage, false));
     observe(Phase::Open {
-        chunks: chunks.len(),
-        streamed: true,
+        chunks: 1,
+        streamed: false,
     });
-    let merged = moho::filter::MergingSceneIndex::new();
-    merged.add_input_scene(
-        moho::chain::input(stage_index(hierarchy, true)),
-        sdf::Path::abs_root(),
-    );
-    let terminal = moho::chain::merged(merged.clone());
+    let root = sdf::Path::abs_root();
     let mut digest = Digest::default();
-    for chunk in &chunks {
-        let stage = open_moho(scene, InitialLoadSet::LoadAll, Some(chunk))?;
-        let input = moho::chain::input(stage_index(stage, false));
-        merged.insert_input_scene(0, input.clone(), chunk.clone());
-        let read = crate::index::read_chunk(terminal.as_ref(), chunk, &mut digest);
-        merged.remove_input_scene(&input);
-        drop(input);
-        observe(Phase::Chunk { path: chunk, read });
-    }
+    let read = crate::index::read_chunk(terminal.as_ref(), &root, &mut digest);
+    observe(Phase::Chunk { path: &root, read });
     Ok(Outcome {
         digest,
-        chunks: chunks.len(),
-        streamed: true,
+        chunks: 1,
+        streamed: false,
     })
 }
 

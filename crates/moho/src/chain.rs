@@ -1,57 +1,31 @@
-//! Standard chains of scene indices: a stage scene index followed by the
-//! filters `UsdImagingCreateSceneIndices` applies, in the same order, with
-//! light linking last, after any merge, as Hydra appends it.
+//! The standard chain of scene indices over a stage scene index.
 
 use std::rc::Rc;
 
-use crate::filter::extent_resolving;
+use crate::filter::extent_resolving::{self, ExtentResolvingSceneIndex};
 use crate::filter::{
-    ExtentResolvingSceneIndex, FlatteningSceneIndex, LightLinkingSceneIndex,
-    MaterialBindingResolvingSceneIndex, MaterialNodeResolvingSceneIndex, NativeInstancingSceneIndex,
-    PointInstancingSceneIndex, RenderSettingsFlatteningSceneIndex,
+    FlatteningSceneIndex, LightLinkingSceneIndex, MaterialBindingResolvingSceneIndex,
+    NativeInstancingSceneIndex, PointInstancingSceneIndex, RenderSettingsFlatteningSceneIndex,
 };
 use crate::scene_index::{CollectionMembership, SceneIndexHandle};
 use crate::stage::StageSceneIndex;
 
-/// The standard chain over `stage`: native instancing, point instancing,
-/// flattening, material binding resolving, render settings flattening, then
-/// light linking and material node resolving. The stage index answers collection membership for the
-/// resolving filters.
+/// The standard chain over `stage`: extent resolving, native instancing,
+/// point instancing, flattening, material binding resolving, render settings
+/// flattening, then light linking. The stage index answers collection
+/// membership for material binding resolving and light linking.
 ///
-/// It is [`input`] followed by light linking. A streamed scene puts one
-/// [`input`] chain per input under a
-/// [`MergingSceneIndex`](crate::filter::MergingSceneIndex), and [`merged`]
-/// over it.
+/// `hydra-parity-instancing` and `hydra-parity-chain` bring the order to
+/// `UsdImagingCreateSceneIndices`' (point instancing before native
+/// instancing, flattening inside native instancing) and move light linking
+/// out, as Hydra's renderers append it.
 pub fn standard(stage: Rc<StageSceneIndex>) -> SceneIndexHandle {
-    let membership: Rc<dyn CollectionMembership> = stage.clone();
-    MaterialNodeResolvingSceneIndex::new(LightLinkingSceneIndex::new(input(stage), Some(membership)))
-}
-
-/// The standard chain over `stage` without light linking: what each input
-/// of a merged, streamed scene runs. Light linking judges every light
-/// against every receiver, so it runs once, after the merge ([`merged`]).
-pub fn input(stage: Rc<StageSceneIndex>) -> SceneIndexHandle {
     let membership: Rc<dyn CollectionMembership> = stage.clone();
     let extents = ExtentResolvingSceneIndex::new(stage, extent_resolving::STANDARD_PURPOSES.iter().copied());
     let native = NativeInstancingSceneIndex::new(extents);
     let point = PointInstancingSceneIndex::new(native);
     let flat = FlatteningSceneIndex::new(point);
-    let bindings = MaterialBindingResolvingSceneIndex::new(flat, Some(membership));
-    RenderSettingsFlatteningSceneIndex::new(bindings)
-}
-
-/// Light linking over a merged index of [`input`] chains, as Hydra appends
-/// `HdsiLightLinkingSceneIndex` after scenes are merged: a receiver in one
-/// input gets the categories of lights in any input. No single stage can
-/// judge every collection, so it judges the lights' complete membership
-/// expressions: path patterns, not predicates. Hydra's linking judges
-/// expressions with Hydra's own predicate library, not USD's either.
-/// Workaround, an upstream candidate in `ROADMAP.md`: openusd's
-/// `CollectionEvaluator::build` is not public, so a light's expression
-/// cannot be judged, predicates included, on the receiver's input stage.
-///
-/// It then fills material networks' nodes that a chunk's stage could not
-/// hold from the merged index (`MaterialNodeResolvingSceneIndex`).
-pub fn merged(index: SceneIndexHandle) -> SceneIndexHandle {
-    MaterialNodeResolvingSceneIndex::new(LightLinkingSceneIndex::new(index, None))
+    let bindings = MaterialBindingResolvingSceneIndex::new(flat, Some(membership.clone()));
+    let settings = RenderSettingsFlatteningSceneIndex::new(bindings);
+    LightLinkingSceneIndex::new(settings, Some(membership))
 }
