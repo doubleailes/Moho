@@ -82,9 +82,11 @@ renderer appends it as a scene index plugin).
   - Open stages with `moho::stage::stage_builder()`, which installs
     openusd-schemas' registry, so schema fallbacks and typed views work.
   - A material represents its descendants, as UsdImaging's material adapter
-    (`RepresentsSelfAndDescendents`): its shaders and node graphs are no
-    prims of the index, and an edit to one dirties the material (see
-    "Materials and lights").
+    (`RepresentsSelfAndDescendents`): population and `children` do not
+    reach its shaders and node graphs (`prim` answers them, typeless, as
+    UsdImaging's `GetPrim`), and an edit to one dirties the material (see
+    "Materials and lights"). A prim of another type resynced under a
+    material is populated, as UsdImaging does.
 - **`ExtentResolving`** gives a prim with no `extent` of its own one from
   its `extentsHint` (purposes `geometry`, `render`, `proxy`).
 - **`PointInstancing`** is `UsdImagingPiPrototypePropagatingSceneIndex`.

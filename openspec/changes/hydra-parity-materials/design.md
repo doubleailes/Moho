@@ -127,15 +127,19 @@ for `__usdAttributes`.
 - **A material represents its descendants** (beyond the tasks, as the
   last of M10's stage-side support). UsdImaging's material adapter is
   `RepresentsSelfAndDescendents`: shaders and node graphs under a material
-  are no prims of the stage index, and their edits dirty the material as
+  are not populated nor listed as children (`GetPrim` still answers them,
+  typeless, as UsdImaging's does), and their edits dirty the material as
   `InvalidateImagingSubprimFromDescendent` does: the terminals whose
   connections reach the shader, and its node in that context and `__all`,
   named by the prim's name alone (`material/mtlx/nodes/ss` for
   `graph/ss`, UsdImaging's quirk), else the whole `material`;
-  `ui:nodegraph:*` edits alone dirty nothing. Not reproduced: a prim of
-  another type resynced under a material (UsdImaging populates it as a
-  prim then); light filters, also `RepresentsSelfAndDescendents`, wait for
-  `hydra-parity-chain`.
+  `ui:nodegraph:*` edits alone dirty nothing. A prim of another type
+  resynced under a material (a shader retyped to a `Scope`, say) is
+  repopulated, its subtree added, and the material is not told, as
+  `_ApplyPendingResyncs` does (PR #19 review). A retype is a resync: openusd
+  reports a `typeName` edit as info-only, so the stage index promotes it
+  (an openusd upstream candidate). Light filters, also
+  `RepresentsSelfAndDescendents`, wait for `hydra-parity-chain`.
 - **Task 2.5, `config:*` dirties nothing.** UsdImaging's material adapter
   invalidates an authored output, an input reached through a terminal's
   connections, or any `inputs:*` (all `material`); a `config:*` edit falls

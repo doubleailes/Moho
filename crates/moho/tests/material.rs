@@ -283,11 +283,92 @@ fn removing_a_shader_notifies_nothing() {
 
 #[test]
 fn a_material_holds_its_shaders() {
-    // The material represents its descendants: they are not prims.
+    // The material represents its descendants: population and `children`
+    // do not reach them, though they answer `prim`, typeless, as
+    // `UsdImagingStageSceneIndex::GetPrim` answers them.
     let (_dir, index) = setup();
     assert!(index.children(&p("/preview")).is_empty());
-    assert!(!index.prim(&p("/preview/surface")).is_defined());
-    assert!(!index.prim(&p("/mtlx/graph/ss")).is_defined());
+    assert_eq!(index.prim(&p("/preview/surface")).ty, "");
+    assert_eq!(index.prim(&p("/mtlx/graph/ss")).ty, "");
+}
+
+#[test]
+fn a_shader_retyped_under_its_material_is_added() {
+    // As UsdImaging (checked against USD 26.08): a prim of another type
+    // resynced under a material is repopulated, and the material is not
+    // told; retyped back to a shader, it dirties the material again.
+    let (_dir, index) = setup();
+    let recorder = RecordingObserver::on(index.as_ref());
+    let stage = index.stage().unwrap();
+    stage.define_typed_prim("/preview/tex", "Scope").unwrap();
+    index.apply_pending_updates();
+    assert_eq!(
+        recorder.take(),
+        [Notice::Added(moho::scene_index::Added {
+            path: p("/preview/tex"),
+            ty: Token::default()
+        })]
+    );
+    let net = network(&index, "/preview", "");
+    assert!(locate(&net, &Locator::parse("nodes/tex")).is_none());
+
+    stage.define_typed_prim("/preview/tex", "Shader").unwrap();
+    index.apply_pending_updates();
+    let notices = recorder.take();
+    let mut locators = dirtied(&notices, "/preview");
+    locators.sort();
+    assert_eq!(
+        locators,
+        [
+            "material//nodes/tex",
+            "material//terminals/surface",
+            "material/__all/nodes/tex"
+        ],
+        "{notices:?}"
+    );
+    assert!(
+        notices.iter().all(|n| matches!(n, Notice::Dirtied(_))),
+        "{notices:?}"
+    );
+
+    // Added once, it is removed with the prim.
+    stage.remove_prim("/preview/tex").unwrap();
+    index.apply_pending_updates();
+    assert_eq!(
+        recorder.take(),
+        [Notice::Removed(moho::scene_index::Removed {
+            path: p("/preview/tex")
+        })]
+    );
+}
+
+#[test]
+fn a_node_graph_retyped_under_its_material_adds_its_subtree() {
+    let (_dir, index) = setup();
+    let recorder = RecordingObserver::on(index.as_ref());
+    index
+        .stage()
+        .unwrap()
+        .define_typed_prim("/mtlx/graph", "Xform")
+        .unwrap();
+    index.apply_pending_updates();
+    let notices = recorder.take();
+    let added: Vec<(String, String)> = notices
+        .iter()
+        .filter_map(|n| match n {
+            Notice::Added(a) => Some((a.path.to_string(), a.ty.to_string())),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        added,
+        [
+            ("/mtlx/graph".to_owned(), String::new()),
+            ("/mtlx/graph/ss".to_owned(), String::new())
+        ],
+        "{notices:?}"
+    );
+    assert!(dirtied(&notices, "/mtlx").is_empty(), "{notices:?}");
 }
 
 #[test]
