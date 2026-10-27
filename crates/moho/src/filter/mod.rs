@@ -3,10 +3,12 @@
 
 pub mod extent_resolving;
 pub mod flattening;
+pub mod instance_proxy_path_translation;
 
 pub use extent_resolving::ExtentResolvingSceneIndex;
 
 pub use flattening::FlatteningSceneIndex;
+pub use instance_proxy_path_translation::InstanceProxyPathTranslationSceneIndex;
 pub mod merging;
 
 pub use merging::MergingSceneIndex;
