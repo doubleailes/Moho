@@ -156,8 +156,8 @@ enum Source {
     OnStage,
     /// Its source prim lies outside the stage's population mask: `(absolute
     /// node path, output name)`. The producer walk cannot follow it; it is
-    /// kept so that `streaming::unresolved` lists the node and a merged index
-    /// resolves it (`MaterialNodeResolvingSceneIndex`).
+    /// kept as a dangling connection, which `hydra-parity-materials` drops as
+    /// UsdShade does.
     OffStage(String, String),
 }
 
@@ -396,8 +396,8 @@ impl<'a> Network<'a> {
 
 /// The adapter of `Shader` prims: `__materialNodes`, the shader's node and
 /// its upstream subgraph, named by absolute paths. A material's network
-/// holds its shaders itself; this is what a side input holding a shader
-/// outside a chunk's mask offers to the merged index.
+/// holds its shaders itself. Moho-only, removed by
+/// `hydra-parity-materials`.
 pub struct ShaderNodesAdapter;
 
 impl Adapter for ShaderNodesAdapter {
@@ -419,8 +419,8 @@ impl Adapter for ShaderNodesAdapter {
 
 /// The adapter of `NodeGraph` prims: `__materialNodes`, the nodes behind
 /// the graph's outputs, and `__materialNodeGraph/outputs`, the connection
-/// each output reads, both by absolute paths. A merged index rewrites a
-/// connection to a node graph outside a chunk's mask through them.
+/// each output reads, both by absolute paths. Moho-only, removed by
+/// `hydra-parity-materials`.
 pub struct NodeGraphNodesAdapter;
 
 impl Adapter for NodeGraphNodesAdapter {

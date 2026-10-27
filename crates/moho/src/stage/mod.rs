@@ -172,8 +172,7 @@ impl StageSceneIndex {
 
     /// Makes unloaded prims (a payload's root, without what the payload
     /// brings) prims of the index, as UsdImaging's `includeUnloadedPrims`
-    /// option does. A streamed scene's `LoadNone` input uses it, so that each
-    /// chunk's root stays when the chunk is dropped. Set it before
+    /// option does. Set it before
     /// [`set_stage`](Self::set_stage).
     pub fn set_include_unloaded_prims(&self, include: bool) {
         self.include_unloaded.set(include);

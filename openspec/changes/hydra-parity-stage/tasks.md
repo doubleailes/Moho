@@ -31,10 +31,10 @@
 
 ## 4. Dropping streaming
 
-- [ ] 4.1 Delete `streaming.rs` and its `lib.rs` export
-- [ ] 4.2 Delete `chain::input` and `chain::merged`; `chain::standard` composes extent resolving, native instancing, point instancing, flattening, material binding resolving, render settings flattening, then light linking, the last two filters given the stage's membership
-- [ ] 4.3 Delete `filter/material_nodes.rs` and its export
-- [ ] 4.4 moho-spike: strategy (D) reads one `chain::standard` over a `LoadAll` stage, whole; update its doc comments, `crates/moho-spike/tests/strategy.rs` (`strategy_d_equals_an_index_over_the_loaded_stage`, `below_the_threshold_d_equals_the_reference`) and `scripts/streaming-spike.sh` if it describes (D) as streamed
+- [x] 4.1 Delete `streaming.rs` and its `lib.rs` export
+- [x] 4.2 Delete `chain::input` and `chain::merged`; `chain::standard` composes extent resolving, native instancing, point instancing, flattening, material binding resolving, render settings flattening, then light linking, the last two filters given the stage's membership
+- [x] 4.3 Delete `filter/material_nodes.rs` and its export
+- [x] 4.4 moho-spike: strategy (D) reads one `chain::standard` over a `LoadAll` stage, whole; update its doc comments, `crates/moho-spike/tests/strategy.rs` (`strategy_d_equals_an_index_over_the_loaded_stage`, `below_the_threshold_d_equals_the_reference`) and `scripts/streaming-spike.sh` if it describes (D) as streamed
 - [ ] 4.5 Rewrite the Streaming section of `docs/architecture.md` as a short note: Moho does not stream; chunking is the consumer's; record why (Hydra parity) and keep the S0 numbers' pointer to `streaming-spike.md`
 
 ## 5. Tests

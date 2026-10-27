@@ -23,7 +23,6 @@ pub mod locator;
 pub mod scene_index;
 pub mod schema;
 pub mod stage;
-pub mod streaming;
 pub mod tokens;
 
 /// The pinned openusd, re-exported so consumers build against exactly the

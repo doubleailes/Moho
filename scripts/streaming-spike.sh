@@ -6,10 +6,11 @@
 #
 # --skip-c  skip the full-stage reference (C), for Moana: Crust's recorded
 #           75.74 GiB composition stands as its baseline.
-# --with-d  also run (D), (B) read through Moho. Its digest hashes index data,
-#           not raw reads, so it is reported but not compared with the
-#           reference (crates/moho-spike/tests/strategy.rs compares it with an
-#           index over the fully loaded stage).
+# --with-d  also run (D), Moho's standard chain over one LoadAll stage, read
+#           whole (Moho does not stream). Its digest hashes index data, not
+#           raw reads, so it is reported but not compared with the reference
+#           (crates/moho-spike/tests/strategy.rs compares it with an index
+#           over the fully loaded stage).
 # --out DIR keep each strategy's JSON lines and a meta.txt (machine, openusd
 #           rev, date, scene) in DIR.
 #

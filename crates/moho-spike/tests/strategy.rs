@@ -97,8 +97,8 @@ fn instanced_chunks_read_the_same_data() {
     assert!(digests.iter().all(|(_, d)| *d == digests[0].1), "{digests:?}");
 }
 
-/// (D) reads through a merged, streamed index what one index over the fully
-/// loaded stage exposes.
+/// (D) reads one standard chain over the fully loaded stage, whole: what
+/// one index over that stage exposes.
 #[test]
 fn strategy_d_equals_an_index_over_the_loaded_stage() {
     use moho::openusd::usd::InitialLoadSet;
@@ -108,29 +108,33 @@ fn strategy_d_equals_an_index_over_the_loaded_stage() {
     let scene = root.to_str().unwrap();
     let mut chunk_events = 0;
     let outcome = Strategy::D
-        .run(scene, &mut |phase| {
-            if let Phase::Chunk { read, .. } = phase {
-                chunk_events += 1;
-                assert!(read.prims >= fixture::PRIMS_PER_ELEMENT, "{read:?}");
+        .run(scene, &mut |phase| match phase {
+            Phase::Open { chunks, streamed } => {
+                assert_eq!(chunks, 1);
+                assert!(!streamed, "Moho does not stream");
             }
+            Phase::Chunk { read, .. } => {
+                chunk_events += 1;
+                assert!(read.prims >= fixture::PRIM_COUNT, "{read:?}");
+            }
+            Phase::Unload => panic!("(D) unloads nothing"),
         })
         .unwrap();
-    assert_eq!(chunk_events, fixture::ELEMENTS);
+    assert_eq!(chunk_events, 1);
     assert_eq!(outcome.digest.mismatches, 0);
 
     let open = |load| moho::stage::stage_builder().load(load).open(scene).unwrap();
-    let chunks = moho_spike::chunks::stream_roots(&open(InitialLoadSet::LoadNone)).unwrap();
     let full = moho::chain::standard(moho_spike::strategy::stage_index(
         open(InitialLoadSet::LoadAll),
         false,
     ));
-    let reference = moho_spike::index::read_whole(full.as_ref(), &chunks);
+    let reference = moho_spike::index::read_whole(full.as_ref(), &[]);
     assert_eq!(outcome.digest.value(), reference.value());
     assert_eq!(outcome.digest.prims(), reference.prims());
 }
 
-/// Below the streaming threshold, (D) reads the whole index once, and so
-/// does the reference.
+/// Below the streaming threshold too, (D) reads the whole index once, as
+/// the reference does.
 #[test]
 fn below_the_threshold_d_equals_the_reference() {
     use moho::openusd::usd::InitialLoadSet;
@@ -146,13 +150,11 @@ fn below_the_threshold_d_equals_the_reference() {
     let outcome = Strategy::D.run(scene, &mut |_| {}).unwrap();
     assert!(!outcome.streamed);
     let open = |load| moho::stage::stage_builder().load(load).open(scene).unwrap();
-    let chunks = moho_spike::chunks::stream_roots(&open(InitialLoadSet::LoadNone)).unwrap();
-    assert!(chunks.is_empty());
     let full = moho::chain::standard(moho_spike::strategy::stage_index(
         open(InitialLoadSet::LoadAll),
         false,
     ));
-    let reference = moho_spike::index::read_whole(full.as_ref(), &chunks);
+    let reference = moho_spike::index::read_whole(full.as_ref(), &[]);
     assert!(reference.prims() > 0);
     assert_eq!(outcome.digest.value(), reference.value());
 }

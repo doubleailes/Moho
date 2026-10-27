@@ -7,8 +7,8 @@
 //! - **(B)** a `LoadNone` hierarchy stage, plus one `LoadAll` stage masked to
 //!   each chunk, opened, read and dropped in turn (Crust's import);
 //! - **(C)** one stage with everything loaded, the reference;
-//! - **(D)** (B) read through Moho: a merging index of input chains, with
-//!   light linking after the merge (`scene-index-gaps`, M5).
+//! - **(D)** (C) read through Moho: one standard chain over a `LoadAll`
+//!   stage, read whole (Moho does not stream).
 //!
 //! Not published. Kept after S0 as a regression benchmark for S2.
 
