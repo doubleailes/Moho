@@ -344,6 +344,13 @@ Read at `d7d2a29`.
   plugin field and ignores built-in ones; Moho ignores every prim-level
   info-only change, so a plugin field's resync (a `renderSettingsPrimPath`
   edit, chiefly) is missed (`stage/pending.rs`).
+- Removing the instance a prototype was composed from retires the
+  prototype: openusd composes the remaining instances under a new
+  `/__Prototype_N` and reports only the retired one (and the removed
+  instance) as resynced, not the new prototype nor the instances re-pointed
+  to it. USD keeps the prototype. The stage index resyncs both when a
+  populated prototype is resynced (`stage/mod.rs`). Prototypes are numbered
+  from `__Prototype_0` (USD: `__Prototype_1`), in composition order.
 - `sdf::Value` has no single-path variant (C++ `VtValue` of `SdfPath`):
   Hydra's single `SdfPath` fields are one-element `Value::PathVec`s, absent
   when Hydra's path would be empty (`data_source.rs`).

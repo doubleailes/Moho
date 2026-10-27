@@ -225,3 +225,17 @@ new prototype paths.
 - **Skinning relocation is not reproduced.** With deferred skinning,
   UsdImaging relocates `skelBinding/animationSource` to a primvar before
   aggregating top-level instances; Moho has no skeleton data.
+- **The stage index resyncs re-pointed prototypes** (beyond the tasks).
+  Native instancing now follows notices as UsdImaging's does, where the old
+  filter rescanned the stage on any change. openusd, unlike USD, retires a
+  prototype whose source instance is removed and composes the other
+  instances under a new `/__Prototype_N`, reporting neither; the instances
+  then named a prototype that no longer existed. When a populated prototype
+  is resynced, the stage index now resyncs the prototypes it has not
+  populated and the instances composed under them. The prototype pruning
+  also judges removals against the prototypes known before the batch, as
+  Moho's stage index removes a prototype's descendants by entries of their
+  own. Recorded as an openusd upstream candidate.
+- **`__Prototype_N` numbers** are openusd's (from 0, in composition order),
+  so propagated prototype paths differ from UsdImaging's by that number,
+  as the design's risks foresaw.
