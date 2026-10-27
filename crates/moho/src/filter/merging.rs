@@ -286,12 +286,20 @@ impl SceneIndex for MergingSceneIndex {
     /// order, each once, which is not part of its contract.
     fn children(&self, path: &sdf::Path) -> Vec<sdf::Path> {
         let mut children: Vec<sdf::Path> = Vec::new();
-        let push = |child: sdf::Path, children: &mut Vec<sdf::Path>| {
-            if !children.contains(&child) {
+        let mut seen: HashSet<sdf::Path> = HashSet::new();
+        let mut push = |child: sdf::Path, children: &mut Vec<sdf::Path>| {
+            if seen.insert(child.clone()) {
                 children.push(child);
             }
         };
-        for input in self.inputs_at(path) {
+        let inputs = self.inputs_at(path);
+        if let [only] = inputs.as_slice()
+            && !self.table.borrow().under.contains_key(path)
+        {
+            // One input and no deeper root: its children as they are.
+            return only.index.children(path);
+        }
+        for input in inputs {
             for child in input.index.children(path) {
                 push(child, &mut children);
             }
