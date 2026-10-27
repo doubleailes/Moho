@@ -33,8 +33,8 @@ def Xform "world"
     }
     def Xform "procedural"
     {
-        token crust:volume:type = "noise"
-        float crust:volume:noiseScale = 2
+        token myRenderer:volume:type = "noise"
+        float myRenderer:volume:noiseScale = 2
     }
 }
 "#;
@@ -83,8 +83,72 @@ fn a_renderer_defined_volume_reads_generically() {
         read(
             &index,
             "/world/procedural",
-            "__usdAttributes/crust:volume:type/value"
+            "__usdAttributes/myRenderer:volume:type/value"
         ),
         Some(Value::Token(Token::from("noise")))
     );
+}
+
+#[test]
+fn bindings_and_fields_as_usd_imaging() {
+    use moho::scene_index::testing::{Notice, RecordingObserver};
+
+    let (_dir, usd) = stage(
+        r#"#usda 1.0
+def Volume "smoke"
+{
+    rel field:density = </smoke/density>
+    rel field:both = [</smoke/density>, </smoke/heat>]
+    def OpenVDBAsset "density"
+    {
+        token fieldClass = "fogVolume"
+    }
+    def OpenVDBAsset "heat"
+    {
+    }
+}
+"#,
+    );
+    let index = StageSceneIndex::new();
+    index.set_stage(usd.clone());
+    let binding = locate(
+        &index.prim(&p("/smoke")).data.unwrap(),
+        &Locator::parse("volumeFieldBinding"),
+    )
+    .unwrap();
+    assert_eq!(
+        binding.as_container().unwrap().names(),
+        [Token::from("density")],
+        "a binding holds exactly one prim target"
+    );
+    assert_eq!(
+        read(&index, "/smoke/density", "volumeField/fieldClass"),
+        Some(Value::Token("fogVolume".into()))
+    );
+    let recorder = RecordingObserver::on(index.as_ref());
+    usd.relationship("/smoke.field:density")
+        .unwrap()
+        .set_targets([p("/smoke/heat")])
+        .unwrap();
+    usd.attribute("/smoke/heat.fieldClass")
+        .unwrap()
+        .set(Token::from("levelSet"))
+        .unwrap();
+    index.apply_pending_updates();
+    let notices = recorder.take();
+    let dirty = |path: &str| -> Vec<String> {
+        notices
+            .iter()
+            .filter_map(|n| match n {
+                Notice::Dirtied(d) if d.path == p(path) => {
+                    Some(d.locators.iter().map(ToString::to_string).collect::<Vec<_>>())
+                }
+                _ => None,
+            })
+            .flatten()
+            .filter(|l| !l.starts_with("__usd"))
+            .collect()
+    };
+    assert_eq!(dirty("/smoke"), ["volumeFieldBinding"]);
+    assert_eq!(dirty("/smoke/heat"), ["volumeField"]);
 }
