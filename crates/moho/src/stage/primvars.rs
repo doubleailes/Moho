@@ -21,7 +21,7 @@
 
 use std::rc::Rc;
 
-use openusd::sdf::{Role, Value};
+use openusd::sdf::{self, Role, Value};
 use openusd::tf::Token;
 use openusd::usd;
 use openusd::usd::Object as _;
@@ -74,6 +74,48 @@ use crate::tokens::instancing::{INSTANCE_ROTATIONS, INSTANCE_SCALES, INSTANCE_TR
 ///
 /// Workaround, an upstream candidate in `ROADMAP.md`: openusd has no
 /// `UsdColorSpaceAPI::ComputeColorSpaceName` nor `GfColorSpace`.
+/// `UsdColorSpaceAPI::ComputeColorSpaceName` for `attribute` of the prim at
+/// `prim`: the attribute's own `colorSpace`, else the nearest prim, from its
+/// own up, applying `ColorSpaceAPI` with a non-empty `colorSpace:name` (an
+/// unknown name ends the search with none), else the attribute's `colorSpace`
+/// fallback; `None` where that is empty.
+pub(crate) fn compute_color_space_name(
+    stage: &openusd::usd::Stage,
+    prim: &sdf::Path,
+    attribute: &usd::Attribute,
+) -> Option<Token> {
+    let own = || -> Option<Token> {
+        match attribute.metadata::<Value>("colorSpace").ok()?? {
+            Value::Token(t) => Some(t),
+            Value::String(s) => Some(Token::from(s.as_str())),
+            _ => None,
+        }
+    };
+    if attribute.has_authored_metadata("colorSpace").unwrap_or(false) {
+        return own().filter(|t| !t.as_str().is_empty());
+    }
+    for path in prim.ancestors_below_root() {
+        let Ok(prim) = stage.prim(&path) else {
+            continue;
+        };
+        if !prim.has_api_schema("ColorSpaceAPI").unwrap_or(false) {
+            continue;
+        }
+        let name = match prim.attribute("colorSpace:name").get::<Value>().ok().flatten() {
+            Some(Value::Token(t)) => t,
+            Some(Value::String(s)) => Token::from(s.as_str()),
+            _ => continue,
+        };
+        if name.as_str().is_empty() {
+            continue;
+        }
+        // Workaround, an upstream candidate in `ROADMAP.md`: no
+        // `ColorSpaceDefinitionAPI` lookup, only `GfColorSpace`'s names.
+        return COLOR_SPACES.contains(&name.as_str()).then_some(name);
+    }
+    own().filter(|t| !t.as_str().is_empty())
+}
+
 const COLOR_SPACES: &[&str] = &[
     "lin_ap1_scene",
     "ACEScg",
@@ -396,38 +438,7 @@ impl PrimvarEntry {
         if self.hd_role()?.as_str() != "color" {
             return None;
         }
-        let attribute = self.attribute()?;
-        let own = || -> Option<Token> {
-            match attribute.metadata::<Value>("colorSpace").ok()?? {
-                Value::Token(t) => Some(t),
-                Value::String(s) => Some(Token::from(s.as_str())),
-                _ => None,
-            }
-        };
-        if attribute.has_authored_metadata("colorSpace").unwrap_or(false) {
-            return own().filter(|t| !t.as_str().is_empty());
-        }
-        let stage = &self.ctx.stage;
-        for path in self.ctx.path.ancestors_below_root() {
-            let Ok(prim) = stage.prim(&path) else {
-                continue;
-            };
-            if !prim.has_api_schema("ColorSpaceAPI").unwrap_or(false) {
-                continue;
-            }
-            let name = match prim.attribute("colorSpace:name").get::<Value>().ok().flatten() {
-                Some(Value::Token(t)) => t,
-                Some(Value::String(s)) => Token::from(s.as_str()),
-                _ => continue,
-            };
-            if name.as_str().is_empty() {
-                continue;
-            }
-            // Workaround, an upstream candidate in `ROADMAP.md`: no
-            // `ColorSpaceDefinitionAPI` lookup, only `GfColorSpace`'s names.
-            return COLOR_SPACES.contains(&name.as_str()).then_some(name);
-        }
-        own().filter(|t| !t.as_str().is_empty())
+        compute_color_space_name(&self.ctx.stage, &self.ctx.path, self.attribute()?)
     }
 
     fn element_size(&self) -> Option<i32> {
