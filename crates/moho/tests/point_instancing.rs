@@ -462,3 +462,80 @@ fn an_authored_child_named_like_the_scope_keeps_its_prim() {
     assert!(children.contains(&scope));
     assert_eq!(chain.prim(&copies[0]).ty, "mesh");
 }
+
+const INACTIVE: &str = r#"#usda 1.0
+def Xform "world"
+{
+    def PointInstancer "a" (
+        inactiveIds = [2]
+    )
+    {
+        rel prototypes = [</world/a/protos/round>, </world/a/protos/flat>]
+        int[] protoIndices = [0, 1, 0]
+        point3f[] positions = [(0, 0, 0), (1, 0, 0), (2, 0, 0)]
+        int64[] ids = [0, 1, 2]
+        int64[] invisibleIds = [1]
+        def Scope "protos"
+        {
+            def Mesh "round"
+            {
+            }
+            def Mesh "flat"
+            {
+            }
+        }
+    }
+    def PointInstancer "b" (
+        inactiveIds = [1, 3]
+    )
+    {
+        rel prototypes = [</world/b/protos/round>, </world/b/protos/flat>]
+        int[] protoIndices = [0, 1, 0, 1]
+        point3f[] positions = [(0, 0, 0), (1, 0, 0), (2, 0, 0), (3, 0, 0)]
+        def Scope "protos"
+        {
+            def Mesh "round"
+            {
+            }
+            def Mesh "flat"
+            {
+            }
+        }
+    }
+}
+"#;
+
+#[test]
+fn inactive_ids_are_masked_not_dropped() {
+    let (_dir, usd) = stage(INACTIVE);
+    let stage_index = StageSceneIndex::new();
+    stage_index.set_stage(usd);
+    let a = p("/world/a");
+    assert_eq!(
+        indices(stage_index.as_ref(), &a),
+        [vec![0, 2], vec![1]],
+        "the inactive instance 2 stays in the indices"
+    );
+    assert_eq!(
+        read(stage_index.as_ref(), &a, "instancerTopology/mask"),
+        Some(Value::BoolVec(vec![true, false, false])),
+        "invisible 1 and inactive 2 are masked out"
+    );
+}
+
+#[test]
+fn a_fully_inactive_prototype_is_pruned() {
+    let (_dir, usd) = stage(INACTIVE);
+    let stage_index = StageSceneIndex::new();
+    stage_index.set_stage(usd);
+    let b = p("/world/b");
+    assert_eq!(
+        read(stage_index.as_ref(), &b, "instancerTopology/prototypes"),
+        Some(Value::PathVec(vec![p("/world/b/protos/round")]))
+    );
+    assert_eq!(indices(stage_index.as_ref(), &b), [vec![0, 2]]);
+    assert_eq!(
+        read(stage_index.as_ref(), &b, "instancerTopology/mask"),
+        Some(Value::BoolVec(vec![true, false, true, false]))
+    );
+}
