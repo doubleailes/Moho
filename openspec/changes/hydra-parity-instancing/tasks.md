@@ -44,6 +44,6 @@
 
 ## 7. Docs
 
-- [ ] 7.1 `docs/architecture.md`: the instancing part of the chain, names and layout; draw mode deferred and why
-- [ ] 7.2 `ROADMAP.md`: delete the "public instancing key" candidate (keep `prim_stack()` only if still used); add the instance-proxy point instancer target gap (UsdImaging 2.0 against 1.0) to raise upstream with OpenUSD; draw mode under "Later"
-- [ ] 7.3 `docs/openusd-notes.md`: drop the instancing key notes; add any API newly relied on
+- [x] 7.1 `docs/architecture.md`: the instancing part of the chain, names and layout; draw mode deferred and why
+- [x] 7.2 `ROADMAP.md`: delete the "public instancing key" candidate (keep `prim_stack()` only if still used); add the instance-proxy point instancer target gap (UsdImaging 2.0 against 1.0) to raise upstream with OpenUSD; draw mode under "Later"
+- [x] 7.3 `docs/openusd-notes.md`: drop the instancing key notes; add any API newly relied on
