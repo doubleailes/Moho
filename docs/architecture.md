@@ -81,6 +81,10 @@ renderer appends it as a scene index plugin).
     the locators it dirties, as UsdImaging's data sources and `Invalidate`.
   - Open stages with `moho::stage::stage_builder()`, which installs
     openusd-schemas' registry, so schema fallbacks and typed views work.
+  - A material represents its descendants, as UsdImaging's material adapter
+    (`RepresentsSelfAndDescendents`): its shaders and node graphs are no
+    prims of the index, and an edit to one dirties the material (see
+    "Materials and lights").
 - **`ExtentResolving`** gives a prim with no `extent` of its own one from
   its `extentsHint` (purposes `geometry`, `render`, `proxy`).
 - **`PointInstancing`** is `UsdImagingPiPrototypePropagatingSceneIndex`.
@@ -146,11 +150,25 @@ renderer appends it as a scene index plugin).
   instancing, and stays a public filter.
 - **The resolving filters** turn binding opinions, light-link collections
   and the stage's `__usdRender*` data into `materialBindings`, categories
-  and `renderSettings`. Collection membership comes from the stage index,
-  through `CollectionMembership`, until the later changes judge collection
-  expressions over the scene index (`moho::collection`, Hydra's evaluator
-  and predicate library). The material binding resolver given no oracle
-  already judges them so, as UsdImaging does.
+  and `renderSettings`.
+  - Material binding resolving is `UsdImagingMaterialBindingsResolvingSceneIndex`.
+    Per purpose, walking the flattened opinions from the root down, at each
+    level: a matching stronger-than-descendants collection binding wins and
+    stops; else a stronger-than-descendants direct binding wins and stops
+    (even over a weaker matching collection binding); else a matching
+    collection binding, else the direct binding, wins for now. A collection
+    matches when the collection prim's
+    `collections/<name>/membershipExpression`, read from the filter's input
+    and judged over it with Hydra's predicates (`moho::collection`), matches
+    the prim's path. Only a prim with `usdMaterialBindings` is given
+    `materialBindings` (every prim names it), and a dirtied
+    `usdMaterialBindings` is forwarded as `materialBindings`.
+  - Nothing re-resolves a binding when a collection elsewhere changes:
+    Hydra tracks no such dependency. A `collection:*` edit on a prim
+    applying `MaterialBindingAPI` dirties its opinions, which flattening
+    carries to its descendants.
+  - Light linking still asks the stage index for collection membership,
+    through `CollectionMembership`, until `hydra-parity-chain`.
 - **`MergingSceneIndex`** combines several inputs over one namespace
   (`add_input_scene(index, root)`, `remove_input_scene`). It lists children
   in input order, strongest first, then the prims implied by deeper roots;
@@ -172,6 +190,40 @@ The absolute root carries what `UsdImagingDataSourceStage` gives:
 give. A consumer that needs other stage metadata (`metersPerUnit`, or
 whether a field is authored) reads it from the stage it opened, through
 `moho::openusd`.
+
+### Materials and lights
+
+A material's `material` is `UsdImagingDataSourceMaterial`'s: one network per
+namespace of its authored outputs (`""` for `outputs:surface`, `mtlx` for
+`outputs:mtlx:surface`), and always `__all`.
+- A named context holds the nodes the shader-output walk reaches from its
+  terminals (node graphs' outputs and interface inputs followed, a
+  connection the stage cannot follow dropped), its terminals named without
+  the context. `__all` holds every `Shader` under the material, connected
+  or not, its terminals keeping their namespaced names.
+- Each network has `nodes` (named by path relative to the material),
+  `terminals`, `interface` (each material input's `displayName`,
+  `displayGroup` and `mappings`, the node inputs it feeds; and
+  `parameterOrder`) and `config` (the `config:*` attributes).
+- Each node names `parameters`, `inputConnections`, `nodeIdentifier`,
+  `renderContextNodeIdentifiers` (lights only) and `nodeTypeInfo` (outside
+  `id` mode: `sdrMetadata` and the other `info:*` attributes). openusd has
+  no shader registry, so a node outside `id` mode has an empty
+  `nodeIdentifier`, as UsdImaging gives it when Sdr finds none.
+- Dirtying is the material adapter's: a shader edit dirties the terminals
+  whose connections reach it and the shader's node (by its name) in that
+  context and `__all`, else the whole `material`; an input or output edit on
+  the material dirties `material`, a `config:*` edit nothing; a removed
+  shader notifies nothing.
+
+Lights are UsdImaging's light API adapter. `light` names `filters`,
+`isLight` and `materialSyncMode` and answers any other name as
+`LookupLightParamAttribute` (Hydra's tokens read their `inputs:` attribute,
+other names the attribute itself); dome lights add `portals`, and
+`DomeLight_1` `domeOffset`. Every light has `material`: the light prim as
+the one node, by its absolute path, feeding the terminal `light`, in the
+contexts `""`, `__all` and each `<context>:light:shaderId` names. An
+`inputs:*` edit dirties `light` and `material`, a `light:*` edit `light`.
 
 ### Render prims
 

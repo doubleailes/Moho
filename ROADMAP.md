@@ -107,3 +107,11 @@ the steps that land in this repository or depend on it.
   (`crates/moho/src/stage/primvars.rs`), without user-defined colour spaces.
 - `SdfPath::MakeRelativePath`. Moho builds a prototype-relative prim origin
   from the path's text meanwhile (`crates/moho/src/stage/prim_origin.rs`).
+- A shader registry (Sdr, C++ `SdrRegistry`), so that a shader outside
+  `id` mode resolves a node identifier from its source asset or code as
+  UsdImaging's material data source does. Moho leaves it empty meanwhile
+  (`crates/moho/src/stage/material.rs`).
+- Authored properties in C++'s order: `authored_attributes_in_namespace`
+  keeps composed order where `UsdPrim::GetAuthoredPropertiesInNamespace`
+  sorts into dictionary order first. Moho sorts material inputs and outputs
+  itself (`crates/moho/src/stage/material.rs`).
