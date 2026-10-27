@@ -40,9 +40,21 @@ the steps that land in this repository or depend on it.
 - Profile the standard chain's per-prim cost. Strategy (D), which reads every
   data source, took 6.6× (B)'s time on Moana (`docs/streaming-spike.md`),
   about 2 ms per prim on its two largest chunks.
-- Offering Moho upstream as an `openusd-imaging` crate.
+- Offering Moho upstream as an `openusd-imaging` crate in openusd's
+  workspace. The `moho::openusd` and `moho::openusd_schemas` re-exports
+  and feature forwarding are a downstream policy (one openusd pin for the
+  stack) and would move to a thin downstream crate then.
 - Draw mode (`UsdImagingDrawModeSceneIndex`), through native instancer
   propagation's append callback (`hydra-parity-instancing`, design D7).
+- `HdsiLocatorCachingSceneIndex` on `material`, which UsdImaging's chain
+  holds: a cache, to weigh with the per-prim cost profiling above.
+- `UsdImagingSelectionSceneIndex`, for a consumer with a selection.
+- Coordinate systems (`UsdShadeCoordSysAPI`, `coordSysBinding`), which the
+  stage index does not give yet.
+- Update latency: a linked light's invalidation walks the whole scene from
+  the root (Hydra's algorithm: the union of the dirty expressions matched
+  once over the input), so it grows with the scene
+  (`docs/update-latency.md`).
 
 ## Upstream candidates (OpenUSD)
 
@@ -62,6 +74,10 @@ the steps that land in this repository or depend on it.
   doubleailes/openusd at `d7d2a29` until it merges.
 
 - Splines (`Ts`): typed knots, evaluation, authoring, usdc encoding.
+- Child listing cost. `Prim::filtered_children` costs about 1 µs per child
+  (10 ms for 10 000 siblings), and about twice that on the first listing
+  after an edit, which the update benchmark meets on every light-linking
+  invalidation (`docs/update-latency.md`).
 - Unloading a payload does not free what composing it took (no layer
   eviction). On Moana, RSS under one stage only grew across 22 load/unload
   rounds. This is what rules out single-stage streaming (S0).
@@ -73,9 +89,6 @@ the steps that land in this repository or depend on it.
 - A rule-based collection's membership as one path expression (C++
   `UsdComputePathExpressionFromCollectionMembershipQueryRuleMap`). Moho ports
   it (`crates/moho/src/stage/collection.rs`) until openusd has it.
-- A public `CollectionEvaluator::build(stage, expression)` (today
-  `pub(super)`), to judge a USD collection's expression against a stage
-  without going through its `MembershipQuery`.
 - Resolved-asset-path resyncs in `StageSink::after_commit` (C++
   `UsdNotice::ObjectsChanged::GetResolvedAssetPathsResyncedPaths`), so an
   index can re-read asset-path-dependent data when resolution changes, as

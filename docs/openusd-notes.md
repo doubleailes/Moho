@@ -392,6 +392,27 @@ Read at `d7d2a29`.
   parameter's colour space); `Stage::stage_metadata("upAxis")` for a
   `DomeLight_1`'s `scene` pole; `gf::Mat4d::IDENTITY`, row-major in `.0`.
 
+## Light filters and the Hydra 2.0 consumer path (`hydra-parity-chain`)
+
+- `openusd_schemas::lux::LightFilter::from_prim_unchecked(prim)` and the
+  `LightFilterExt` trait (`lux/light.rs`, for `LightFilter` and
+  `PluginLightFilter`): `shader_id_for(&[context]) -> Result<Option<Token>>`
+  (C++ `UsdLuxLightFilter::GetShaderId`, falling back to
+  `lightFilter:shaderId`) and `shader_id_attr_for(context) ->
+  Result<Option<Attribute>>` (`<context>:lightFilter:shaderId`).
+- `Prim::is_a(schema) -> Result<bool>` (`usd/prim.rs`) tells a
+  `LightFilter` or a type derived from it (C++ `UsdLuxLightFilter(prim)`).
+  `PluginLightFilter` and `LightFilter` declare the built-in
+  `CollectionAPI:filterLink`, which `Prim::api_schemas` lists.
+- `sdf::PathExpression::make_op(op, left, right)` absorbs constants as C++
+  `SdfPathExpression::MakeOp` does: an empty operand is the identity of a
+  union, so light linking folds its dirty expressions from
+  `PathExpression::default()`. `PathExpression` is `PartialEq` but not
+  `Hash`: the light linking cache finds expressions by comparison.
+- `StageBuilder::in_memory(identifier) -> Result<Stage>` (C++
+  `UsdStage::CreateInMemory`), used by the chain module's doc test, and
+  `Stage::create_relationship(path)` (the update benchmark's linked light).
+
 ## Gaps
 
 - Splines (`Ts`): a `.spline` block only round-trips as a dictionary. There
@@ -411,11 +432,9 @@ Read at `d7d2a29`.
   collection adapter uses). Moho ports it in `stage/collection.rs`, checked
   against `MembershipQuery::is_included`.
 
-- `CollectionEvaluator::build` is `pub(super)`: a USD collection
-  expression can only be compiled against the stage of the collection that
-  owns it (`MembershipQuery`). Hydra judges collections with its own
-  predicate library over the scene index (`moho::collection`), so Moho only
-  needs it where it reads USD membership.
+- `CollectionEvaluator::build` is `pub(super)`. No longer a gap for Moho:
+  since `hydra-parity-chain` nothing reads USD collection membership
+  (light linking judges collections over the scene index, as Hydra).
 - No `ArResolverContext` on a stage (C++ `UsdStage::GetPathResolverContext`):
   the absolute root has no `system/assetResolution/resolverContext`
   (`stage/globals.rs`).
