@@ -46,7 +46,7 @@ const MEMBERS: &[(&str, &str, &str)] = &[
     ("/nurbs", "nurbsCurves/order", "order"),
     ("/nurbs", "nurbsCurves/knots", "knots"),
     ("/nurbs", "nurbsCurves/ranges", "ranges"),
-    ("/nurbs", "nurbsCurves/pointWeights", "pointWeights"),
+    ("/nurbs", "primvars/pointWeights/primvarValue", "pointWeights"),
 ];
 
 #[test]
@@ -82,5 +82,26 @@ fn widths_are_primvars() {
     assert_eq!(
         hair.primvar("widths").unwrap().interpolation().unwrap(),
         "uniform"
+    );
+}
+
+#[test]
+fn nurbs_point_weights_are_a_primvar() {
+    let (_dir, stage) = stage(SCENE);
+    let index = StageSceneIndex::new();
+    index.set_stage(stage);
+    let data = index.prim(&p("/nurbs")).data.unwrap();
+    assert!(locate(&data, &Locator::parse("nurbsCurves/pointWeights")).is_none());
+    let primvars = PrimvarsSchema::get(&data).unwrap();
+    assert_eq!(
+        primvars.primvar("pointWeights").unwrap().interpolation().unwrap(),
+        "vertex"
+    );
+    assert!(
+        PrimvarsSchema::get(&index.prim(&p("/hair")).data.unwrap())
+            .unwrap()
+            .primvar("pointWeights")
+            .is_none(),
+        "basis curves have no point weights"
     );
 }

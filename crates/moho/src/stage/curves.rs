@@ -1,5 +1,6 @@
-//! The `basisCurves` and `nurbsCurves` data of curve prims; `widths` reach
-//! them as primvars.
+//! The `basisCurves` and `nurbsCurves` data of curve prims; `widths`, and a
+//! NURBS curve's `pointWeights`, reach them as primvars, as UsdImaging's
+//! curve data sources give them.
 
 use crate::stage::table::{Member, TableAdapter};
 use crate::tokens::curves as t;
@@ -20,7 +21,6 @@ const NURBS: &[Member] = &[
     Member::Attr(t::ORDER, "order"),
     Member::Attr(t::KNOTS, "knots"),
     Member::Attr(t::RANGES, "ranges"),
-    Member::Attr(t::POINT_WEIGHTS, "pointWeights"),
 ];
 
 /// The adapter of `BasisCurves` prims.
