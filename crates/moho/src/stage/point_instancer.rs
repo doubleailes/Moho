@@ -13,7 +13,7 @@
 //! The instance positions, rotations and scales reach `primvars` as
 //! `hydra:instance*`.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use openusd::sdf::Value;
 use openusd::tf::Token;
@@ -21,7 +21,7 @@ use openusd::usd::TimeCode;
 use openusd_schemas::geom::{PointInstancer, PrimMetadata};
 
 use crate::data_source::DataSource;
-use crate::data_source::retained::{RetainedVector, value};
+use crate::data_source::retained::value;
 use crate::locator::{Locator, LocatorSet};
 use crate::stage::PrimContext;
 use crate::stage::adapter::Adapter;
@@ -45,12 +45,16 @@ fn ints(value: Option<Value>) -> Vec<i64> {
 /// As UsdImaging, the inactive ids are the explicit items of the composed
 /// `inactiveIds` list op. openusd composes metadata to the strongest
 /// opinion, where USD composes list ops across layers.
+///
+/// UsdImaging counts into arrays of `count` entries; Moho counts only the
+/// prototype indices used, as `count` follows the largest `protoIndices`
+/// value for `instanceIndices`, which a stray index makes huge.
 fn fully_inactive(
     prim: &openusd::usd::Prim,
     proto_indices: &[i64],
     ids: &[i64],
     count: usize,
-) -> Option<Vec<bool>> {
+) -> Option<BTreeSet<usize>> {
     let inactive: BTreeSet<i64> = match prim.inactive_ids().ok()?? {
         Value::Int64ListOp(op) => op.explicit_items().iter().copied().collect(),
         _ => return None,
@@ -58,26 +62,68 @@ fn fully_inactive(
     if inactive.is_empty() {
         return None;
     }
-    let mut total = vec![0usize; count];
-    let mut inactive_count = vec![0usize; count];
+    // Prototype index to (instances, inactive instances).
+    let mut counts: BTreeMap<usize, (usize, usize)> = BTreeMap::new();
     for (i, &k) in proto_indices.iter().enumerate() {
         let Some(k) = usize::try_from(k).ok().filter(|k| *k < count) else {
             continue;
         };
-        total[k] += 1;
         let id = if ids.is_empty() {
             i64::try_from(i).unwrap_or(i64::MAX)
         } else {
             ids.get(i).copied().unwrap_or(i64::MAX)
         };
+        let entry = counts.entry(k).or_default();
+        entry.0 += 1;
         if inactive.contains(&id) {
-            inactive_count[k] += 1;
+            entry.1 += 1;
         }
     }
-    let mask: Vec<bool> = (0..count)
-        .map(|k| total[k] > 0 && total[k] == inactive_count[k])
+    let pruned: BTreeSet<usize> = counts
+        .into_iter()
+        .filter(|(_, (total, inactive))| total == inactive)
+        .map(|(k, _)| k)
         .collect();
-    mask.contains(&true).then_some(mask)
+    (!pruned.is_empty()).then_some(pruned)
+}
+
+/// `instanceIndices`: one array per prototype index up to the largest one
+/// `protoIndices` uses, empty for the indices it skips, without the
+/// `pruned` ones.
+///
+/// UsdImaging allocates every array (`resize(protoIndex + 1)`), so a stray
+/// huge index (2 000 000 000) exhausts memory. Moho keeps only the arrays
+/// used and answers the skipped ones empty, which reads the same.
+struct InstanceIndices {
+    /// Prototype index to its instances, for the indices used.
+    used: BTreeMap<usize, Vec<i32>>,
+    /// The largest index used, plus one.
+    count: usize,
+    /// The fully inactive prototype indices, left out.
+    pruned: BTreeSet<usize>,
+}
+
+impl crate::data_source::Vector for InstanceIndices {
+    fn len(&self) -> usize {
+        self.count - self.pruned.len()
+    }
+
+    fn get(&self, index: usize) -> Option<DataSource> {
+        if index >= self.len() {
+            return None;
+        }
+        // The `index`-th prototype index that is not pruned.
+        let mut k = index;
+        for &q in &self.pruned {
+            if q > k {
+                break;
+            }
+            k += 1;
+        }
+        Some(value(Value::IntVec(
+            self.used.get(&k).cloned().unwrap_or_default(),
+        )))
+    }
 }
 
 fn topology(ctx: &PrimContext, name: &str) -> Option<DataSource> {
@@ -97,11 +143,11 @@ fn topology(ctx: &PrimContext, name: &str) -> Option<DataSource> {
             let ids = ints(read("ids"));
             let kept = match fully_inactive(&prim, &proto_indices, &ids, targets.len()) {
                 None => relationship.forwarded_targets().unwrap_or_default(),
-                Some(mask) => targets
+                Some(pruned) => targets
                     .into_iter()
-                    .zip(mask)
-                    .filter(|(_, pruned)| !pruned)
-                    .map(|(target, _)| target)
+                    .enumerate()
+                    .filter(|(k, _)| !pruned.contains(k))
+                    .map(|(_, target)| target)
                     .collect(),
             };
             Some(value(Value::PathVec(kept)))
@@ -119,24 +165,21 @@ fn topology(ctx: &PrimContext, name: &str) -> Option<DataSource> {
             }
             let proto_indices = ints(read("protoIndices"));
             // [0, 1, 0] gives 0: [0, 2], 1: [1].
-            let mut per_prototype: Vec<Vec<i32>> = Vec::new();
+            let mut used: BTreeMap<usize, Vec<i32>> = BTreeMap::new();
             for (i, &k) in proto_indices.iter().enumerate() {
                 let (Ok(k), Ok(i)) = (usize::try_from(k), i32::try_from(i)) else {
                     continue;
                 };
-                if k >= per_prototype.len() {
-                    per_prototype.resize(k + 1, Vec::new());
-                }
-                per_prototype[k].push(i);
+                used.entry(k).or_default().push(i);
             }
+            let count = used.last_key_value().map_or(0, |(k, _)| k.saturating_add(1));
             let ids = ints(read("ids"));
-            let pruned = fully_inactive(&prim, &proto_indices, &ids, per_prototype.len());
-            let kept = per_prototype
-                .into_iter()
-                .enumerate()
-                .filter(|(k, _)| pruned.as_ref().is_none_or(|mask| !mask[*k]))
-                .map(|(_, indices)| value(Value::IntVec(indices)));
-            Some(RetainedVector::new(kept).into_data_source())
+            let pruned = fully_inactive(&prim, &proto_indices, &ids, count).unwrap_or_default();
+            Some(DataSource::Vector(std::rc::Rc::new(InstanceIndices {
+                used,
+                count,
+                pruned,
+            })))
         }
         t::MASK => {
             if prim
