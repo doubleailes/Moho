@@ -275,16 +275,15 @@ fn each_family_edit_dirties_its_locators() {
             "{path}.{attribute} dirtied more than {locator}: {locators:?}"
         );
     }
-    // A render var change also reaches the settings that include it.
+    // A render var change reaches the settings that include it only through
+    // dependency forwarding, which the standard chain leaves out.
     stage
         .attribute("/Render/color.sourceName")
         .unwrap()
         .set("D".to_owned())
         .unwrap();
     stage_index.apply_pending_updates();
-    assert!(
-        dirtied(&recorder.take(), "/Render/settings").contains(&"renderSettings/renderProducts".to_owned())
-    );
+    assert!(dirtied(&recorder.take(), "/Render/settings").is_empty());
     // A binding change re-resolves descendants.
     stage
         .relationship("/world.material:binding")
