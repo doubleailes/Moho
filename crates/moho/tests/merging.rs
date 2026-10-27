@@ -382,3 +382,56 @@ fn an_input_at_the_root_notifies_the_root() {
     assert!(root_added(&recorder.take()), "the root's data changed back");
     assert_eq!(read(merged.as_ref(), "/", "startTimeCode"), Some(Value::Int(1)));
 }
+
+#[test]
+fn an_input_does_not_re_add_ancestors_that_have_prims() {
+    let (scene, chunk) = scene_and_chunk();
+    let merged = MergingSceneIndex::new();
+    merged.add_input_scene(scene.clone(), sdf_root());
+    let recorder = RecordingObserver::on(merged.as_ref());
+    // `/world` and `/world/elem` already have prims: only the new input's
+    // own prims are added, as HdMergingSceneIndex does.
+    merged.add_input_scene(chunk.clone(), p("/world/elem"));
+    let added: Vec<String> = recorder
+        .take()
+        .into_iter()
+        .filter_map(|n| match n {
+            Notice::Added(a) => Some(a.path.to_string()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(added, ["/world/elem", "/world/elem/geo"]);
+}
+
+#[test]
+fn many_inputs_are_found_by_path() {
+    let merged = MergingSceneIndex::new();
+    let mut inputs = Vec::new();
+    for i in 0..8 {
+        let input = RetainedSceneIndex::new();
+        let root = format!("/r{i}/deep");
+        input.add_prims([
+            (p(&root), prim("", &[("n", i)])),
+            (p(&format!("{root}/geo")), prim("mesh", &[])),
+        ]);
+        merged.add_input_scene(input.clone(), p(&root));
+        inputs.push(input);
+    }
+    // A stronger input at the root, inserted first.
+    let top = RetainedSceneIndex::new();
+    top.add_prims([(p("/r3/deep"), prim("", &[("n", 100)]))]);
+    merged.insert_input_scene(0, top.clone(), sdf_root());
+    assert_eq!(read(merged.as_ref(), "/r3/deep", "n"), Some(Value::Int(100)));
+    assert_eq!(read(merged.as_ref(), "/r5/deep", "n"), Some(Value::Int(5)));
+    assert_eq!(merged.prim(&p("/r5/deep/geo")).ty, "mesh");
+    assert!(merged.prim(&p("/r5")).is_defined(), "an ancestor of a root");
+    assert!(!merged.prim(&p("/elsewhere")).is_defined());
+    assert_eq!(merged.children(&p("/r5")), [p("/r5/deep")]);
+    let roots: Vec<_> = merged.children(&sdf_root());
+    assert_eq!(roots.len(), 8);
+    let removed: SceneIndexHandle = inputs.remove(5);
+    merged.remove_input_scene(&removed);
+    assert!(!merged.prim(&p("/r5/deep")).is_defined());
+    assert!(!merged.prim(&p("/r5")).is_defined());
+    assert_eq!(merged.children(&sdf_root()).len(), 7);
+}

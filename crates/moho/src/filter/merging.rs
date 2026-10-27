@@ -5,10 +5,14 @@
 //! Earlier inputs are stronger: a prim takes the first non-empty type, and
 //! its data overlays the inputs' containers, stronger first. The ancestors
 //! of every root exist, with empty data where no input holds them. Adding an
-//! input notifies its root's ancestors and its subtree added; removing one
-//! notifies removed what no other input holds and re-added what one does.
+//! input notifies added its root's ancestors that had no prim, then its
+//! subtree; removing one notifies removed what no other input holds and
+//! re-added what one does. Nothing is computed for notices while no one
+//! observes the index. With many inputs, a prim is answered from the inputs
+//! at its ancestors (Hydra's path table), not by scanning them all.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
+use std::collections::HashMap;
 use std::rc::{Rc, Weak};
 
 use openusd::sdf;
@@ -23,11 +27,57 @@ use crate::scene_index::{
 struct Input {
     index: SceneIndexHandle,
     root: sdf::Path,
+    /// The input's strength: lower is stronger.
+    strength: Cell<u64>,
+}
+
+type Inputs = Vec<Rc<Input>>;
+
+/// The inputs indexed by path, as `HdMergingSceneIndex`'s path table, so
+/// that a prim is answered from the inputs at its ancestors rather than by
+/// scanning every input. Each list is in strength order.
+#[derive(Default)]
+struct PathTable {
+    /// Inputs by root.
+    at_root: HashMap<sdf::Path, Inputs>,
+    /// Inputs by each strict ancestor of their root.
+    under: HashMap<sdf::Path, Inputs>,
+}
+
+fn insert_sorted(list: &mut Inputs, input: &Rc<Input>) {
+    let at = list.partition_point(|i| i.strength.get() < input.strength.get());
+    list.insert(at, input.clone());
+}
+
+impl PathTable {
+    fn insert(&mut self, input: &Rc<Input>) {
+        insert_sorted(self.at_root.entry(input.root.clone()).or_default(), input);
+        for ancestor in input.root.strict_ancestors() {
+            insert_sorted(self.under.entry(ancestor).or_default(), input);
+        }
+    }
+
+    fn remove(&mut self, input: &Rc<Input>) {
+        let drop_from = |map: &mut HashMap<sdf::Path, Inputs>, key: sdf::Path| {
+            if let Some(list) = map.get_mut(&key) {
+                list.retain(|i| !Rc::ptr_eq(i, input));
+                if list.is_empty() {
+                    map.remove(&key);
+                }
+            }
+        };
+        drop_from(&mut self.at_root, input.root.clone());
+        for ancestor in input.root.strict_ancestors() {
+            drop_from(&mut self.under, ancestor);
+        }
+    }
 }
 
 /// Several scene indices merged over one namespace.
 pub struct MergingSceneIndex {
-    inputs: RefCell<Vec<Input>>,
+    inputs: RefCell<Inputs>,
+    table: RefCell<PathTable>,
+    next_strength: Cell<u64>,
     me: Weak<MergingSceneIndex>,
     observers: Observers,
 }
@@ -36,11 +86,17 @@ fn same(a: &dyn SceneIndex, b: &SceneIndexHandle) -> bool {
     std::ptr::addr_eq(a as *const dyn SceneIndex, Rc::as_ptr(b))
 }
 
+/// Below this many inputs a prim scans them all, as `HdMergingSceneIndex`
+/// does.
+const SCAN_BELOW: usize = 5;
+
 impl MergingSceneIndex {
     /// A merging index with no inputs.
     pub fn new() -> Rc<Self> {
         Rc::new_cyclic(|me| Self {
             inputs: RefCell::new(Vec::new()),
+            table: RefCell::new(PathTable::default()),
+            next_strength: Cell::new(0),
             me: me.clone(),
             observers: Observers::default(),
         })
@@ -54,18 +110,54 @@ impl MergingSceneIndex {
 
     /// Inserts `index` at `root` at `position` in strength order (0 is the
     /// strongest).
+    ///
+    /// Notifies added, as `HdMergingSceneIndex`, the strict ancestors of
+    /// `root` from the first one no input holds a prim at, then the new
+    /// input's prims at and under `root`.
     pub fn insert_input_scene(&self, position: usize, index: SceneIndexHandle, root: sdf::Path) {
         let observer: Weak<dyn Observer> = self.me.clone();
         index.add_observer(observer);
-        let mut paths: Vec<sdf::Path> = root.strict_ancestors_below_root().collect();
-        paths.reverse();
-        let subtree = subtree(index.as_ref(), &root);
+        let observed = !self.observers.is_empty();
+        let mut paths: Vec<sdf::Path> = Vec::new();
+        if observed {
+            // `_AddStrictPrefixesOfSceneRoots`, read before the input joins.
+            let mut prefixes: Vec<sdf::Path> = root.strict_ancestors_below_root().collect();
+            prefixes.reverse();
+            let mut has_prim = true;
+            for prefix in prefixes {
+                has_prim = has_prim && self.prim(&prefix).is_defined();
+                if !has_prim {
+                    paths.push(prefix);
+                }
+            }
+        }
         {
             let mut inputs = self.inputs.borrow_mut();
             let position = position.min(inputs.len());
-            inputs.insert(position, Input { index, root });
+            let input = Rc::new(Input {
+                index: index.clone(),
+                root: root.clone(),
+                strength: Cell::new(0),
+            });
+            inputs.insert(position, input);
+            if position + 1 == inputs.len() {
+                input_strength(&inputs[position], &self.next_strength);
+                self.table.borrow_mut().insert(&inputs[position]);
+            } else {
+                // Renumber every input, and rebuild the table.
+                let mut table = PathTable::default();
+                self.next_strength.set(0);
+                for input in inputs.iter() {
+                    input_strength(input, &self.next_strength);
+                    table.insert(input);
+                }
+                *self.table.borrow_mut() = table;
+            }
         }
-        paths.extend(subtree);
+        if !observed {
+            return;
+        }
+        paths.extend(subtree(index.as_ref(), &root));
         let added: Vec<Added> = paths
             .into_iter()
             .map(|path| {
@@ -86,6 +178,10 @@ impl MergingSceneIndex {
             };
             inputs.remove(at)
         };
+        self.table.borrow_mut().remove(&removed);
+        if self.observers.is_empty() {
+            return;
+        }
         let mut gone: Vec<Removed> = Vec::new();
         let mut kept: Vec<Added> = Vec::new();
         for path in subtree(removed.index.as_ref(), &removed.root) {
@@ -104,7 +200,31 @@ impl MergingSceneIndex {
     }
 
     fn is_root_or_ancestor(&self, path: &sdf::Path) -> bool {
-        self.inputs.borrow().iter().any(|i| i.root.has_prefix(path))
+        let table = self.table.borrow();
+        table.at_root.contains_key(path) || table.under.contains_key(path)
+    }
+
+    /// The inputs whose root is `path` or one of its ancestors, strongest
+    /// first.
+    fn inputs_at(&self, path: &sdf::Path) -> Inputs {
+        let inputs = self.inputs.borrow();
+        if inputs.len() < SCAN_BELOW {
+            return inputs
+                .iter()
+                .filter(|i| path.has_prefix(&i.root))
+                .cloned()
+                .collect();
+        }
+        drop(inputs);
+        let table = self.table.borrow();
+        let mut found: Inputs = Vec::new();
+        for ancestor in path.ancestors() {
+            if let Some(list) = table.at_root.get(&ancestor) {
+                found.extend(list.iter().cloned());
+            }
+        }
+        found.sort_by_key(|i| i.strength.get());
+        found
     }
 
     /// Every root `sender` is added at (an index may be added at several).
@@ -149,6 +269,11 @@ impl MergingSceneIndex {
     }
 }
 
+fn input_strength(input: &Input, next: &Cell<u64>) {
+    input.strength.set(next.get());
+    next.set(next.get() + 1);
+}
+
 fn under_any(path: &sdf::Path, roots: &[sdf::Path]) -> bool {
     roots.iter().any(|r| path.has_prefix(r))
 }
@@ -175,10 +300,7 @@ impl SceneIndex for MergingSceneIndex {
     fn prim(&self, path: &sdf::Path) -> Prim {
         let mut ty = Token::default();
         let mut data: Vec<ContainerHandle> = Vec::new();
-        for input in self.inputs.borrow().iter() {
-            if !path.has_prefix(&input.root) {
-                continue;
-            }
+        for input in self.inputs_at(path) {
             let prim = input.index.prim(path);
             if ty.as_str().is_empty() && !prim.ty.as_str().is_empty() {
                 ty = prim.ty;
@@ -206,16 +328,13 @@ impl SceneIndex for MergingSceneIndex {
                 children.push(child);
             }
         };
-        let inputs = self.inputs.borrow();
-        for input in inputs.iter().filter(|i| path.has_prefix(&i.root)) {
+        for input in self.inputs_at(path) {
             for child in input.index.children(path) {
                 push(child, &mut children);
             }
         }
-        for input in inputs
-            .iter()
-            .filter(|i| i.root.has_prefix(path) && i.root != *path)
-        {
+        let deeper: Inputs = self.table.borrow().under.get(path).cloned().unwrap_or_default();
+        for input in deeper {
             if let Some(child) = input.root.ancestors().find(|a| a.parent().as_ref() == Some(path)) {
                 push(child, &mut children);
             }
