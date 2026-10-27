@@ -23,7 +23,7 @@
 - [x] 3.2 Instance aggregation: enclosing prototype root from `instancedBy/prototypeRoots` (or the native prototype root, or `/`); key and `<bindingHash>` name per design D2 and D4; `<bindingHash>` prim with the static, re-rooted copy of the instance data; instances in path order
 - [x] 3.3 Instancer data per design D3: `instancerTopology` with `mask`, `primvars` with instance-rate constant primvars, `instancedBy` when nested; dirty locators as `niInstanceAggregationSceneIndex.cpp`
 - [x] 3.4 `NiPrototype` pass: instance prims' renderable types blanked; prototype root overlay (identity `xform` resetting the stack, `instancedBy`); `instancedBy` underlay on the other prototype prims
-- [ ] 3.5 Delete `stage/instancing.rs`, the private identity accessor and `niPrototypeIdentity` from `tokens.rs`; rename `PROPAGATED_ROOT` and the prototype tokens to `UsdNiPropagatedPrototypes`, `UsdNiInstancer`, `UsdNiPrototype`
+- [x] 3.5 Delete `stage/instancing.rs`, the private identity accessor and `niPrototypeIdentity` from `tokens.rs`; rename `PROPAGATED_ROOT` and the prototype tokens to `UsdNiPropagatedPrototypes`, `UsdNiInstancer`, `UsdNiPrototype`
 
 ## 4. Flattening
 

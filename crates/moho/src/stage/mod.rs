@@ -18,7 +18,6 @@ pub mod geom_subset;
 pub mod globals;
 pub mod imageable;
 pub mod implicit;
-pub mod instancing;
 pub mod light;
 pub mod material;
 pub mod material_binding;
