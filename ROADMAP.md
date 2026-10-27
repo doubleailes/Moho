@@ -41,6 +41,18 @@ the steps that land in this repository or depend on it.
   data source, took 6.6× (B)'s time on Moana (`docs/streaming-spike.md`),
   about 2 ms per prim on its two largest chunks.
 - Offering Moho upstream as an `openusd-imaging` crate.
+- Draw mode (`UsdImagingDrawModeSceneIndex`), through native instancer
+  propagation's append callback (`hydra-parity-instancing`, design D7).
+
+## Upstream candidates (OpenUSD)
+
+- Point instancer prototypes inside native instances. A `PointInstancer`
+  whose `prototypes` target an instance proxy (Moana's `isCoral`) draws
+  nothing under UsdImaging 2.0: the stage scene index gives an instance
+  proxy no data, and point instancer propagation copies that empty prim.
+  UsdImaging 1.0's point instancer adapter traversed the proxy and drew it.
+  Moho follows 2.0 (`hydra-parity-instancing` removed its M12 workaround);
+  the regression is worth raising with OpenUSD.
 
 ## Upstream candidates (openusd)
 

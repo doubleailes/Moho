@@ -225,11 +225,24 @@ the root edit target (`crates/moho-spike/tests/probe.rs` asserts all of it):
 - Parity references (S1 chain tests): `geom::XformCache::new(time)` and
   `local_to_world_transform(&Prim)`, `ImageableExt::compute_visibility(time)
   -> Visibility`, `shade::MaterialBindingAPI::bound_material(purpose)`.
-- Point instancers: `geom::PointInstancer::get`, `mask_at(time, Some(&ids))`
-  (inactive and invisible ids folded together; the inactive-id helper is
-  private, so Moho separates them against `invisibleIds`), and
-  `orientationsf` preferred over `orientations` when non-empty (as
-  `uses_orientationsf`).
+- Point instancers: `geom::PointInstancer::get`, `mask_at(time, None)`
+  (C++ `ComputeMaskAtTime`: inactive and invisible ids folded together,
+  empty when nothing is masked), and `orientationsf` preferred over
+  `orientations` when non-empty (as `uses_orientationsf`).
+- `openusd_schemas::geom::PrimMetadata::inactive_ids()` (generated, on
+  `usd::Prim`): the `inactiveIds` metadata as a `Value::Int64ListOp`, the
+  strongest opinion (C++ composes list ops across layers);
+  `sdf::ListOp::explicit_items()`, which UsdImaging reads
+  (`GetExplicitItems`) to prune fully inactive prototypes. `mask_at`
+  flattens the list op where C++ `ComputeMaskAtTime` reads its explicit
+  items; the two differ only for a prepended or appended `inactiveIds`.
+- `Relationship::targets()` (authored, unforwarded) for a point instancer's
+  prototypes when it authors `inactiveIds`, as UsdImaging reads
+  `GetTargets` there and `GetForwardedTargets` otherwise.
+- `Stage::prototypes() -> Result<Vec<sdf::Path>>` (the stage's
+  `/__Prototype_N` prims), which the stage index compares with what it
+  populated to resync re-pointed prototypes; `Stage::remove_prim(path)` in
+  tests.
 
 ## Scene index gaps (`scene-index-gaps`)
 
