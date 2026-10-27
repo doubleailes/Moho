@@ -19,6 +19,9 @@ it depends on the other three.
 
 ## What Changes
 
+- **BREAKING** The index's time starts at time code 0, as
+  `UsdImagingStageSceneIndex`'s does, not at the stage's default time.
+  Replacing a held stage resets it to `EarliestTime` (design D9).
 - Update latency is measured first. Two edits stand for it: a camera edit
   dirties only the camera, at Hydra's locators, and adding a light dirties
   no geometry when its collections are trivial. Both are pinned by tests
@@ -95,6 +98,8 @@ None.
 - `render-settings-schemas`: dependencies across prims through
   `__dependencies`.
 - `volume-schemas`: renderer-defined volumes without a consumer's names.
+- `stage-scene-index`: the index's time starts at time code 0 and resets
+  to `EarliestTime` when a held stage is replaced, as UsdImaging's.
 
 ## Impact
 
