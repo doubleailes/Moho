@@ -279,7 +279,8 @@ impl StageSceneIndex {
     }
 
     /// Turns every stage edit since the last call into notices: resynced
-    /// prims removed and re-added (or added when new, removed when gone),
+    /// prims added (again, or for the first time), each prim that was held
+    /// and is not re-added removed,
     /// and changed properties as their prims dirtied for the locators the
     /// adapters map them to. Property changes under a resynced prim are
     /// folded into its resync.
@@ -297,18 +298,25 @@ impl StageSceneIndex {
         let mut removed = Vec::new();
         let mut added = Vec::new();
         for root in &roots {
-            let was_present = {
+            let before: Vec<sdf::Path> = {
                 let mut populated = self.populated.borrow_mut();
-                let present = populated.contains(root);
+                let before = populated.iter().filter(|p| p.has_prefix(root)).cloned().collect();
                 populated.retain(|p| !p.has_prefix(root));
-                present
+                before
             };
             self.cache.borrow_mut().retain(|p, _| !p.has_prefix(root));
             self.globals.forget_under(root);
             let now = self.populate(root);
-            if was_present {
-                removed.push(Removed { path: root.clone() });
-            }
+            // As `UsdImagingStageSceneIndex::_ApplyPendingResyncs`: a prim
+            // added again is resynced by its `Added` alone; each populated
+            // prim that is not re-added is removed by an entry of its own.
+            let again: BTreeSet<&sdf::Path> = now.iter().map(|a| &a.path).collect();
+            removed.extend(
+                before
+                    .into_iter()
+                    .filter(|p| !again.contains(p))
+                    .map(|path| Removed { path }),
+            );
             added.extend(now);
         }
         let mut dirty: BTreeMap<sdf::Path, LocatorSet> = BTreeMap::new();
