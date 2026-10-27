@@ -1,12 +1,12 @@
 ## 0. Preconditions
 
-- [ ] 0.1 `hydra-parity-stage` is implemented (block data source, exposed overs and their whole-stage pass, `model`/`geomModel`/`extentsHint`, extent resolving)
-- [ ] 0.2 Compute golden `TfHash::Combine(std::string, std::string)` and `TfHash::Combine(std::map<std::string, std::string>)` values with a USD build (a small C++ program against `tf`) for a handful of paths, and keep them as test data
+- [x] 0.1 `hydra-parity-stage` is implemented (block data source, exposed overs and their whole-stage pass, `model`/`geomModel`/`extentsHint`, extent resolving)
+- [x] 0.2 Compute golden `TfHash::Combine(std::string, std::string)` and `TfHash::Combine(std::map<std::string, std::string>)` values with a USD build (a small C++ program against `tf`) for a handful of paths, and keep them as test data
 
 ## 1. Building blocks
 
 - [ ] 1.1 Add a re-rooting scene index (`UsdImagingRerootingSceneIndex`): prims, children and notices moved from a source root to a destination root, data wrapped by the existing re-rooting container; tests for prims, children, notices and path values
-- [ ] 1.2 Add a private `TfHash` port (SpookyHash `ArchHash64`, `Tf_HashState` folding, `Combine` over strings and over a sorted string map); tests against 0.2's golden values
+- [x] 1.2 Add a private `TfHash` port (SpookyHash `ArchHash64`, `Tf_HashState` folding, `Combine` over strings and over a sorted string map); tests against 0.2's golden values
 
 ## 2. Point instancer propagation
 
