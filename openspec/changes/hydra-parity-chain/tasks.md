@@ -30,7 +30,7 @@
 ## 4b. Update latency
 
 - [x] 4b.1 Tests for the update-scope requirement: a camera's `focalLength` and transform edits, a light added with trivial and with non-trivial collections; each asserts the exact added and dirtied entries, through `chain::standard` plus the light linking and dependency forwarding filters
-- [ ] 4b.2 An update benchmark in `crates/moho-spike` (`bin/update`): on a LoadAll stage, measure the time from the stage edit to the managing observer having received every notice, for (a) a camera `focalLength` edit, (b) a camera transform edit, (c) adding a sphere light with default collections, (d) adding a light linked to one prim. Report the median and worst of N runs, and the count of notices and dirtied entries
+- [x] 4b.2 An update benchmark in `crates/moho-spike` (`bin/update`): on a LoadAll stage, measure the time from the stage edit to the managing observer having received every notice, for (a) a camera `focalLength` edit, (b) a camera transform edit, (c) adding a sphere light with default collections, (d) adding a light linked to one prim. Report the median and worst of N runs, and the count of notices and dirtied entries
 - [ ] 4b.3 Run it on a small fixture and on Moana; record the results in `docs/` beside the spike results. Reported, not gated. Update latency ranks ahead of first-load time in later profiling
 
 ## 4c. The index's time as UsdImaging's
