@@ -27,6 +27,12 @@
 - [ ] 4.2 Add a prim managing observer, a port of `HdsiPrimManagingSceneIndexObserver` (prim factory trait, managed prims receiving dirties, release on removal, lookup by path)
 - [ ] 4.3 An example or doc test: `chain::standard` → renderer filters → prim type batching → managing observer, as hdPrman's `renderDelegate.cpp` builds it
 
+## 4b. Update latency
+
+- [ ] 4b.1 Tests for the update-scope requirement: a camera's `focalLength` and transform edits, a light added with trivial and with non-trivial collections; each asserts the exact added and dirtied entries, through `chain::standard` plus the light linking and dependency forwarding filters
+- [ ] 4b.2 An update benchmark in `crates/moho-spike` (`bin/update`): on a LoadAll stage, measure the time from the stage edit to the managing observer having received every notice, for (a) a camera `focalLength` edit, (b) a camera transform edit, (c) adding a sphere light with default collections, (d) adding a light linked to one prim. Report the median and worst of N runs, and the count of notices and dirtied entries
+- [ ] 4b.3 Run it on a small fixture and on Moana; record the results in `docs/` beside the spike results. Reported, not gated. Update latency ranks ahead of first-load time in later profiling
+
 ## 5. Merging
 
 - [ ] 5.1 `filter/merging.rs`: adding an input notifies root and every listed descendant, defined or not; notices forwarded without root filtering; rename as remove plus add (unchanged)

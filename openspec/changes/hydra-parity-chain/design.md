@@ -152,6 +152,22 @@ the archived changes. `architecture.md`'s chain section is rewritten in
 Hydra's order (it claimed `UsdImagingCreateSceneIndices`' order while
 running native instancing first), with the consumer path of Context.
 
+### D8. Update latency is measured on a camera edit and a light addition
+
+What matters most for interactive rendering is the time from an edit to the
+renderer being updated, more than the time to the first pixel. Two edits
+stand for it. A camera edit is the most frequent edit in a viewport, and it
+must touch one prim. Adding a light is the edit most likely to fan out,
+through light linking categories. Both are pinned down twice. First, the
+update-scope requirement fixes exactly what is notified, matching what
+Hydra notifies (camera locators from
+`UsdImagingDataSourceCameraPrim::Invalidate`, and trivial collections
+ignored in `HdsiLightLinkingSceneIndex::_ProcessAddedLightOrFilter`).
+Second, a benchmark measures how long it takes. The benchmark stops at
+Moho's managing observer, because the consumer's own update time (Crust
+rebuilding its scene, restarting the render) belongs to the consumer's
+benchmark.
+
 ## Risks / Trade-offs
 
 - [Without dependency forwarding, render settings and instance categories
