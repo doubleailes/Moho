@@ -22,5 +22,8 @@ copy's.
 A copy under the propagated prototype would be drawn by every native
 instance of that prototype. Proxy copies go under the instancer instead,
 at `I/ForInstancer<hash>/prototype<i>`, `i` the prototype's index; the
-`ForInstancer<hash>` scope is a typeless prim holding them. Targets the
-index holds keep their copies at `P/ForInstancer<hash>`.
+`ForInstancer<hash>` scope is a typeless prim holding them (named
+`ForInstancer<hash>_<n>` should the instancer already have a child of that
+name). Targets the index holds keep their copies at `P/ForInstancer<hash>`.
+The scope is notified added and removed with the copies it holds when the
+model is rebuilt.
