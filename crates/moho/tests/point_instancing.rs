@@ -407,6 +407,71 @@ fn a_fully_inactive_prototype_is_pruned() {
     );
 }
 
+const STRAY_INDICES: &str = r#"#usda 1.0
+def Xform "world"
+{
+    def PointInstancer "huge"
+    {
+        rel prototypes = [</world/huge/protos/round>, </world/huge/protos/flat>]
+        int[] protoIndices = [0, 2000000000, 0]
+        point3f[] positions = [(0, 0, 0), (1, 0, 0), (2, 0, 0)]
+        def Scope "protos"
+        {
+            def Mesh "round"
+            {
+            }
+            def Mesh "flat"
+            {
+            }
+        }
+    }
+    def PointInstancer "pruned" (
+        inactiveIds = [1]
+    )
+    {
+        rel prototypes = [</world/pruned/protos/round>, </world/pruned/protos/flat>]
+        int[] protoIndices = [0, 1, 3]
+        point3f[] positions = [(0, 0, 0), (1, 0, 0), (2, 0, 0)]
+        def Scope "protos"
+        {
+            def Mesh "round"
+            {
+            }
+            def Mesh "flat"
+            {
+            }
+        }
+    }
+}
+"#;
+
+#[test]
+fn a_stray_prototype_index_reads_as_usd_imaging_without_allocating_it() {
+    let (_dir, usd) = stage(STRAY_INDICES);
+    let stage_index = StageSceneIndex::new();
+    stage_index.set_stage(usd);
+    // UsdImaging gives one array per index up to the largest one used,
+    // here 2 000 000 001 of them, nearly all empty.
+    let data = stage_index.prim(&p("/world/huge")).data.unwrap();
+    let vector = locate(&data, &Locator::parse("instancerTopology/instanceIndices")).unwrap();
+    let vector = vector.as_vector().unwrap().clone();
+    assert_eq!(vector.len(), 2_000_000_001);
+    let at = |i: usize| vector.get(i).and_then(|d| d.value());
+    assert_eq!(at(0), Some(Value::IntVec(vec![0, 2])));
+    assert_eq!(at(1), Some(Value::IntVec(vec![])));
+    assert_eq!(at(1_999_999_999), Some(Value::IntVec(vec![])));
+    assert_eq!(at(2_000_000_000), Some(Value::IntVec(vec![1])));
+    assert_eq!(at(2_000_000_001), None);
+    // Index 1 is fully inactive: pruned from both, the out-of-range index 3
+    // kept after the unused 2, as UsdImaging.
+    let pruned = p("/world/pruned");
+    assert_eq!(
+        read(stage_index.as_ref(), &pruned, "instancerTopology/prototypes"),
+        Some(Value::PathVec(vec![p("/world/pruned/protos/round")]))
+    );
+    assert_eq!(indices(stage_index.as_ref(), &pruned), [vec![0], vec![], vec![2]]);
+}
+
 const PROXIES_AND_SCOPES: &str = r#"#usda 1.0
 def Xform "staghorn"
 {
