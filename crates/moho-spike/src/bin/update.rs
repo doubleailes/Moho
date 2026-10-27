@@ -75,16 +75,22 @@ fn run() -> moho_spike::Result<()> {
         bench.camera, bench.target
     );
     println!();
-    println!("| edit | median (ms) | worst (ms) | added | removed | dirtied entries | prim dirty calls |");
-    println!("|---|---|---|---|---|---|---|");
+    println!(
+        "| edit | median (ms) | worst (ms) | authoring, median (ms) | added | removed | dirtied entries | prim dirty calls |"
+    );
+    println!("|---|---|---|---|---|---|---|---|");
     for edit in Edit::ALL {
         let samples: Vec<Sample> = (0..runs).map(|i| bench.run(edit, i)).collect::<Result<_, _>>()?;
         let (median, worst) = median_and_worst(&samples);
         let counts = samples.last().map(|s| s.counts).unwrap_or_default();
+        let mut authoring: Vec<Duration> = samples.iter().map(|s| s.authoring).collect();
+        authoring.sort();
+        let authoring = authoring.get(authoring.len() / 2).copied().unwrap_or_default();
         println!(
-            "| {edit} | {} | {} | {} | {} | {} | {} |",
+            "| {edit} | {} | {} | {} | {} | {} | {} | {} |",
             ms(median),
             ms(worst),
+            ms(authoring),
             counts.added,
             counts.removed,
             counts.dirtied,

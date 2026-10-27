@@ -77,6 +77,8 @@ pub struct Counts {
 #[derive(Debug, Clone, Copy)]
 pub struct Sample {
     pub elapsed: Duration,
+    /// Of which authoring the edit on the stage (openusd's side).
+    pub authoring: Duration,
     pub counts: Counts,
 }
 
@@ -264,6 +266,7 @@ impl Bench {
                     .set_targets([self.target.clone()])?;
             }
         }
+        let authoring = start.elapsed();
         self.update();
         let elapsed = start.elapsed();
         let counts = self.counters.take();
@@ -273,7 +276,11 @@ impl Bench {
             self.update();
             self.counters.take();
         }
-        Ok(Sample { elapsed, counts })
+        Ok(Sample {
+            elapsed,
+            authoring,
+            counts,
+        })
     }
 
     /// Sets the camera's first transform op to a value it did not hold.
