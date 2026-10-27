@@ -298,15 +298,27 @@ impl StageSceneIndex {
         let known_prototypes = self.populated_prototypes();
         let mut removed = Vec::new();
         let mut added = Vec::new();
-        for root in &roots {
+        // A shader or node graph resynced under a material is not
+        // repopulated but invalidates its material (below), as
+        // `UsdImagingStageSceneIndex::_ApplyPendingResyncs` does for a
+        // `RepresentedByAncestor` prim. Any other prim under a material is
+        // repopulated, its subtree added though population never reached it.
+        let represented: Vec<Option<(usd::Prim, usd::Prim)>> = roots
+            .iter()
+            .map(|root| self.representing_material(root))
+            .collect();
+        for (root, represented) in roots.iter().zip(&represented) {
+            self.cache.borrow_mut().retain(|p, _| !p.has_prefix(root));
+            self.globals.forget_under(root);
+            if represented.is_some() {
+                continue;
+            }
             let before: Vec<sdf::Path> = {
                 let mut populated = self.populated.borrow_mut();
                 let before = populated.iter().filter(|p| p.has_prefix(root)).cloned().collect();
                 populated.retain(|p| !p.has_prefix(root));
                 before
             };
-            self.cache.borrow_mut().retain(|p, _| !p.has_prefix(root));
-            self.globals.forget_under(root);
             let now = self.populate(root);
             // As `UsdImagingStageSceneIndex::_ApplyPendingResyncs`: a prim
             // added again is resynced by its `Added` alone; each populated
@@ -340,16 +352,15 @@ impl StageSceneIndex {
         let mut dirty: BTreeMap<sdf::Path, LocatorSet> = BTreeMap::new();
         // A shader or node graph resynced under a material is a property
         // resync of it (UsdImaging's `RepresentedByAncestor` prims); a prim
-        // gone from the stage has no adapter and notifies nothing.
-        for root in &roots {
-            if let Some((material, prim)) = self.representing_material(root) {
-                let all: BTreeSet<String> = [String::new()].into();
-                let locators = material::invalidate_from_descendant(&material, &prim, &all);
-                dirty
-                    .entry(material.path().clone())
-                    .or_default()
-                    .insert_set(&locators);
-            }
+        // gone from the stage has no adapter, and is removed only if it was
+        // added.
+        for (material, prim) in represented.into_iter().flatten() {
+            let all: BTreeSet<String> = [String::new()].into();
+            let locators = material::invalidate_from_descendant(&material, &prim, &all);
+            dirty
+                .entry(material.path().clone())
+                .or_default()
+                .insert_set(&locators);
         }
         // Per prim, the properties whose spec came or went (UsdImaging's
         // `Resync` invalidation) and those whose value changed (`Update`).
@@ -526,13 +537,14 @@ impl StageSceneIndex {
             return false;
         }
         // Inside a native instance: the instancing filter exposes those.
-        // Under a material: the material represents its descendants, as
-        // UsdImaging's material adapter (`RepresentsSelfAndDescendents`).
+        // A material's descendants answer, as `UsdImagingStageSceneIndex::GetPrim`
+        // does, though neither population nor `children` reaches them (the
+        // material represents them, `RepresentsSelfAndDescendents`).
         !path.strict_ancestors_below_root().any(|a| {
             stage
                 .prim(&a)
                 .ok()
-                .is_some_and(|p| p.is_instance().unwrap_or(false) || is_material(&p))
+                .is_some_and(|p| p.is_instance().unwrap_or(false))
         })
     }
 
