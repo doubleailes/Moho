@@ -1,27 +1,39 @@
-//! `PointInstancingSceneIndex`: point instancers' prototypes re-rooted as
-//! UsdImaging's point-instancer prototype propagation does.
+//! `PointInstancingSceneIndex`: point instancers' prototypes propagated as
+//! `UsdImagingPiPrototypePropagatingSceneIndex` does.
 //!
-//! Each prototype `P` a point instancer `I` targets is copied to
-//! `P/ForInstancer<hash of I>`: the copy's root resets the transform stack,
-//! and every prim of the copy names `I` in `instancedBy`. The instancer's
-//! `instancerTopology/prototypes` names the copies. Every other prim under
-//! the instancer, the original prototypes included, becomes typeless, so it
-//! is not drawn on its own. Native instancers (which carry
-//! `instanceLocations`) are left alone.
+//! The output merges (`MergingSceneIndex`), strongest first:
 //!
-//! A prototype target inside a native instance (an instance proxy, which the
-//! index does not hold) is copied from the same prim in that instance's
-//! propagated prototype, to `I/ForInstancer<hash>/prototype<i>`: under the
-//! instancer, so the native instances of that prototype do not draw it.
+//! - a retained index overriding each propagated instancer's
+//!   `instancerTopology/prototypes` with the paths of its copies;
+//! - a retained index giving each prototype `P` its copies at
+//!   `__usdPrimInfo/piPropagatedPrototypes/ForInstancer<hash>`;
+//! - the input under the whole-stage prototype pass
+//!   (`UsdImaging_PiPrototypeSceneIndex` with prototype root `/` and no
+//!   instancer): every prim strictly under an instancer or an `over` is
+//!   unrenderable (an empty type unless `material`, `niPrototypePath`
+//!   blocked, `applyDrawMode` false);
+//! - for each instancer and each prototype `P` it targets, the input re-rooted
+//!   `P → P` (isolating `P`), a prototype pass for that instancer (the copy's
+//!   root resets the transform stack and is visible unless it says
+//!   otherwise, every prim is `instancedBy` the instancer, prims under a
+//!   nested instancer or `over` are unrenderable), re-rooted
+//!   `P → P/ForInstancer<hash>`.
 //!
-//! An instancer inside a prototype is re-instanced in every copy, as Hydra's
-//! propagation does: the copy of a nested instancer gets copies of its own
-//! prototypes (inside the enclosing copy), named by its output path, and a
-//! copy's path values are re-rooted level by level.
+//! An instancer is found by its type, `instancer`, on a pass's output; its
+//! descendants are left to the copies of its prototypes. `<hash>` is
+//! `TfHash::Combine` of the instancer's path in the prototype's input
+//! namespace and the enclosing copy root (`/` at the top level), printed
+//! `%zx`. Each copy runs the same search, so an instancer inside a prototype
+//! is re-instanced in every copy, with copies of its own prototypes made at
+//! their input paths and named from the enclosing copy root. A prototype
+//! that contains its instancer, or that an enclosing copy is already made
+//! from (a cycle), is not copied.
+//!
+//! A prototype target the input holds no data for (an instance proxy) is
+//! copied as it is: an empty prim, as in UsdImaging 2.0.
 
 use std::cell::RefCell;
-use std::collections::BTreeSet;
-use std::hash::{DefaultHasher, Hash, Hasher};
+use std::collections::{BTreeMap, BTreeSet};
 use std::rc::{Rc, Weak};
 
 use openusd::sdf::{self, Value};
@@ -29,128 +41,14 @@ use openusd::tf::Token;
 
 use crate::data_source::retained::{RetainedContainer, block, container, value};
 use crate::data_source::{Container, ContainerHandle, DataSource, Overlay, locate};
-use crate::locator::Locator;
+use crate::filter::merging::MergingSceneIndex;
+use crate::filter::rerooting::RerootingSceneIndex;
+use crate::locator::{Locator, LocatorSet};
 use crate::scene_index::{
-    Added, Dirtied, Observer, Observers, Prim, Removed, Renamed, SceneIndex, SceneIndexHandle,
+    Added, Dirtied, Observer, Observers, Prim, Removed, Renamed, RetainedSceneIndex, SceneIndex,
+    SceneIndexHandle,
 };
-use crate::schema::{XformSchema, member_container};
-use crate::tokens::{geom_model, instancing as t, prim_type, usd_prim_info, xform};
-
-struct Instancer {
-    /// The instancer's output path: its input path for a top-level one, or
-    /// a path inside another instancer's copy for a nested one.
-    path: sdf::Path,
-    /// `(copy root, original prototype)`, in prototype order, both output
-    /// paths.
-    copies: Vec<(sdf::Path, sdf::Path)>,
-}
-
-/// One step from a path inside a copy to the namespace the copy was made
-/// from.
-struct Step<'m> {
-    instancer: &'m Instancer,
-    copy: &'m sdf::Path,
-    original: &'m sdf::Path,
-}
-
-#[derive(Default)]
-struct Model {
-    /// Top-level instancers first, then the instancers found inside copies,
-    /// in the order they were found: a copy's original always lies outside
-    /// the copies made after it.
-    instancers: Vec<Instancer>,
-    /// Children the model adds beside the copies hosted at their originals:
-    /// an instancer's `ForInstancer<hash>` scope, and the copies of its
-    /// prototypes that are instance proxies, under that scope.
-    extra_children: std::collections::BTreeMap<sdf::Path, Vec<sdf::Path>>,
-    /// The prims whose descendants are unrenderable (UsdImaging's
-    /// `_instancersAndOvers`): instancers and `over` prims, output paths,
-    /// found over the whole stage and in every copy.
-    instancers_and_overs: BTreeSet<sdf::Path>,
-}
-
-impl Model {
-    /// The innermost copy `out` lies in.
-    fn innermost(&self, out: &sdf::Path) -> Option<Step<'_>> {
-        let mut best: Option<Step<'_>> = None;
-        for instancer in &self.instancers {
-            for (copy, original) in &instancer.copies {
-                if out.has_prefix(copy)
-                    && best
-                        .as_ref()
-                        .is_none_or(|b| copy.element_count() > b.copy.element_count())
-                {
-                    best = Some(Step {
-                        instancer,
-                        copy,
-                        original,
-                    });
-                }
-            }
-        }
-        best
-    }
-
-    /// The input path `out` reads, with the copies it goes through,
-    /// innermost first.
-    fn resolve(&self, out: &sdf::Path) -> Option<(sdf::Path, Vec<Step<'_>>)> {
-        let mut path = out.clone();
-        let mut steps = Vec::new();
-        while let Some(step) = self.innermost(&path) {
-            path = path.replace_prefix(step.copy, step.original)?;
-            steps.push(step);
-        }
-        Some((path, steps))
-    }
-
-    /// Every output path an input path appears at: itself, and its image in
-    /// every copy of a prototype holding it, nested copies included.
-    fn outputs(&self, input: &sdf::Path) -> Vec<sdf::Path> {
-        let mut out = vec![input.clone()];
-        for instancer in &self.instancers {
-            for (copy, original) in &instancer.copies {
-                let found: Vec<sdf::Path> = out
-                    .iter()
-                    .filter(|p| p.has_prefix(original))
-                    .filter_map(|p| p.replace_prefix(original, copy))
-                    .collect();
-                out.extend(found);
-            }
-        }
-        out
-    }
-
-    /// The copies hosted at `out` (the copy roots whose original is `out`),
-    /// and the scope and proxy copies the model adds under it.
-    fn hosted(&self, out: &sdf::Path) -> impl Iterator<Item = &sdf::Path> {
-        self.instancers
-            .iter()
-            .flat_map(|i| i.copies.iter())
-            .filter(move |(_, original)| original == out)
-            .map(|(copy, _)| copy)
-            .chain(self.extra_children.get(out).into_iter().flatten())
-    }
-
-    /// Whether `out` is an instancer's `ForInstancer<hash>` scope for proxy
-    /// prototypes.
-    fn is_scope(&self, out: &sdf::Path) -> bool {
-        self.instancers
-            .iter()
-            .any(|i| self.extra_children.get(&i.path).is_some_and(|c| c.contains(out)))
-    }
-
-    /// Whether `out` lies strictly under an instancer or an `over`, as
-    /// UsdImaging's point instancer prototype scene index judges it: over
-    /// the whole stage for a prim in no copy, and from the copy's root down
-    /// for a prim in a copy (a copy does not see what lies above its
-    /// original).
-    fn unrenderable(&self, out: &sdf::Path) -> bool {
-        let scope = self.innermost(out).map(|step| step.copy.clone());
-        out.strict_ancestors()
-            .filter(|a| scope.as_ref().is_none_or(|root| a.has_prefix(root)))
-            .any(|a| self.instancers_and_overs.contains(&a))
-    }
-}
+use crate::tokens::{geom_model, imageable, instancing as t, prim_type, usd_prim_info, xform};
 
 /// Whether a prim hides its descendants: an instancer, or a prim whose
 /// specifier is `over` (UsdImaging's `_IsOverOrInstance`).
@@ -171,8 +69,8 @@ fn is_over_or_instancer(prim: &Prim) -> bool {
     matches!(specifier, Some(Value::Token(t)) if t == usd_prim_info::OVER)
 }
 
-/// A type the whole-stage pass empties (UsdImaging's
-/// `IsRenderablePrimType`): any but the empty type and `material`.
+/// A renderable type (UsdImaging's `IsRenderablePrimType`): any but the
+/// empty type and `material`.
 fn is_renderable(ty: &Token) -> bool {
     !ty.as_str().is_empty() && ty != prim_type::MATERIAL
 }
@@ -190,399 +88,591 @@ fn make_unrenderable(prim: Prim) -> Prim {
     let Some(data) = prim.data else {
         return Prim { ty, data: None };
     };
-    let overlay = RetainedContainer::new([
-        (
-            usd_prim_info::USD_PRIM_INFO,
-            container([(usd_prim_info::NI_PROTOTYPE_PATH, block())]),
-        ),
-        (
-            geom_model::GEOM_MODEL,
-            container([(geom_model::APPLY_DRAW_MODE, value(false))]),
-        ),
-    ])
-    .into_handle();
+    thread_local! {
+        static OVERLAY: ContainerHandle = RetainedContainer::new([
+            (
+                usd_prim_info::USD_PRIM_INFO,
+                container([(usd_prim_info::NI_PROTOTYPE_PATH, block())]),
+            ),
+            (
+                geom_model::GEOM_MODEL,
+                container([(geom_model::APPLY_DRAW_MODE, value(false))]),
+            ),
+        ])
+        .into_handle();
+    }
+    let overlay = OVERLAY.with(Clone::clone);
     Prim {
         ty,
         data: Some(Overlay::handle([overlay, data])),
     }
 }
 
-/// A scene index re-rooting point instancers' prototypes.
-pub struct PointInstancingSceneIndex {
+/// `UsdImaging_PiPrototypeSceneIndex`: a prototype prepared to be instanced
+/// by `instancer` (or, without one, the whole stage's pass).
+struct PiPrototypeSceneIndex {
     input: SceneIndexHandle,
-    me: Weak<PointInstancingSceneIndex>,
-    model: RefCell<Option<Rc<Model>>>,
+    instancer: Option<sdf::Path>,
+    prototype_root: sdf::Path,
+    /// The instancers and `over`s at or under the prototype root, not
+    /// below another one.
+    instancers_and_overs: RefCell<BTreeSet<sdf::Path>>,
+    me: Weak<PiPrototypeSceneIndex>,
     observers: Observers,
 }
 
-fn paths(value: Option<Value>) -> Vec<sdf::Path> {
-    match value {
-        Some(Value::PathVec(v)) => v,
-        _ => Vec::new(),
-    }
-}
-
-/// The copies of a point instancer at `path` whose topology is `data`'s, or
-/// `None` for a prim that is not a point instancer (a native instancer
-/// carries `instanceLocations`).
-fn instancer_at(path: &sdf::Path, data: &ContainerHandle) -> Option<Instancer> {
-    let topology = member_container(data, t::INSTANCER_TOPOLOGY)?;
-    if topology.get(&Token::from(t::INSTANCE_LOCATIONS)).is_some() {
-        return None;
-    }
-    let mut h = DefaultHasher::new();
-    path.as_str().hash(&mut h);
-    let suffix = format!("ForInstancer{:016x}", h.finish());
-    let prototypes = paths(topology.get(&Token::from(t::PROTOTYPES)).and_then(|d| d.value()));
-    let copies = prototypes
-        .into_iter()
-        .filter_map(|p| Some((p.append_path(suffix.as_str()).ok()?, p)))
-        .collect();
-    Some(Instancer {
-        path: path.clone(),
-        copies,
-    })
-}
-
-impl PointInstancingSceneIndex {
-    /// A point-instancing index over `input`.
-    pub fn new(input: SceneIndexHandle) -> Rc<Self> {
+impl PiPrototypeSceneIndex {
+    fn new(input: SceneIndexHandle, instancer: Option<sdf::Path>, prototype_root: sdf::Path) -> Rc<Self> {
         let index = Rc::new_cyclic(|me| Self {
             input: input.clone(),
+            instancer,
+            prototype_root,
+            instancers_and_overs: RefCell::new(BTreeSet::new()),
             me: me.clone(),
-            model: RefCell::new(None),
             observers: Observers::default(),
         });
+        index.populate();
         let observer: Weak<dyn Observer> = index.me.clone();
         input.add_observer(observer);
         index
     }
 
-    /// `out`'s input data, re-rooted through every copy it lies in,
-    /// outermost first, as Hydra's point instancer propagation re-roots each
-    /// level.
-    fn data_at(&self, model: &Model, out: &sdf::Path) -> Option<(Prim, Vec<(sdf::Path, sdf::Path)>)> {
-        let (input_path, steps) = model.resolve(out)?;
-        let input = self.input.prim(&input_path);
-        let maps: Vec<(sdf::Path, sdf::Path)> = steps
-            .iter()
-            .rev()
-            .map(|s| (s.original.clone(), s.copy.clone()))
-            .collect();
-        Some((input, maps))
-    }
-
-    /// The children `out` has in the input, through the copies it lies in,
-    /// without the copies hosted at it.
-    fn natural_children(&self, model: &Model, out: &sdf::Path) -> Vec<sdf::Path> {
-        match model.innermost(out) {
-            Some(step) => {
-                let Some(original) = out.replace_prefix(step.copy, step.original) else {
-                    return Vec::new();
-                };
-                self.natural_children(model, &original)
-                    .into_iter()
-                    .filter_map(|c| c.replace_prefix(&original, out))
-                    .collect()
-            }
-            None => self.input.children(out),
-        }
-    }
-
-    /// `out`'s data in the model's namespace (re-rooted through its copies).
-    fn data_in(&self, model: &Model, out: &sdf::Path) -> Option<ContainerHandle> {
-        let (input, maps) = self.data_at(model, out)?;
-        let data = input.data?;
-        Some(maps.iter().fold(data, |d, (from, to)| {
-            crate::filter::rerooting::rerooted(d, from, to)
-        }))
-    }
-
-    /// For a prototype target inside a native instance (an instance proxy,
-    /// which the index does not hold), the same prim in that instance's
-    /// propagated prototype: the nearest ancestor carrying `instance` names
-    /// its instancer, whose topology names the propagated prototype.
-    fn through_instance(&self, model: &Model, target: &sdf::Path) -> Option<sdf::Path> {
-        for ancestor in target.strict_ancestors_below_root() {
-            let Some(data) = self.data_in(model, &ancestor) else {
-                continue;
-            };
-            let Some(instance) = member_container(&data, t::INSTANCE) else {
-                continue;
-            };
-            let instancer = paths(instance.get(&Token::from(t::INSTANCER)).and_then(|d| d.value()))
-                .into_iter()
-                .next()?;
-            let topology = self
-                .data_in(model, &instancer)
-                .and_then(|d| member_container(&d, t::INSTANCER_TOPOLOGY))?;
-            let prototype = paths(topology.get(&Token::from(t::PROTOTYPES)).and_then(|d| d.value()))
-                .into_iter()
-                .next()?;
-            return target.replace_prefix(&ancestor, &prototype);
-        }
-        None
-    }
-
-    /// Adds `instancer` to `model`, resolving its prototypes that are
-    /// instance proxies through native instancing's propagated prototypes:
-    /// their copies go under the instancer's `ForInstancer<hash>` scope, not
-    /// under the propagated prototype (whose instances would draw them).
-    fn add_instancer(&self, model: &mut Model, mut instancer: Instancer) {
-        let mut scope_children = Vec::new();
-        // `I/ForInstancer<hash>`, or `ForInstancer<hash>_<n>` should the
-        // instancer already have a child of that name.
-        let taken = self.natural_children(model, &instancer.path);
-        let scope = instancer
-            .copies
-            .first()
-            .and_then(|(copy, _)| copy.name())
-            .and_then(|suffix| {
-                (0..)
-                    .map(|n| {
-                        if n == 0 {
-                            suffix.to_owned()
-                        } else {
-                            format!("{suffix}_{n}")
-                        }
-                    })
-                    .filter_map(|name| instancer.path.append_path(name.as_str()).ok())
-                    .find(|candidate| !taken.contains(candidate))
-            });
-        for (i, (copy, original)) in instancer.copies.iter_mut().enumerate() {
-            if self.data_in(model, original).is_some() {
-                continue;
-            }
-            let (Some(resolved), Some(scope)) = (self.through_instance(model, original), &scope) else {
-                continue;
-            };
-            let Ok(relocated) = scope.append_path(format!("prototype{i}").as_str()) else {
-                continue;
-            };
-            *copy = relocated.clone();
-            *original = resolved;
-            scope_children.push(relocated);
-        }
-        if let Some(scope) = scope.filter(|_| !scope_children.is_empty()) {
-            model
-                .extra_children
-                .entry(instancer.path.clone())
-                .or_default()
-                .push(scope.clone());
-            model
-                .extra_children
-                .entry(scope)
-                .or_default()
-                .extend(scope_children);
-        }
-        model.instancers.push(instancer);
-    }
-
-    fn model(&self) -> Rc<Model> {
-        if let Some(model) = self.model.borrow().as_ref() {
-            return model.clone();
-        }
-        let mut model = Model::default();
-        // The whole stage, parents first. An instancer under an instancer or
-        // an `over` has an empty type there, so it is propagated only
-        // through the copies holding it.
-        let mut stack = vec![sdf::Path::abs_root()];
+    fn populate(&self) {
+        let mut found = BTreeSet::new();
+        let mut stack = vec![self.prototype_root.clone()];
         while let Some(path) = stack.pop() {
-            let prim = self.input.prim(&path);
-            let under = model.unrenderable(&path);
-            if is_over_or_instancer(&prim) {
-                model.instancers_and_overs.insert(path.clone());
-            }
-            if !under
-                && let Some(data) = prim.data
-                && let Some(instancer) = instancer_at(&path, &data)
-            {
-                self.add_instancer(&mut model, instancer);
+            if is_over_or_instancer(&self.input.prim(&path)) {
+                found.insert(path);
+                continue;
             }
             stack.extend(self.input.children(&path));
         }
-        // Instancers inside copies get copies of their own, recursively, as
-        // Hydra's propagation re-instances nested point instancers.
-        let mut next = 0;
-        while next < model.instancers.len() {
-            let roots: Vec<sdf::Path> = model.instancers[next]
-                .copies
-                .iter()
-                .map(|(c, _)| c.clone())
-                .collect();
-            next += 1;
-            for root in roots {
-                let mut stack = vec![root];
-                while let Some(path) = stack.pop() {
-                    if model.instancers.iter().any(|i| i.path == path) {
-                        model.instancers_and_overs.insert(path.clone());
-                        continue;
-                    }
-                    if let Some((input, maps)) = self.data_at(&model, &path) {
-                        if is_over_or_instancer(&input) {
-                            model.instancers_and_overs.insert(path.clone());
-                        }
-                        if let Some(data) = input.data {
-                            let data = maps.iter().fold(data, |d, (from, to)| {
-                                crate::filter::rerooting::rerooted(d, from, to)
-                            });
-                            if let Some(instancer) = instancer_at(&path, &data) {
-                                self.add_instancer(&mut model, instancer);
-                                continue;
-                            }
-                        }
-                    }
-                    if model.instancers_and_overs.contains(&path) {
-                        // Nothing under an `over` is drawn, instancers
-                        // included.
-                        continue;
-                    }
-                    stack.extend(self.natural_children(&model, &path));
+        *self.instancers_and_overs.borrow_mut() = found;
+    }
+
+    fn under_instancer_or_over(&self, path: &sdf::Path) -> bool {
+        let set = self.instancers_and_overs.borrow();
+        !set.is_empty() && path.strict_ancestors().any(|a| set.contains(&a))
+    }
+}
+
+impl SceneIndex for PiPrototypeSceneIndex {
+    fn prim(&self, path: &sdf::Path) -> Prim {
+        let prim = self.input.prim(path);
+        if !path.has_prefix(&self.prototype_root) {
+            return prim;
+        }
+        if self.under_instancer_or_over(path) {
+            // Drawn only through an instancer, or not at all under an
+            // `over`.
+            return make_unrenderable(prim);
+        }
+        let Some(data) = prim.data else {
+            return prim;
+        };
+        let Some(instancer) = &self.instancer else {
+            return Prim {
+                ty: prim.ty,
+                data: Some(data),
+            };
+        };
+        let mut layers: Vec<ContainerHandle> = Vec::with_capacity(4);
+        let is_root = *path == self.prototype_root;
+        if is_root {
+            // Composed under the instancer's instances, not under its parent.
+            layers.push(
+                RetainedContainer::new([(
+                    xform::XFORM,
+                    container([(xform::RESET_XFORM_STACK, value(true))]),
+                )])
+                .into_handle(),
+            );
+        }
+        layers.push(data);
+        if is_root {
+            // Under the prim's own data: a prototype kept under an invisible
+            // scope is still drawn through the instancer.
+            layers.push(
+                RetainedContainer::new([(
+                    imageable::VISIBILITY,
+                    container([(imageable::VISIBILITY, value(true))]),
+                )])
+                .into_handle(),
+            );
+        }
+        layers.push(
+            RetainedContainer::new([(
+                t::INSTANCED_BY,
+                container([
+                    (t::PATHS, value(Value::PathVec(vec![instancer.clone()]))),
+                    (
+                        t::PROTOTYPE_ROOTS,
+                        value(Value::PathVec(vec![self.prototype_root.clone()])),
+                    ),
+                ]),
+            )])
+            .into_handle(),
+        );
+        Prim {
+            ty: prim.ty,
+            data: Some(Overlay::handle(layers)),
+        }
+    }
+
+    fn children(&self, path: &sdf::Path) -> Vec<sdf::Path> {
+        self.input.children(path)
+    }
+
+    fn add_observer(&self, observer: Weak<dyn Observer>) {
+        self.observers.add(observer);
+    }
+}
+
+impl Observer for PiPrototypeSceneIndex {
+    fn added(&self, _: &dyn SceneIndex, entries: &[Added]) {
+        {
+            let mut set = self.instancers_and_overs.borrow_mut();
+            for e in entries {
+                if is_over_or_instancer(&self.input.prim(&e.path)) {
+                    set.insert(e.path.clone());
+                } else {
+                    // A prim that stopped being an instancer or `over`; the
+                    // input re-adds what lies under it, as UsdImaging
+                    // assumes.
+                    set.remove(&e.path);
                 }
             }
         }
-        let model = Rc::new(model);
-        *self.model.borrow_mut() = Some(model.clone());
-        model
-    }
-
-    /// Every prim of every copy, and the scopes holding proxy copies,
-    /// parents first.
-    fn copy_paths(&self, model: &Model) -> Vec<sdf::Path> {
-        let mut out = std::collections::BTreeSet::new();
-        for instancer in &model.instancers {
-            let roots = instancer
-                .copies
-                .iter()
-                .map(|(copy, _)| copy)
-                .chain(model.extra_children.get(&instancer.path).into_iter().flatten());
-            for root in roots {
-                let mut stack = vec![root.clone()];
-                while let Some(path) = stack.pop() {
-                    if !out.insert(path.clone()) {
-                        continue;
-                    }
-                    stack.extend(self.children(&path));
-                }
-            }
-        }
-        let mut out: Vec<sdf::Path> = out.into_iter().collect();
-        out.sort_by_key(sdf::Path::element_count);
-        out
-    }
-
-    fn resync(&self, old: Option<Rc<Model>>) {
-        let removed: Vec<Removed> = old
+        let entries: Vec<Added> = entries
             .iter()
-            .flat_map(|m| {
-                m.instancers
-                    .iter()
-                    .flat_map(|i| {
-                        // The scopes holding proxy copies go with them.
-                        i.copies
-                            .iter()
-                            .map(|(c, _)| c)
-                            .chain(m.extra_children.get(&i.path).into_iter().flatten())
-                            .map(|path| Removed { path: path.clone() })
-                    })
-                    .collect::<Vec<_>>()
+            .map(|e| Added {
+                path: e.path.clone(),
+                ty: if is_renderable(&e.ty) && self.under_instancer_or_over(&e.path) {
+                    Token::default()
+                } else {
+                    e.ty.clone()
+                },
             })
             .collect();
-        let new = self.model();
-        let added: Vec<Added> = self
-            .copy_paths(&new)
-            .into_iter()
+        self.observers.send_added(self, &entries);
+    }
+
+    fn removed(&self, _: &dyn SceneIndex, entries: &[Removed]) {
+        {
+            let mut set = self.instancers_and_overs.borrow_mut();
+            if !set.is_empty() {
+                set.retain(|p| !entries.iter().any(|e| p.has_prefix(&e.path)));
+            }
+        }
+        self.observers.send_removed(self, entries);
+    }
+
+    fn dirtied(&self, _: &dyn SceneIndex, entries: &[Dirtied]) {
+        self.observers.send_dirtied(self, entries);
+    }
+
+    fn renamed(&self, sender: &dyn SceneIndex, entries: &[Renamed]) {
+        let removed: Vec<Removed> = entries.iter().map(|e| Removed { path: e.old.clone() }).collect();
+        self.removed(sender, &removed);
+        let added: Vec<Added> = entries
+            .iter()
+            .flat_map(|e| subtree(sender, &e.new))
             .map(|path| {
-                let ty = self.prim(&path).ty;
+                let ty = sender.prim(&path).ty;
                 Added { path, ty }
             })
             .collect();
-        self.observers.send_removed(self, &removed);
-        self.observers.send_added(self, &added);
+        self.added(sender, &added);
+    }
+}
+
+/// Every path at or under `root` in `index`, parents first.
+fn subtree(index: &dyn SceneIndex, root: &sdf::Path) -> Vec<sdf::Path> {
+    let mut out = Vec::new();
+    let mut stack = vec![root.clone()];
+    while let Some(path) = stack.pop() {
+        let mut children = index.children(&path);
+        children.reverse();
+        stack.extend(children);
+        out.push(path);
+    }
+    out
+}
+
+/// `__usdPrimInfo/piPropagatedPrototypes` of one prototype: its copies, by
+/// instancer hash.
+#[derive(Default)]
+struct PropagatedPrototypes(RefCell<BTreeMap<String, sdf::Path>>);
+
+impl Container for PropagatedPrototypes {
+    fn names(&self) -> Vec<Token> {
+        self.0.borrow().keys().map(|k| Token::from(k.as_str())).collect()
     }
 
-    /// An instancer's data with `instancerTopology/prototypes` naming its
-    /// copies.
-    fn with_copies(instancer: &Instancer, local: ContainerHandle) -> ContainerHandle {
-        let copies: Vec<sdf::Path> = instancer.copies.iter().map(|(c, _)| c.clone()).collect();
-        let topology = member_container(&local, t::INSTANCER_TOPOLOGY).map(|original| -> DataSource {
-            DataSource::Container(Rc::new(Overridden {
-                local: original,
-                overrides: vec![(Token::from(t::PROTOTYPES), value(Value::PathVec(copies)))],
-            }))
+    fn get(&self, name: &Token) -> Option<DataSource> {
+        let path = self.0.borrow().get(name.as_str())?.clone();
+        Some(value(Value::PathVec(vec![path])))
+    }
+}
+
+/// The retained index giving prototypes their `piPropagatedPrototypes`
+/// (UsdImaging's `_UsdPrimInfoSceneIndex`).
+struct PrimInfoIndex {
+    retained: Rc<RetainedSceneIndex>,
+    sources: RefCell<BTreeMap<sdf::Path, Rc<PropagatedPrototypes>>>,
+}
+
+impl PrimInfoIndex {
+    fn add(&self, prototype: &sdf::Path, hash: &str, propagated: &sdf::Path) {
+        let existing = self.sources.borrow().get(prototype).cloned();
+        let source = match existing {
+            Some(source) => source,
+            None => {
+                let source = Rc::new(PropagatedPrototypes::default());
+                self.sources
+                    .borrow_mut()
+                    .insert(prototype.clone(), source.clone());
+                let data = RetainedContainer::new([(
+                    usd_prim_info::USD_PRIM_INFO,
+                    container([(
+                        usd_prim_info::PI_PROPAGATED_PROTOTYPES,
+                        DataSource::Container(source.clone()),
+                    )]),
+                )]);
+                self.retained
+                    .add_prims([(prototype.clone(), Prim::new("", data.into_handle()))]);
+                source
+            }
+        };
+        source.0.borrow_mut().insert(hash.to_owned(), propagated.clone());
+        self.retained.dirty_prims([(
+            prototype.clone(),
+            LocatorSet::from(Locator::new([
+                usd_prim_info::USD_PRIM_INFO,
+                usd_prim_info::PI_PROPAGATED_PROTOTYPES,
+            ])),
+        )]);
+    }
+
+    fn remove(&self, prototype: &sdf::Path, hash: &str) {
+        let Some(source) = self.sources.borrow().get(prototype).cloned() else {
+            return;
+        };
+        let empty = {
+            let mut map = source.0.borrow_mut();
+            map.remove(hash);
+            map.is_empty()
+        };
+        if empty {
+            // Removing the prim removes the retained prims under it too.
+            self.sources.borrow_mut().retain(|p, _| !p.has_prefix(prototype));
+            self.retained.remove_prims([prototype.clone()]);
+        }
+    }
+}
+
+/// What every observer of one propagation shares (UsdImaging's `_Context`).
+struct Context {
+    input: SceneIndexHandle,
+    /// Overrides each propagated instancer's `instancerTopology/prototypes`.
+    instancers: Rc<RetainedSceneIndex>,
+    prim_info: PrimInfoIndex,
+    merging: Rc<MergingSceneIndex>,
+}
+
+/// The copies an instancer inside one propagated prototype makes, by
+/// prototype.
+type Copies = BTreeMap<sdf::Path, Rc<InstancerObserver>>;
+
+/// One propagated prototype (the whole stage, or a copy of a prototype),
+/// and the copies the instancers inside it make (UsdImaging's
+/// `_InstancerObserver`). It adds its re-rooted prototype to the merging
+/// index when made and removes it when dropped.
+struct InstancerObserver {
+    context: Rc<Context>,
+    prototype: sdf::Path,
+    propagated: sdf::Path,
+    /// The prototypes enclosing copies are made from, to detect cycles.
+    ancestors: BTreeSet<sdf::Path>,
+    prototype_index: Rc<PiPrototypeSceneIndex>,
+    rerooting: SceneIndexHandle,
+    /// Instancer (input path) to the copies of its prototypes.
+    subs: RefCell<BTreeMap<sdf::Path, Copies>>,
+}
+
+/// `index` re-rooted from `from` to `to`, or `index` itself for `/ → /`.
+fn rerooting(index: SceneIndexHandle, from: &sdf::Path, to: &sdf::Path) -> SceneIndexHandle {
+    if from.is_abs_root() && to.is_abs_root() {
+        index
+    } else {
+        RerootingSceneIndex::new(index, from.clone(), to.clone())
+    }
+}
+
+impl InstancerObserver {
+    fn new(
+        context: Rc<Context>,
+        instancer: Option<sdf::Path>,
+        prototype: sdf::Path,
+        propagated: sdf::Path,
+        ancestors: BTreeSet<sdf::Path>,
+    ) -> Rc<Self> {
+        let isolated = rerooting(context.input.clone(), &prototype, &prototype);
+        let prototype_index = PiPrototypeSceneIndex::new(isolated, instancer, prototype.clone());
+        let as_handle: SceneIndexHandle = prototype_index.clone();
+        let rerooting = rerooting(as_handle, &prototype, &propagated);
+        context
+            .merging
+            .add_input_scene(rerooting.clone(), propagated.clone());
+        let observer = Rc::new(Self {
+            context,
+            prototype,
+            propagated,
+            ancestors,
+            prototype_index,
+            rerooting,
+            subs: RefCell::new(BTreeMap::new()),
         });
-        let overrides = topology
-            .map(|t| vec![(Token::from(t::INSTANCER_TOPOLOGY), t)])
-            .unwrap_or_default();
-        Rc::new(Overridden { local, overrides })
+        let weak: Weak<dyn Observer> = Rc::downgrade(&(observer.clone() as Rc<dyn Observer>));
+        observer.prototype_index.add_observer(weak);
+        observer.populate();
+        observer
+    }
+
+    /// An instancer's path in the output.
+    fn rerooted(&self, instancer: &sdf::Path) -> sdf::Path {
+        if self.prototype == self.propagated {
+            return instancer.clone();
+        }
+        instancer
+            .replace_prefix(&self.prototype, &self.propagated)
+            .unwrap_or_else(|| instancer.clone())
+    }
+
+    /// `ForInstancer<hash>` for an instancer inside this prototype.
+    fn instancer_hash(&self, instancer: &sdf::Path) -> String {
+        let h = crate::tf_hash::combine_strings(&[instancer.as_str(), self.propagated.as_str()]);
+        format!("ForInstancer{h:x}")
+    }
+
+    fn prototypes_of(prim: &Prim) -> Vec<sdf::Path> {
+        let Some(data) = &prim.data else {
+            return Vec::new();
+        };
+        match locate(data, &Locator::new([t::INSTANCER_TOPOLOGY, t::PROTOTYPES])).and_then(|d| d.value()) {
+            Some(Value::PathVec(v)) => v,
+            _ => Vec::new(),
+        }
+    }
+
+    /// Makes the copies of `prototypes` for `instancer`, drops those of
+    /// prototypes it no longer targets, and points its topology at the
+    /// copies (`_UpdateInstancerPrototypes`).
+    fn update_instancer_prototypes(
+        &self,
+        copies: &mut Copies,
+        instancer: &sdf::Path,
+        prototypes: &[sdf::Path],
+    ) {
+        let rerooted_instancer = self.rerooted(instancer);
+        let hash = self.instancer_hash(instancer);
+        let targeted: BTreeSet<&sdf::Path> = prototypes.iter().collect();
+        let gone: Vec<sdf::Path> = copies.keys().filter(|p| !targeted.contains(p)).cloned().collect();
+        for prototype in gone {
+            self.context.prim_info.remove(&prototype, &hash);
+            copies.remove(&prototype);
+        }
+        let mut ancestors = self.ancestors.clone();
+        ancestors.insert(self.prototype.clone());
+        let mut propagated_prototypes = Vec::with_capacity(prototypes.len());
+        for prototype in prototypes {
+            if instancer.has_prefix(prototype) || self.ancestors.contains(prototype) {
+                // A cycle: UsdImaging warns and skips the prototype.
+                continue;
+            }
+            let Ok(propagated) = prototype.append_path(hash.as_str()) else {
+                continue;
+            };
+            propagated_prototypes.push(propagated.clone());
+            if !copies.contains_key(prototype) {
+                let observer = InstancerObserver::new(
+                    self.context.clone(),
+                    Some(rerooted_instancer.clone()),
+                    prototype.clone(),
+                    propagated.clone(),
+                    ancestors.clone(),
+                );
+                copies.insert(prototype.clone(), observer);
+                self.context.prim_info.add(prototype, &hash, &propagated);
+            }
+        }
+        let topology = RetainedContainer::new([(
+            t::INSTANCER_TOPOLOGY,
+            container([(t::PROTOTYPES, value(Value::PathVec(propagated_prototypes)))]),
+        )]);
+        self.context.instancers.add_prims([(
+            rerooted_instancer,
+            Prim::new(prim_type::INSTANCER, topology.into_handle()),
+        )]);
+    }
+
+    fn update_instancer(&self, instancer: &sdf::Path, prim: &Prim) {
+        let prototypes = Self::prototypes_of(prim);
+        let mut copies = self.subs.borrow_mut().remove(instancer).unwrap_or_default();
+        self.update_instancer_prototypes(&mut copies, instancer, &prototypes);
+        self.subs.borrow_mut().insert(instancer.clone(), copies);
+    }
+
+    /// Finds the instancers of this prototype, not those under another
+    /// instancer: a copy of that instancer's prototypes finds those.
+    fn populate(&self) {
+        let mut stack = vec![self.prototype.clone()];
+        while let Some(path) = stack.pop() {
+            let prim = self.prototype_index.prim(&path);
+            if prim.ty == prim_type::INSTANCER {
+                self.update_instancer(&path, &prim);
+                continue;
+            }
+            let mut children = self.prototype_index.children(&path);
+            children.reverse();
+            stack.extend(children);
+        }
+    }
+}
+
+impl Observer for InstancerObserver {
+    fn added(&self, _: &dyn SceneIndex, entries: &[Added]) {
+        for e in entries {
+            if e.ty == prim_type::INSTANCER {
+                let prim = self.prototype_index.prim(&e.path);
+                self.update_instancer(&e.path, &prim);
+            } else {
+                // Resynced and no longer an instancer.
+                let gone = self.subs.borrow_mut().remove(&e.path);
+                if gone.is_some() {
+                    drop(gone);
+                    self.context.instancers.remove_prims([self.rerooted(&e.path)]);
+                }
+            }
+        }
+    }
+
+    fn removed(&self, _: &dyn SceneIndex, entries: &[Removed]) {
+        if self.subs.borrow().is_empty() {
+            return;
+        }
+        let mut removed_instancers = Vec::new();
+        let mut gone = Vec::new();
+        {
+            let mut subs = self.subs.borrow_mut();
+            for e in entries {
+                let under: Vec<sdf::Path> = subs.keys().filter(|p| p.has_prefix(&e.path)).cloned().collect();
+                for instancer in under {
+                    removed_instancers.push(self.rerooted(&instancer));
+                    gone.extend(subs.remove(&instancer));
+                }
+            }
+        }
+        // The copies remove their inputs from the merging index as they go.
+        drop(gone);
+        if !removed_instancers.is_empty() {
+            self.context.instancers.remove_prims(removed_instancers);
+        }
+    }
+
+    fn dirtied(&self, _: &dyn SceneIndex, entries: &[Dirtied]) {
+        if self.subs.borrow().is_empty() {
+            return;
+        }
+        let prototypes = Locator::new([t::INSTANCER_TOPOLOGY, t::PROTOTYPES]);
+        for e in entries {
+            if !e.locators.contains(&prototypes) || !self.subs.borrow().contains_key(&e.path) {
+                continue;
+            }
+            let prim = self.prototype_index.prim(&e.path);
+            self.update_instancer(&e.path, &prim);
+        }
+    }
+
+    fn renamed(&self, sender: &dyn SceneIndex, entries: &[Renamed]) {
+        let removed: Vec<Removed> = entries.iter().map(|e| Removed { path: e.old.clone() }).collect();
+        self.removed(sender, &removed);
+        let added: Vec<Added> = entries
+            .iter()
+            .flat_map(|e| subtree(sender, &e.new))
+            .map(|path| {
+                let ty = sender.prim(&path).ty;
+                Added { path, ty }
+            })
+            .collect();
+        self.added(sender, &added);
+    }
+}
+
+impl Drop for InstancerObserver {
+    fn drop(&mut self) {
+        // RAII, as UsdImaging's: the instancers it overrode and the copies it
+        // made go, then its own input.
+        let subs = std::mem::take(self.subs.get_mut());
+        if !subs.is_empty() {
+            let instancers: Vec<sdf::Path> = subs.keys().map(|i| self.rerooted(i)).collect();
+            self.context.instancers.remove_prims(instancers);
+        }
+        drop(subs);
+        self.context.merging.remove_input_scene(&self.rerooting);
+    }
+}
+
+/// A scene index propagating point instancers' prototypes.
+pub struct PointInstancingSceneIndex {
+    context: Rc<Context>,
+    /// The whole stage's propagation, kept alive with the index.
+    _root: Rc<InstancerObserver>,
+    observers: Observers,
+}
+
+impl PointInstancingSceneIndex {
+    /// A point-instancing index over `input`.
+    pub fn new(input: SceneIndexHandle) -> Rc<Self> {
+        let merging = MergingSceneIndex::new();
+        let instancers = RetainedSceneIndex::new();
+        let prim_info = RetainedSceneIndex::new();
+        merging.add_input_scene(instancers.clone(), sdf::Path::abs_root());
+        merging.add_input_scene(prim_info.clone(), sdf::Path::abs_root());
+        let context = Rc::new(Context {
+            input,
+            instancers,
+            prim_info: PrimInfoIndex {
+                retained: prim_info,
+                sources: RefCell::new(BTreeMap::new()),
+            },
+            merging,
+        });
+        let root = InstancerObserver::new(
+            context.clone(),
+            None,
+            sdf::Path::abs_root(),
+            sdf::Path::abs_root(),
+            BTreeSet::new(),
+        );
+        let index = Rc::new(Self {
+            context,
+            _root: root,
+            observers: Observers::default(),
+        });
+        let weak: Weak<dyn Observer> = Rc::downgrade(&(index.clone() as Rc<dyn Observer>));
+        index.context.merging.add_observer(weak);
+        index
     }
 }
 
 impl SceneIndex for PointInstancingSceneIndex {
     fn prim(&self, path: &sdf::Path) -> Prim {
-        let model = self.model();
-        if model.is_scope(path) {
-            return Prim::new(
-                Token::default(),
-                crate::data_source::retained::RetainedContainer::default().into_handle(),
-            );
-        }
-        let Some((input, maps)) = self.data_at(&model, path) else {
-            return Prim::undefined();
-        };
-        let Some(local) = input.data else {
-            return input;
-        };
-        // The copies' path values name the copies, level by level.
-        let local = maps.iter().fold(local, |d, (from, to)| {
-            crate::filter::rerooting::rerooted(d, from, to)
-        });
-        let local = match model.instancers.iter().find(|i| i.path == *path) {
-            Some(instancer) => Self::with_copies(instancer, local),
-            None => local,
-        };
-        if model.unrenderable(path) {
-            // Drawn only through an instancer, or not at all under an
-            // `over`.
-            return make_unrenderable(Prim {
-                ty: input.ty,
-                data: Some(local),
-            });
-        }
-        let ty = input.ty;
-        let Some(step) = model.innermost(path) else {
-            return Prim {
-                ty,
-                data: Some(local),
-            };
-        };
-        let mut overrides: Vec<(Token, DataSource)> = vec![(
-            Token::from(t::INSTANCED_BY),
-            container([
-                (t::PATHS, value(Value::PathVec(vec![step.instancer.path.clone()]))),
-                (t::PROTOTYPE_ROOTS, value(Value::PathVec(vec![step.copy.clone()]))),
-            ]),
-        )];
-        if path == step.copy {
-            // The copy's root composes under the instancer's instances, not
-            // under its parent: its own transform, reset.
-            let mut entries = vec![(xform::RESET_XFORM_STACK, value(true))];
-            if let Some(matrix) = XformSchema::get(&local).and_then(|x| x.matrix()) {
-                entries.push((xform::MATRIX, DataSource::Sampled(matrix)));
-            }
-            overrides.push((Token::from(xform::XFORM), container(entries)));
-        }
-        Prim {
-            ty,
-            data: Some(Rc::new(Overridden { local, overrides })),
-        }
+        self.context.merging.prim(path)
     }
 
     fn children(&self, path: &sdf::Path) -> Vec<sdf::Path> {
-        let model = self.model();
-        let mut children = self.natural_children(&model, path);
-        children.extend(model.hosted(path).cloned());
-        children
+        self.context.merging.children(path)
     }
 
     fn add_observer(&self, observer: Weak<dyn Observer>) {
@@ -592,79 +682,18 @@ impl SceneIndex for PointInstancingSceneIndex {
 
 impl Observer for PointInstancingSceneIndex {
     fn added(&self, _: &dyn SceneIndex, entries: &[Added]) {
-        let old = self.model.borrow_mut().take();
-        let model = self.model();
-        // A prim under an instancer or an `over` is added unrenderable.
-        let entries: Vec<Added> = entries
-            .iter()
-            .map(|e| Added {
-                path: e.path.clone(),
-                ty: if is_renderable(&e.ty) && model.unrenderable(&e.path) {
-                    Token::default()
-                } else {
-                    e.ty.clone()
-                },
-            })
-            .collect();
-        self.observers.send_added(self, &entries);
-        self.resync(old);
+        self.observers.send_added(self, entries);
     }
 
     fn removed(&self, _: &dyn SceneIndex, entries: &[Removed]) {
-        let old = self.model.borrow_mut().take();
         self.observers.send_removed(self, entries);
-        self.resync(old);
     }
 
     fn dirtied(&self, _: &dyn SceneIndex, entries: &[Dirtied]) {
-        let topology = Locator::new([t::INSTANCER_TOPOLOGY]);
-        if entries.iter().any(|e| e.locators.intersects(&topology)) {
-            let old = self.model.borrow_mut().take();
-            self.resync(old);
-        }
-        let model = self.model();
-        // A prototype's edits reach its copies, nested ones included.
-        let out: Vec<Dirtied> = entries
-            .iter()
-            .flat_map(|e| {
-                model.outputs(&e.path).into_iter().map(|path| Dirtied {
-                    path,
-                    locators: e.locators.clone(),
-                })
-            })
-            .collect();
-        self.observers.send_dirtied(self, &out);
+        self.observers.send_dirtied(self, entries);
     }
 
     fn renamed(&self, _: &dyn SceneIndex, entries: &[Renamed]) {
-        let old = self.model.borrow_mut().take();
         self.observers.send_renamed(self, entries);
-        self.resync(old);
-    }
-}
-
-/// A container with some members replaced.
-struct Overridden {
-    local: ContainerHandle,
-    overrides: Vec<(Token, DataSource)>,
-}
-
-impl Container for Overridden {
-    fn names(&self) -> Vec<Token> {
-        let mut names = self.local.names();
-        for (name, _) in &self.overrides {
-            if !names.contains(name) {
-                names.push(name.clone());
-            }
-        }
-        names
-    }
-
-    fn get(&self, name: &Token) -> Option<DataSource> {
-        self.overrides
-            .iter()
-            .find(|(n, _)| n == name)
-            .map(|(_, s)| s.clone())
-            .or_else(|| self.local.get(name))
     }
 }
