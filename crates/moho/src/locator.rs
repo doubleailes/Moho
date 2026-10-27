@@ -64,6 +64,15 @@ impl Locator {
     pub fn intersects(&self, other: &Locator) -> bool {
         self.has_prefix(other) || other.has_prefix(self)
     }
+
+    /// This locator with `old` replaced by `new` when it begins with `old`,
+    /// else itself (`HdDataSourceLocator::ReplacePrefix`).
+    pub fn replace_prefix(&self, old: &Locator, new: &Locator) -> Self {
+        if !self.has_prefix(old) {
+            return self.clone();
+        }
+        Self(new.0.iter().chain(&self.0[old.0.len()..]).cloned().collect())
+    }
 }
 
 impl fmt::Display for Locator {
@@ -136,6 +145,13 @@ impl LocatorSet {
         self.0.is_empty()
     }
 
+    /// Every member with `old` replaced by `new` where it begins with `old`
+    /// (`HdDataSourceLocatorSet::ReplacePrefix`): a member that only covers
+    /// `old` is kept as it is.
+    pub fn replace_prefix(&self, old: &Locator, new: &Locator) -> Self {
+        self.0.iter().map(|l| l.replace_prefix(old, new)).collect()
+    }
+
     /// The members, in order.
     pub fn iter(&self) -> impl Iterator<Item = &Locator> {
         self.0.iter()
@@ -180,6 +196,20 @@ mod tests {
         assert!(set.intersects(&l("primvars")));
         assert!(!set.contains(&l("primvars")));
         assert!(!set.intersects(&l("primvars/normals")));
+    }
+
+    #[test]
+    fn replacing_a_prefix_keeps_what_covers_it() {
+        let set: LocatorSet = [l("usdMaterialBindings/preview"), l("xform")]
+            .into_iter()
+            .collect();
+        let replaced = set.replace_prefix(&l("usdMaterialBindings"), &l("materialBindings"));
+        assert_eq!(
+            replaced.iter().collect::<Vec<_>>(),
+            [&l("materialBindings/preview"), &l("xform")]
+        );
+        let universal = LocatorSet::universal().replace_prefix(&l("usdMaterialBindings"), &l("m"));
+        assert!(universal.is_universal());
     }
 
     #[test]

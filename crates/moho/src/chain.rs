@@ -15,8 +15,9 @@ use crate::tokens::material_bindings;
 /// propagation, native instancer propagation (which flattens the stage and
 /// each prototype), instance proxy path translation (of
 /// `usdMaterialBindings`), material binding resolving, render settings
-/// flattening, then light linking. The stage index answers collection membership for
-/// material binding resolving and light linking.
+/// flattening, then light linking. Binding collections are judged over the
+/// scene index, as UsdImaging judges them; the stage index answers
+/// collection membership for light linking until `hydra-parity-chain`.
 ///
 /// Up to binding resolving this is `UsdImagingCreateSceneIndices`' order
 /// with `addDrawModeSceneIndex = false`; `hydra-parity-chain` moves light
@@ -29,7 +30,7 @@ pub fn standard(stage: Rc<StageSceneIndex>) -> SceneIndexHandle {
     // Bindings may name prims inside native instances.
     let proxies =
         InstanceProxyPathTranslationSceneIndex::new(native, [material_bindings::USD_MATERIAL_BINDINGS]);
-    let bindings = MaterialBindingResolvingSceneIndex::new(proxies, Some(membership.clone()));
+    let bindings = MaterialBindingResolvingSceneIndex::new(proxies);
     let settings = RenderSettingsFlatteningSceneIndex::new(bindings);
     LightLinkingSceneIndex::new(settings, Some(membership))
 }

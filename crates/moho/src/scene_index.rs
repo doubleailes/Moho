@@ -101,9 +101,9 @@ pub trait SceneIndex {
 /// A shared scene index handle.
 pub type SceneIndexHandle = Rc<dyn SceneIndex>;
 
-/// Answers whether a USD collection includes a path, for filters that
-/// resolve collection-based data (material bindings, light linking) without
-/// a stage of their own. `StageSceneIndex` answers through openusd's
+/// Answers whether a USD collection includes a path, for light linking
+/// without a stage of its own (material binding resolving judges collections
+/// over the scene index, as UsdImaging). `StageSceneIndex` answers through openusd's
 /// membership query, membership expressions and their predicates included.
 pub trait CollectionMembership {
     /// Whether the collection `name` on `collection_prim` includes `path`,
