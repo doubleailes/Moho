@@ -320,31 +320,6 @@ impl StageSceneIndex {
             added.extend(now);
         }
         let mut dirty: BTreeMap<sdf::Path, LocatorSet> = BTreeMap::new();
-        if pending.stage_metadata && !roots.iter().any(|r| r.is_abs_root()) {
-            dirty
-                .entry(sdf::Path::abs_root())
-                .or_default()
-                .insert_set(&LocatorSet::from_iter([
-                    Locator::new([crate::tokens::scene_globals::SCENE_GLOBALS]),
-                    Locator::new([crate::tokens::usd::STAGE_METADATA]),
-                ]));
-        }
-        // A prim's own metadata changed: of what Moho exposes, only its kind
-        // can change without a resync.
-        //
-        // Workaround, an upstream candidate in `ROADMAP.md`: openusd's
-        // commit notice names info-only paths but not their changed fields
-        // (C++ `GetChangedFields`), so every such prim is dirtied for its
-        // kind, whichever field changed.
-        for prim in &pending.updated_prims {
-            if roots.iter().any(|r| prim.has_prefix(r)) || !self.populated.borrow().contains(prim) {
-                continue;
-            }
-            dirty.entry(prim.clone()).or_default().insert(Locator::new([
-                crate::tokens::usd_prim_info::USD_PRIM_INFO,
-                crate::tokens::usd_prim_info::KIND,
-            ]));
-        }
         // A shader or node graph resynced (added, removed, replaced) changes
         // the network of the material that represents it.
         for root in &roots {
