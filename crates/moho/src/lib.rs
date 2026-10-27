@@ -20,6 +20,7 @@ pub mod collection;
 pub mod data_source;
 pub mod filter;
 pub mod locator;
+pub mod prim_managing;
 pub mod scene_index;
 pub mod schema;
 pub mod stage;
