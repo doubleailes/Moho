@@ -59,14 +59,17 @@ cargo test --workspace        # everything
 ## Boundaries
 
 - **openusd only** (openusd and openusd-schemas, one rev). Moho never depends
-  on Mantle, Crust or Obsidian, and holds none of their types. Adapters
-  (Mantle's `ChangeSet` to a mirror stage, a renderer's import) live in the
-  consumers.
-- **Hydra 2.0's model and names.** Schemas, filters and the standard chain
-  (`moho::chain::standard`) follow UsdImaging. Moho's one addition is the
-  generic data (`__usdAttributes`, `__usdRelationships`, and the root's
-  `__usdStageMetadata`); anything else Hydra lacks is argued in the change
-  that adds it.
+  on a consumer (the DCC that feeds it, the renderers that read it), and
+  holds none of their types. Adapters (a DCC's changes to a mirror stage, a
+  renderer's import) live in the consumers. Crate docs and comments name no
+  consumer.
+- **Hydra parity.** UsdImaging's and Hydra's chain order
+  (`moho::chain::standard` is `UsdImagingCreateSceneIndices`'), prim paths,
+  schema and token names, data layout and dirty locators, at the reference
+  revision, quirks included; behaviour Hydra lacks is dropped. The only
+  addition is the generic attribute data (`__usdAttributes`,
+  `__usdRelationships`). A renderer's fix over Hydra is a renderer filter
+  of its own (`moho::chain::renderer_filters`), not a change to Moho.
 - **The consumer decides.** Moho reports what changed (dirty locators). It
   never decides whether a renderer can update in place.
 
@@ -95,4 +98,8 @@ cargo test --workspace        # everything
 - `moho` re-exports `openusd` (`moho::openusd`) and `openusd-schemas`
   (`moho::openusd_schemas`) from the same rev: the only way consumers reach
   openusd. openusd-schemas is part of the openusd project, so depending on it
-  keeps Moho "openusd only".
+  keeps Moho "openusd only". The re-exports and feature forwarding are a
+  downstream policy for the stack's single pin: they change no Hydra
+  behaviour, and if Moho moves into openusd's workspace as `openusd-imaging`
+  they move to a thin downstream crate (or consumers depend on openusd at
+  the same rev).

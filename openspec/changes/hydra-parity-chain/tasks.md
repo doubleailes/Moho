@@ -55,6 +55,6 @@
 
 - [ ] 7.1 `docs/architecture.md`: the chain in Hydra's order (correcting the old claim), renderer filters by phase, the Hydra 2.0 consumer path, the principle (quirks reproduced; renderer fixes are renderer filters), generic data as the only addition
 - [x] 7.2 Remove Crust, Mantle, Moana and gap ids (M1–M12) from crate docs and comments (`lib.rs`, module docs, comments in `filter/` and `stage/`), keeping openusd workaround comments
-- [ ] 7.3 `CLAUDE.md` Boundaries: "Hydra parity; the only addition is generic attribute data" (design D7); the openusd section notes the re-export policy as downstream (design D6)
+- [x] 7.3 `CLAUDE.md` Boundaries: "Hydra parity; the only addition is generic attribute data" (design D7); the openusd section notes the re-export policy as downstream (design D6)
 - [ ] 7.4 `ROADMAP.md`: upstream candidates refreshed (drop `CollectionEvaluator::build` and the merged light-link predicates item; keep changed fields, `Value::Path`, `MakeRelativePath`, rule-map expressions); "Later": draw mode, locator caching, selection, coordinate systems; the Moho-as-`openusd-imaging` item with the re-export note
 - [ ] 7.5 At archive, edit the Purpose lines of `openspec/specs/filtering-scene-indices` and `instancing-schemas` that mention chunks and streaming
