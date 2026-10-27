@@ -7,7 +7,10 @@
 //! `strongerThanDescendants` wins; otherwise the deepest wins. On one prim, a
 //! collection binding whose collection includes the prim beats its direct
 //! binding. Membership comes from a [`CollectionMembership`] oracle (the
-//! stage scene index); without one, no collection binding applies.
+//! stage scene index) when one is given. Without one, it is judged as
+//! UsdImaging judges it: the collection prim's
+//! `collections/<name>/membershipExpression` in the input scene index,
+//! evaluated over the input by a [`CollectionExpressionEvaluator`].
 
 use std::cell::RefCell;
 use std::collections::{BTreeSet, HashMap};
@@ -16,15 +19,16 @@ use std::rc::{Rc, Weak};
 use openusd::sdf::{self, Value};
 use openusd::tf::Token;
 
+use crate::collection::CollectionExpressionEvaluator;
 use crate::data_source::retained::{container, value};
-use crate::data_source::{Container, ContainerHandle, DataSource};
+use crate::data_source::{Container, ContainerHandle, DataSource, locate};
 use crate::locator::Locator;
 use crate::scene_index::{
     Added, CollectionMembership, Dirtied, Observer, Observers, Prim, Removed, Renamed, SceneIndex,
     SceneIndexHandle,
 };
 use crate::schema::{as_token, member_container, member_value};
-use crate::tokens::material_bindings as t;
+use crate::tokens::{collections, material_bindings as t};
 
 /// A scene index adding each prim's resolved `materialBindings`. Its input is
 /// expected to be flattened, so that `usdMaterialBindings` lists the
@@ -114,18 +118,33 @@ impl Resolved {
                 .or_default()
                 .insert(self.path.clone());
         }
-        // Membership comes from the stage's oracle, until
-        // `hydra-parity-materials` judges the collection's expression over
-        // the input scene index, as UsdImaging does.
         let (Some(index), Some(prim), Some(name)) = (self.index.upgrade(), &collection_prim, &name) else {
             return false;
         };
-        let Some(membership) = &index.membership else {
+        // The stage's oracle when given, until `hydra-parity-materials`
+        // judges every collection over the input scene index.
+        if let Some(membership) = &index.membership {
+            return membership
+                .includes(prim, name.as_str(), &self.path)
+                .unwrap_or(false);
+        }
+        // As UsdImaging's `_ComputeResolveInfo`: the collection's
+        // expression from the input scene index, evaluated over it; a
+        // collection without one includes nothing.
+        let expression = index.input.prim(prim).data.and_then(|data| {
+            locate(
+                &data,
+                &Locator::new([
+                    collections::COLLECTIONS,
+                    name.as_str(),
+                    collections::MEMBERSHIP_EXPRESSION,
+                ]),
+            )
+        });
+        let Some(Value::PathExpression(expression)) = expression.and_then(|d| d.value()) else {
             return false;
         };
-        membership
-            .includes(prim, name.as_str(), &self.path)
-            .unwrap_or(false)
+        CollectionExpressionEvaluator::new(&expression).matches(index.input.as_ref(), &self.path)
     }
 
     /// The material one purpose resolves to.

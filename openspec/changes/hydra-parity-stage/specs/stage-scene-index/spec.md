@@ -144,7 +144,7 @@ is written by point instancer propagation).
 A prim SHALL carry the model data UsdImaging gives it:
 - `model` (`UsdImagingModelSchema`): `modelPath`, `assetIdentifier`, `assetName` and `assetVersion`, on a prim that is a model;
 - `geomModel` (`UsdImagingGeomModelSchema`): the `GeomModelAPI` draw mode attributes, on a prim that applies it, with `applyDrawMode` set as UsdImaging's GeomModelAPI adapter sets it;
-- `extentsHint` (`UsdImagingExtentsHintSchema`): the authored `extentsHint`, one range per purpose in its order.
+- `extentsHint` (`UsdImagingExtentsHintSchema`): the authored `extentsHint`, one range per purpose in its order, as many ranges as its value at the index's time holds.
 
 #### Scenario: An asset
 - **WHEN** a `component` prim authors `assetInfo` with an identifier and a name
@@ -153,6 +153,10 @@ A prim SHALL carry the model data UsdImaging gives it:
 #### Scenario: An extents hint
 - **WHEN** a model authors `extentsHint` for the purposes default and render
 - **THEN** its `extentsHint` gives one range for `geometry` and one for `render`
+
+#### Scenario: An animated extents hint
+- **WHEN** a prim authors `extentsHint` as time samples only, one range at one time and two at another
+- **THEN** its `extentsHint` names one purpose at the first time and two at the second
 
 ### Requirement: Adapter data follows UsdImaging
 For each prim type the index exposes, the data names, the data layout under

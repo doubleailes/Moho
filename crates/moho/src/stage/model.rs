@@ -49,10 +49,13 @@ struct ExtentsHint {
 }
 
 impl ExtentsHint {
+    /// The ranges the hint holds at the index's time, as
+    /// `UsdImagingDataSourceExtentsHint` counts them from its attribute data
+    /// source at offset 0.
     fn count(&self) -> usize {
         let pairs = self
             .attribute
-            .get::<Value>()
+            .get_at::<Value>(self.ctx.globals.time())
             .ok()
             .flatten()
             .and_then(|v| v.array_len())

@@ -86,12 +86,17 @@ struct Chain {
 }
 
 fn chain() -> Chain {
+    chain_with(true)
+}
+
+fn chain_with(oracle: bool) -> Chain {
     let (dir, usd) = stage(SCENE);
     let stage_index = StageSceneIndex::new();
     stage_index.set_stage(usd);
     let flat = FlatteningSceneIndex::new(stage_index.clone());
-    let oracle: Rc<dyn CollectionMembership> = stage_index.clone();
-    let resolved = MaterialBindingResolvingSceneIndex::new(flat, Some(oracle));
+    let oracle: Option<Rc<dyn CollectionMembership>> =
+        oracle.then(|| stage_index.clone() as Rc<dyn CollectionMembership>);
+    let resolved = MaterialBindingResolvingSceneIndex::new(flat, oracle);
     Chain {
         _dir: dir,
         stage: stage_index,
@@ -132,6 +137,59 @@ fn inherited_strong_deep_and_collection() {
         Some(p("/Looks/red")),
         "not in the collection"
     );
+}
+
+#[test]
+fn without_an_oracle_the_input_judges_membership() {
+    // As UsdImaging: the collection's `membershipExpression` in the input
+    // scene index, evaluated over it.
+    let chain = chain_with(false);
+    assert_eq!(bound(&chain, "/coll/geo", ""), Some(p("/Looks/chrome")));
+    assert_eq!(bound(&chain, "/coll/other", ""), Some(p("/Looks/red")));
+}
+
+#[test]
+fn without_an_oracle_hydra_predicates_apply() {
+    // Hydra's collection predicates judge the input's prims: only the mesh
+    // is in `/world//{hdType:mesh}`.
+    let (_dir, usd) = stage(
+        r#"#usda 1.0
+def Xform "world" (
+    prepend apiSchemas = ["MaterialBindingAPI", "CollectionAPI:meshes"]
+)
+{
+    pathExpression collection:meshes:membershipExpression = "/world//{hdType:mesh}"
+    rel material:binding = </Looks/red>
+    rel material:binding:collection:chrome = [</world.collection:meshes>, </Looks/chrome>]
+    def Mesh "geo"
+    {
+    }
+    def Xform "group"
+    {
+    }
+}
+def Scope "Looks"
+{
+    def Material "red"
+    {
+    }
+    def Material "chrome"
+    {
+    }
+}
+"#,
+    );
+    let stage_index = StageSceneIndex::new();
+    stage_index.set_stage(usd);
+    let flat = FlatteningSceneIndex::new(stage_index.clone());
+    let resolved = MaterialBindingResolvingSceneIndex::new(flat, None);
+    let chain = Chain {
+        _dir,
+        stage: stage_index,
+        resolved,
+    };
+    assert_eq!(bound(&chain, "/world/geo", ""), Some(p("/Looks/chrome")));
+    assert_eq!(bound(&chain, "/world/group", ""), Some(p("/Looks/red")));
 }
 
 #[test]
