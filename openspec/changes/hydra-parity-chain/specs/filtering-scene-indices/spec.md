@@ -14,15 +14,16 @@ the inputs' children, in no specified order.
 - **THEN** reading `/world/elem` gives the first input's data where both define it, and the second's elsewhere
 
 ### Requirement: Adding and removing an input
-Adding an input SHALL notify added the strict ancestors of its root, its
-root, and every descendant its input lists, whether or not the input
-defines it, each with its merged type. Removing an input SHALL walk the
+Adding an input SHALL notify added its root and every descendant its input
+lists, whether or not the input defines it, each with its merged type; the
+strict ancestors of its root are not notified (`HdMergingSceneIndex`'s
+`_AddStrictPrefixesOfSceneRoots` skips every valid root). Removing an input SHALL walk the
 removed input's prims and notify added those another input still holds and
 removed the others.
 
 #### Scenario: An input comes and goes
 - **WHEN** an input rooted at `/world/elem` is added and later removed, over another input holding `/world/elem` but not its children
-- **THEN** adding notifies `/world`, `/world/elem` and every descendant the first input lists added; removing notifies those descendants removed and `/world/elem` added from the other input
+- **THEN** adding notifies `/world/elem` and every descendant the first input lists added; removing notifies those descendants removed and `/world/elem` added from the other input
 
 #### Scenario: An undefined root
 - **WHEN** an input whose index does not define its root `/w` is added
