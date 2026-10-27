@@ -380,3 +380,85 @@ fn a_prototype_inside_a_native_instance_is_copied_from_its_propagated_prototype(
     assert!(chain.children(&scope).contains(copy));
     assert_eq!(chain.prim(&scope).ty, "");
 }
+
+#[test]
+fn a_proxy_prototype_coming_and_going_notifies_its_scope() {
+    use moho::scene_index::testing::{Notice, RecordingObserver};
+
+    let (_dir, usd) = stage(PROXY_PROTOTYPES);
+    let stage_index = StageSceneIndex::new();
+    stage_index.set_stage(usd);
+    let chain = moho::chain::standard(stage_index.clone());
+    let coral = p("/world/coral");
+    let Some(Value::PathVec(copies)) = read(chain.as_ref(), &coral, "instancerTopology/prototypes") else {
+        panic!()
+    };
+    let scope = copies[0].parent().unwrap();
+    let recorder = RecordingObserver::on(chain.as_ref());
+
+    // Retarget the prototype outside the instance: the scope goes.
+    let usd = stage_index.stage().unwrap();
+    usd.define_typed_prim("/world/coral/Prototypes/plain", "Mesh")
+        .unwrap();
+    usd.relationship("/world/coral.prototypes")
+        .unwrap()
+        .set_targets([p("/world/coral/Prototypes/plain")])
+        .unwrap();
+    stage_index.apply_pending_updates();
+    let notices = recorder.take();
+    assert!(
+        notices
+            .iter()
+            .any(|n| matches!(n, Notice::Removed(r) if scope.has_prefix(&r.path))),
+        "the scope is removed: {notices:?}"
+    );
+    assert!(!chain.children(&coral).contains(&scope));
+
+    // Back inside the instance: the scope comes back, added.
+    usd.relationship("/world/coral.prototypes")
+        .unwrap()
+        .set_targets([p("/world/coral/Prototypes/staghorn/geo")])
+        .unwrap();
+    stage_index.apply_pending_updates();
+    let notices = recorder.take();
+    assert!(
+        notices
+            .iter()
+            .any(|n| matches!(n, Notice::Added(a) if a.path == scope)),
+        "the scope is added: {notices:?}"
+    );
+    assert!(chain.children(&coral).contains(&scope));
+}
+
+#[test]
+fn an_authored_child_named_like_the_scope_keeps_its_prim() {
+    use std::hash::{DefaultHasher, Hash, Hasher};
+
+    // The scope the filter would name: ForInstancer<hash of the instancer>.
+    let mut h = DefaultHasher::new();
+    "/world/coral".hash(&mut h);
+    let name = format!("ForInstancer{:016x}", h.finish());
+    let text = PROXY_PROTOTYPES.replace(
+        "        def Scope \"Prototypes\"",
+        &format!("        def Mesh \"{name}\"\n        {{\n        }}\n        def Scope \"Prototypes\""),
+    );
+    let (_dir, usd) = stage(&text);
+    let stage_index = StageSceneIndex::new();
+    stage_index.set_stage(usd);
+    let chain = moho::chain::standard(stage_index);
+    let coral = p("/world/coral");
+    let authored = coral.append_path(name.as_str()).unwrap();
+    let Some(Value::PathVec(copies)) = read(chain.as_ref(), &coral, "instancerTopology/prototypes") else {
+        panic!()
+    };
+    let scope = copies[0].parent().unwrap();
+    assert_ne!(scope, authored, "the scope takes another name");
+    assert!(
+        chain.prim(&authored).is_defined(),
+        "the authored prim is still there"
+    );
+    let children = chain.children(&coral);
+    assert_eq!(children.iter().filter(|c| **c == authored).count(), 1);
+    assert!(children.contains(&scope));
+    assert_eq!(chain.prim(&copies[0]).ty, "mesh");
+}

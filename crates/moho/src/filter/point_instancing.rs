@@ -268,11 +268,25 @@ impl PointInstancingSceneIndex {
     /// under the propagated prototype (whose instances would draw them).
     fn add_instancer(&self, model: &mut Model, mut instancer: Instancer) {
         let mut scope_children = Vec::new();
+        // `I/ForInstancer<hash>`, or `ForInstancer<hash>_<n>` should the
+        // instancer already have a child of that name.
+        let taken = self.natural_children(model, &instancer.path);
         let scope = instancer
             .copies
             .first()
             .and_then(|(copy, _)| copy.name())
-            .and_then(|suffix| instancer.path.append_path(suffix).ok());
+            .and_then(|suffix| {
+                (0..)
+                    .map(|n| {
+                        if n == 0 {
+                            suffix.to_owned()
+                        } else {
+                            format!("{suffix}_{n}")
+                        }
+                    })
+                    .filter_map(|name| instancer.path.append_path(name.as_str()).ok())
+                    .find(|candidate| !taken.contains(candidate))
+            });
         for (i, (copy, original)) in instancer.copies.iter_mut().enumerate() {
             if self.data_in(model, original).is_some() {
                 continue;
@@ -352,12 +366,18 @@ impl PointInstancingSceneIndex {
         model
     }
 
-    /// Every prim of every copy, parents first.
+    /// Every prim of every copy, and the scopes holding proxy copies,
+    /// parents first.
     fn copy_paths(&self, model: &Model) -> Vec<sdf::Path> {
         let mut out = std::collections::BTreeSet::new();
         for instancer in &model.instancers {
-            for (copy, _) in &instancer.copies {
-                let mut stack = vec![copy.clone()];
+            let roots = instancer
+                .copies
+                .iter()
+                .map(|(copy, _)| copy)
+                .chain(model.extra_children.get(&instancer.path).into_iter().flatten());
+            for root in roots {
+                let mut stack = vec![root.clone()];
                 while let Some(path) = stack.pop() {
                     if !out.insert(path.clone()) {
                         continue;
@@ -377,7 +397,15 @@ impl PointInstancingSceneIndex {
             .flat_map(|m| {
                 m.instancers
                     .iter()
-                    .flat_map(|i| i.copies.iter().map(|(c, _)| Removed { path: c.clone() }))
+                    .flat_map(|i| {
+                        // The scopes holding proxy copies go with them.
+                        i.copies
+                            .iter()
+                            .map(|(c, _)| c)
+                            .chain(m.extra_children.get(&i.path).into_iter().flatten())
+                            .map(|path| Removed { path: path.clone() })
+                    })
+                    .collect::<Vec<_>>()
             })
             .collect();
         let new = self.model();
