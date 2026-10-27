@@ -249,3 +249,34 @@ the same step. No rollback beyond reverting the rev.
   pass's output and skips their descendants, the point instancing filter
   propagates an instancer strictly under another instancer or an `over`
   only through the copies holding it, not at its own path.
+- **D8, `instantaneousShutter` at the stage index.** UsdImaging's
+  `_DataSourceRenderSettings` and `_DataSourceRenderProduct` name
+  `UsdRender*::GetSchemaAttributeNames(true)`, which includes the
+  settings base's `instantaneousShutter`
+  (`dataSourceRenderPrims.cpp`, `usdRender/settingsBase.cpp`). The stage
+  index follows that code, so `__usdRenderSettings/instantaneousShutter`
+  stays (a product's only when authored, as its other settings-base
+  attributes); it is gone from the flattened `renderSettings`, which holds
+  `HdRenderSettingsSchema`'s fields only. A minor departure from task 2.8's
+  wording, in favour of the reference code.
+- **D8, flattening details reproduced.** A product's settings-base
+  attribute is answered only when authored (so the flattening takes the
+  settings'); `camera` is the first forwarded target (absent when none);
+  a var's `sourceName` is flattened to a token; `renderPass` lists only
+  `passType` and `renderSource` (the first forwarded target), and other
+  pass properties dirty nothing; `namespacedSettings` lists authored
+  attributes whose name (less `outputs:`) is namespaced, and the four
+  `ri:` relationships with authored targets, as UsdImaging does. Not
+  reproduced: `_RenderSettingsDataSource::Get` falling back to the prim's
+  own data for any other name.
+- **D8, dirtying without `__dependencies`.** Until `hydra-parity-chain`
+  emits `__dependencies`, the flattening filter sends what UsdImaging's
+  declared dependencies would make a forwarding index send: a settings
+  edit of `__usdRenderSettings/<member>` dirties the `renderSettings`
+  fields that read it (`resolution`, aspect and data window:
+  `renderSettings/renderProducts`; `camera`, motion blur and depth of
+  field: their own field and `renderProducts`), and an edit of an
+  included product's `__usdRenderProduct` or var's `__usdRenderVar`
+  dirties `renderSettings/renderProducts`, not the whole `renderSettings`.
+  A `products` edit dirties `renderProducts` (UsdImaging rebuilds
+  `__dependencies` only).

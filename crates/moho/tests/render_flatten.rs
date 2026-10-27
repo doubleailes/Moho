@@ -57,10 +57,27 @@ fn settings_with_products() {
     assert_eq!(read(&s, "camera"), Some(Value::PathVec(vec![p("/cam")])));
     assert_eq!(
         read(&s, "resolution"),
-        Some(Value::Vec2i(gf::Vec2i { x: 1920, y: 1080 }))
+        None,
+        "not a field of HdRenderSettingsSchema: it reaches the products"
+    );
+    let mut names = s.names();
+    names.sort();
+    assert_eq!(
+        names,
+        [
+            "camera",
+            "disableDepthOfField",
+            "disableMotionBlur",
+            "includedPurposes",
+            "materialBindingPurposes",
+            "namespacedSettings",
+            "renderProducts",
+            "renderingColorSpace",
+        ]
+        .map(moho::openusd::tf::Token::from)
     );
     assert_eq!(
-        read(&s, "namespacedSettings/crust:samplesPerPixel"),
+        read(&s, "namespacedSettings/myRenderer:samplesPerPixel"),
         Some(Value::Int(64))
     );
     assert_eq!(
@@ -111,9 +128,9 @@ fn vars_in_order() {
     let beauty = element(&settings(&flat), "renderProducts", 0);
     let color = element(&beauty, "renderVars", 0);
     let depth = element(&beauty, "renderVars", 1);
-    assert_eq!(read(&color, "sourceName"), Some(Value::String("Ci".into())));
+    assert_eq!(read(&color, "sourceName"), Some(Value::Token("Ci".into())));
     assert_eq!(read(&color, "dataType"), Some(Value::Token("color3f".into())));
-    assert_eq!(read(&depth, "sourceName"), Some(Value::String("z".into())));
+    assert_eq!(read(&depth, "sourceName"), Some(Value::Token("z".into())));
     assert_eq!(
         read(&color, "path"),
         Some(Value::PathVec(vec![p("/Render/color")]))
@@ -134,11 +151,41 @@ fn a_var_change_dirties_its_settings() {
     stage_index.apply_pending_updates();
     let notices = recorder.take();
     assert!(
-        notices.iter().any(|n| matches!(n, Notice::Dirtied(d) if d.path == p("/Render/settings") && d.locators.contains(&Locator::parse("renderSettings")))),
+        notices.iter().any(|n| matches!(n, Notice::Dirtied(d) if d.path == p("/Render/settings") && d.locators.contains(&Locator::parse("renderSettings/renderProducts")))),
         "{notices:?}"
     );
     let depth = element(&element(&settings(&flat), "renderProducts", 0), "renderVars", 1);
-    assert_eq!(read(&depth, "sourceName"), Some(Value::String("Z".into())));
+    assert_eq!(read(&depth, "sourceName"), Some(Value::Token("Z".into())));
+}
+
+#[test]
+fn a_settings_edit_dirties_the_fields_that_read_it() {
+    let (_dir, stage_index, flat) = setup();
+    let recorder = RecordingObserver::on(flat.as_ref());
+    stage_index
+        .stage()
+        .unwrap()
+        .attribute("/Render/settings.resolution")
+        .unwrap()
+        .set(gf::Vec2i { x: 640, y: 480 })
+        .unwrap();
+    stage_index.apply_pending_updates();
+    let notices = recorder.take();
+    let dirty: Vec<_> = notices
+        .iter()
+        .filter_map(|n| match n {
+            Notice::Dirtied(d) if d.path == p("/Render/settings") => Some(d.locators.clone()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(dirty.len(), 1, "{notices:?}");
+    assert!(dirty[0].contains(&Locator::parse("renderSettings/renderProducts")));
+    assert!(!dirty[0].contains(&Locator::parse("renderSettings/camera")));
+    let beauty = element(&settings(&flat), "renderProducts", 0);
+    assert_eq!(
+        read(&beauty, "resolution"),
+        Some(Value::Vec2i(gf::Vec2i { x: 640, y: 480 }))
+    );
 }
 
 #[test]
@@ -156,7 +203,7 @@ fn removing_and_adding_a_product_dirties_its_settings() {
     let (_dir, stage_index, flat) = setup();
     let recorder = RecordingObserver::on(flat.as_ref());
     let dirtied = |notices: &[Notice]| {
-        notices.iter().any(|n| matches!(n, Notice::Dirtied(d) if d.path == p("/Render/settings") && d.locators.contains(&Locator::parse("renderSettings"))))
+        notices.iter().any(|n| matches!(n, Notice::Dirtied(d) if d.path == p("/Render/settings") && d.locators.contains(&Locator::parse("renderSettings/renderProducts"))))
     };
     let usd = stage_index.stage().unwrap();
     usd.remove_prim("/Render/aovs").unwrap();
