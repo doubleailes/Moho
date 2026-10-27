@@ -346,32 +346,59 @@ impl Flattened {
         }
     }
 
+    /// `UsdImagingFlattenedMaterialBindingsDataSourceProvider`: the prim's
+    /// opinions or its parent's alone where only one has any, else both
+    /// per purpose, the parent's first.
     fn material_bindings(&self) -> Option<DataSource> {
         let local = member_container(&self.local, material_bindings::USD_MATERIAL_BINDINGS);
         let parent = self
             .parent()
             .and_then(|p| member_container(&p, material_bindings::USD_MATERIAL_BINDINGS));
-        if local.is_none() && parent.is_none() {
-            return None;
+        match (local, parent) {
+            (None, None) => None,
+            (Some(only), None) | (None, Some(only)) => Some(DataSource::Container(only)),
+            (Some(local), Some(parent)) => Some(DataSource::Container(Rc::new(FlattenedBindings {
+                local,
+                parent,
+            }))),
         }
-        let mut purposes: Vec<Token> = Vec::new();
-        for c in [&parent, &local].into_iter().flatten() {
-            for name in c.names() {
-                if !purposes.contains(&name) {
-                    purposes.push(name);
-                }
+    }
+}
+
+/// A prim's binding opinions after its ancestors' (`_MaterialBindingsDataSource`).
+struct FlattenedBindings {
+    local: ContainerHandle,
+    parent: ContainerHandle,
+}
+
+impl Container for FlattenedBindings {
+    /// The purposes either names.
+    fn names(&self) -> Vec<Token> {
+        let mut purposes = self.parent.names();
+        for name in self.local.names() {
+            if !purposes.contains(&name) {
+                purposes.push(name);
             }
         }
-        let entries = purposes.into_iter().map(|purpose| {
-            let mut elements = Vec::new();
-            for c in [&parent, &local].into_iter().flatten() {
-                if let Some(v) = c.get(&purpose).and_then(|d| d.as_vector().cloned()) {
-                    elements.extend((0..v.len()).filter_map(|i| v.get(i)));
-                }
-            }
-            (purpose, RetainedVector::new(elements).into_data_source())
-        });
-        Some(container(entries))
+        purposes
+    }
+
+    fn get(&self, purpose: &Token) -> Option<DataSource> {
+        let vector = |c: &ContainerHandle| c.get(purpose).and_then(|d| d.as_vector().cloned());
+        let (local, parent) = (vector(&self.local), vector(&self.parent));
+        let empty = |v: &Option<crate::data_source::VectorHandle>| v.as_ref().is_none_or(|v| v.is_empty());
+        if empty(&parent) {
+            return local.map(DataSource::Vector);
+        }
+        if empty(&local) {
+            return parent.map(DataSource::Vector);
+        }
+        let elements = [parent, local]
+            .into_iter()
+            .flatten()
+            .flat_map(|v| (0..v.len()).filter_map(move |i| v.get(i)))
+            .collect::<Vec<_>>();
+        Some(RetainedVector::new(elements).into_data_source())
     }
 }
 

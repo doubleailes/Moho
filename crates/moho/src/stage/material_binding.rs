@@ -4,12 +4,14 @@
 //! filter concatenates the ancestors' before it, and the resolving filter
 //! picks the winner.
 
+use std::rc::Rc;
+
 use openusd::sdf::{self, Value};
 use openusd::tf::Token;
 use openusd_schemas::shade::{BindingStrength, MATERIAL_PURPOSES, MaterialBindingAPI};
 
-use crate::data_source::DataSource;
 use crate::data_source::retained::{RetainedVector, container, value};
+use crate::data_source::{Container, DataSource};
 use crate::locator::{Locator, LocatorSet};
 use crate::stage::PrimContext;
 use crate::stage::adapter::Adapter;
@@ -30,27 +32,24 @@ fn path(path: &sdf::Path) -> DataSource {
     value(Value::PathVec(vec![path.clone()]))
 }
 
-/// One purpose's opinions on this prim, or `None` when it authors none.
+/// One purpose's opinions on this prim, one level naming both kinds of
+/// binding, or `None` when it authors none (`_BuildMaterialBindingVectorDataSource`).
 fn bindings(api: &MaterialBindingAPI, purpose: &str) -> Option<DataSource> {
     let direct = api.direct_binding(purpose).ok().flatten();
     let collections = api.collection_bindings(purpose).unwrap_or_default();
     if direct.is_none() && collections.is_empty() {
         return None;
     }
-    let mut entries = Vec::new();
-    if let Some(direct) = direct {
-        entries.push((
-            t::DIRECT_MATERIAL_BINDING,
-            container([
-                (t::MATERIAL_PATH, path(direct.material_path())),
-                (
-                    t::BINDING_STRENGTH,
-                    strength(direct.strength().unwrap_or_default()),
-                ),
-            ]),
-        ));
-    }
-    if !collections.is_empty() {
+    let direct = direct.map(|direct| {
+        container([
+            (t::MATERIAL_PATH, path(direct.material_path())),
+            (
+                t::BINDING_STRENGTH,
+                strength(direct.strength().unwrap_or_default()),
+            ),
+        ])
+    });
+    let collections = (!collections.is_empty()).then(|| {
         let elements = collections.iter().map(|binding| {
             let collection = binding.collection_path();
             let (prim, name) = collection
@@ -73,12 +72,48 @@ fn bindings(api: &MaterialBindingAPI, purpose: &str) -> Option<DataSource> {
                 ),
             ])
         });
-        entries.push((
-            t::COLLECTION_MATERIAL_BINDINGS,
-            RetainedVector::new(elements).into_data_source(),
-        ));
+        RetainedVector::new(elements).into_data_source()
+    });
+    let level: DataSource = DataSource::Container(Rc::new(Level { direct, collections }));
+    Some(RetainedVector::new([level]).into_data_source())
+}
+
+/// One level of opinions, naming both kinds of binding whether or not it
+/// has them (`_MaterialBindingContainerDataSource`).
+struct Level {
+    direct: Option<DataSource>,
+    collections: Option<DataSource>,
+}
+
+impl Container for Level {
+    fn names(&self) -> Vec<Token> {
+        vec![
+            Token::from(t::DIRECT_MATERIAL_BINDING),
+            Token::from(t::COLLECTION_MATERIAL_BINDINGS),
+        ]
     }
-    Some(RetainedVector::new([container(entries)]).into_data_source())
+
+    fn get(&self, name: &Token) -> Option<DataSource> {
+        match name.as_str() {
+            t::DIRECT_MATERIAL_BINDING => self.direct.clone(),
+            t::COLLECTION_MATERIAL_BINDINGS => self.collections.clone(),
+            _ => None,
+        }
+    }
+}
+
+/// A prim's opinions by purpose, naming every material purpose whether or
+/// not it binds one (`_MaterialBindingsContainerDataSource`).
+struct Purposes(MaterialBindingAPI);
+
+impl Container for Purposes {
+    fn names(&self) -> Vec<Token> {
+        MATERIAL_PURPOSES.iter().map(|p| Token::from(*p)).collect()
+    }
+
+    fn get(&self, purpose: &Token) -> Option<DataSource> {
+        bindings(&self.0, purpose.as_str())
+    }
 }
 
 fn api(ctx: &PrimContext) -> Option<MaterialBindingAPI> {
@@ -96,12 +131,7 @@ impl Adapter for MaterialBindingAdapter {
         if name != t::USD_MATERIAL_BINDINGS {
             return None;
         }
-        let api = api(ctx)?;
-        let entries: Vec<(Token, DataSource)> = MATERIAL_PURPOSES
-            .iter()
-            .filter_map(|purpose| bindings(&api, purpose).map(|b| (Token::from(*purpose), b)))
-            .collect();
-        Some(container(entries))
+        Some(DataSource::Container(Rc::new(Purposes(api(ctx)?))))
     }
 
     fn invalidate(&self, _ctx: &PrimContext, name: &str) -> LocatorSet {
