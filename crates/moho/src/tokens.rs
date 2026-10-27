@@ -37,9 +37,6 @@ pub mod usd {
     pub const ATTRIBUTES: &str = "__usdAttributes";
     /// Every relationship of a prim, by name.
     pub const RELATIONSHIPS: &str = "__usdRelationships";
-    /// The stage metadata the scene globals read, by field, on the absolute
-    /// root.
-    pub const STAGE_METADATA: &str = "__usdStageMetadata";
 
     /// An attribute's resolved value (sampled).
     pub const VALUE: &str = "value";
@@ -64,15 +61,19 @@ pub mod usd {
     pub const FORWARDED_TARGETS: &str = "forwardedTargets";
 }
 
-/// Scene globals, at the absolute root (`HdSceneGlobalsSchema`, plus the
-/// stage metrics a consumer converts units with).
+/// Scene globals, at the absolute root (`HdSceneGlobalsSchema`, the fields
+/// `UsdImagingDataSourceStage` fills).
 pub mod scene_globals {
     pub const SCENE_GLOBALS: &str = "sceneGlobals";
     pub const START_TIME_CODE: &str = "startTimeCode";
     pub const END_TIME_CODE: &str = "endTimeCode";
     pub const TIME_CODES_PER_SECOND: &str = "timeCodesPerSecond";
     pub const ACTIVE_RENDER_SETTINGS_PRIM: &str = "activeRenderSettingsPrim";
-    pub const METERS_PER_UNIT: &str = "metersPerUnit";
+}
+
+/// `UsdImagingUsdUpAxisSchema` (`__usdUpAxis`), at the absolute root.
+pub mod usd_up_axis {
+    pub const USD_UP_AXIS: &str = "__usdUpAxis";
     pub const UP_AXIS: &str = "upAxis";
 }
 
