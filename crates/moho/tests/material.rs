@@ -454,6 +454,35 @@ fn interface_and_config() {
 }
 
 #[test]
+fn parameter_order_follows_property_order() {
+    let (_dir, usd) = stage(
+        r#"#usda 1.0
+def Material "m"
+{
+    reorder properties = ["inputs:b", "outputs:surface", "inputs:a"]
+    token outputs:surface.connect = </m/s.outputs:surface>
+    float inputs:a = 1
+    float inputs:b = 2
+    def Shader "s"
+    {
+        uniform token info:id = "UsdPreviewSurface"
+        float inputs:roughness.connect = </m.inputs:a>
+        token outputs:surface
+    }
+}
+"#,
+    );
+    let index = StageSceneIndex::new();
+    index.set_stage(usd);
+    let net = network(&index, "/m", "");
+    // The material's `propertyOrder`, its inputs only, by base name.
+    assert_eq!(
+        value(&net, &["interface", "parameterOrder"]),
+        Some(Value::TokenVec(vec![Token::from("b"), Token::from("a")]))
+    );
+}
+
+#[test]
 fn node_type_info_for_a_source_asset_shader() {
     let (_dir, index) = networks();
     let all = network(&index, "/m", "__all");
