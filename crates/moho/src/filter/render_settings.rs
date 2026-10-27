@@ -12,15 +12,18 @@
 //! opinion overrides the settings' for the camera and the settings base
 //! (resolution, aspect, data window, motion blur, depth of field).
 //!
-//! UsdImaging declares which stage data each flattened field depends on as
-//! `__dependencies`, which a renderer's dependency forwarding scene index
-//! turns into dirty notices. This filter sends those notices itself: an
-//! edit of the settings dirties the flattened fields that read it, and an
-//! edit of an included product or var dirties `renderSettings/renderProducts`
-//! (until `hydra-parity-chain` emits `__dependencies`).
+//! The settings prim also declares, in `__dependencies`, which stage data
+//! each flattened field reads, as UsdImaging does: each field on the
+//! settings' own `__usdRenderSettings` field (`resolution` and the other
+//! product settings on `renderSettings/renderProducts`),
+//! `renderSettings/renderProducts` on each included product's
+//! `__usdRenderProduct` and each of their vars' `__usdRenderVar`, and
+//! `__dependencies` itself on `__usdRenderSettings/products`. The filter
+//! dirties nothing itself: a consumer that adds dependency forwarding
+//! ([`DependencyForwardingSceneIndex`](crate::filter::DependencyForwardingSceneIndex))
+//! gets the settings dirtied at the affected locators.
 
-use std::cell::RefCell;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 use std::rc::{Rc, Weak};
 
 use openusd::sdf::{self, Value};
@@ -28,19 +31,17 @@ use openusd::tf::Token;
 
 use crate::data_source::retained::{RetainedVector, container, value};
 use crate::data_source::{Container, ContainerHandle, DataSource, Sampled, SampledHandle};
-use crate::locator::{Locator, LocatorSet};
+use crate::locator::Locator;
 use crate::scene_index::{
     Added, Dirtied, Observer, Observers, Prim, Removed, Renamed, SceneIndex, SceneIndexHandle,
 };
-use crate::schema::member_container;
-use crate::tokens::{prim_type, render as t};
+use crate::schema::{DependencySchema, member_container};
+use crate::tokens::{dependencies, prim_type, render as t};
 
 /// A scene index flattening render settings.
 pub struct RenderSettingsFlatteningSceneIndex {
     input: SceneIndexHandle,
     me: Weak<RenderSettingsFlatteningSceneIndex>,
-    /// Product or var path to the settings prims including it.
-    dependents: RefCell<Option<BTreeMap<sdf::Path, BTreeSet<sdf::Path>>>>,
     observers: Observers,
 }
 
@@ -73,26 +74,86 @@ const RESOLVED: &[&str] = &[
     t::DISABLE_DEPTH_OF_FIELD,
 ];
 
-/// The flattened fields an edit of `__usdRenderSettings/<member>` dirties,
-/// from UsdImaging's self dependencies (`_GetRenderSettingsDependenciesDataSource`).
-fn affected_by_settings(member: &str) -> &'static [&'static str] {
-    match member {
-        t::INCLUDED_PURPOSES => &[t::INCLUDED_PURPOSES],
-        t::MATERIAL_BINDING_PURPOSES => &[t::MATERIAL_BINDING_PURPOSES],
-        t::NAMESPACED_SETTINGS => &[t::NAMESPACED_SETTINGS],
-        t::RENDERING_COLOR_SPACE => &[t::RENDERING_COLOR_SPACE],
-        t::CAMERA => &[t::CAMERA, t::RENDER_PRODUCTS],
-        t::DISABLE_DEPTH_OF_FIELD => &[t::DISABLE_DEPTH_OF_FIELD, t::RENDER_PRODUCTS],
-        t::DISABLE_MOTION_BLUR => &[t::DISABLE_MOTION_BLUR, t::RENDER_PRODUCTS],
-        t::RESOLUTION | t::PIXEL_ASPECT_RATIO | t::ASPECT_RATIO_CONFORM_POLICY | t::DATA_WINDOW_NDC => {
-            &[t::RENDER_PRODUCTS]
-        }
-        // UsdImaging only rebuilds `__dependencies` for a products edit;
-        // the flattened products change with it.
-        t::PRODUCTS => &[t::RENDER_PRODUCTS],
-        _ => &[],
-    }
-}
+/// The settings' self dependencies (`_GetRenderSettingsDependenciesDataSource`,
+/// entries 1 and 2), in UsdImaging's order: the entry name, the
+/// `__usdRenderSettings` field depended on, and the affected locator.
+const SELF_DEPENDENCIES: &[(&str, &str, &[&str])] = &[
+    (
+        "renderSettings_includedPurposes_depOn_usdRenderSettings_includedPurposes",
+        t::INCLUDED_PURPOSES,
+        &[t::RENDER_SETTINGS, t::INCLUDED_PURPOSES],
+    ),
+    (
+        "renderSettings_materialBindingPurposes_depOn_usdRenderSettings_materialBindingPurposes",
+        t::MATERIAL_BINDING_PURPOSES,
+        &[t::RENDER_SETTINGS, t::MATERIAL_BINDING_PURPOSES],
+    ),
+    (
+        "renderSettings_namespacedSettings_depOn_usdRenderSettings_namespacedSettings",
+        t::NAMESPACED_SETTINGS,
+        &[t::RENDER_SETTINGS, t::NAMESPACED_SETTINGS],
+    ),
+    (
+        "renderSettings_renderingColorSpace_depOn_usdRenderSettings_renderingColorSpace",
+        t::RENDERING_COLOR_SPACE,
+        &[t::RENDER_SETTINGS, t::RENDERING_COLOR_SPACE],
+    ),
+    (
+        "renderSettings_camera_depOn_usdRenderSettings_camera",
+        t::CAMERA,
+        &[t::RENDER_SETTINGS, t::CAMERA],
+    ),
+    (
+        "renderSettings_disableDepthOfField_depOn_usdRenderSettings_disableDepthOfField",
+        t::DISABLE_DEPTH_OF_FIELD,
+        &[t::RENDER_SETTINGS, t::DISABLE_DEPTH_OF_FIELD],
+    ),
+    (
+        "renderSettings_disableMotionBlur_depOn_usdRenderSettings_disableMotionBlur",
+        t::DISABLE_MOTION_BLUR,
+        &[t::RENDER_SETTINGS, t::DISABLE_MOTION_BLUR],
+    ),
+    (
+        "renderSettings_renderProducts_depOn_usdRenderSettings_resolution",
+        t::RESOLUTION,
+        &[t::RENDER_SETTINGS, t::RENDER_PRODUCTS],
+    ),
+    (
+        "renderSettings_renderProducts_depOn_usdRenderSettings_pixelAspectRatio",
+        t::PIXEL_ASPECT_RATIO,
+        &[t::RENDER_SETTINGS, t::RENDER_PRODUCTS],
+    ),
+    (
+        "renderSettings_renderProducts_depOn_usdRenderSettings_aspectRatioConformPolicy",
+        t::ASPECT_RATIO_CONFORM_POLICY,
+        &[t::RENDER_SETTINGS, t::RENDER_PRODUCTS],
+    ),
+    (
+        "renderSettings_renderProducts_depOn_usdRenderSettings_dataWindowNDC",
+        t::DATA_WINDOW_NDC,
+        &[t::RENDER_SETTINGS, t::RENDER_PRODUCTS],
+    ),
+    (
+        "renderSettings_renderProducts_depOn_usdRenderSettings_disableMotionBlur",
+        t::DISABLE_MOTION_BLUR,
+        &[t::RENDER_SETTINGS, t::RENDER_PRODUCTS],
+    ),
+    (
+        "renderSettings_renderProducts_depOn_usdRenderSettings_disableDepthOfField",
+        t::DISABLE_DEPTH_OF_FIELD,
+        &[t::RENDER_SETTINGS, t::RENDER_PRODUCTS],
+    ),
+    (
+        "renderSettings_renderProducts_depOn_usdRenderSettings_camera",
+        t::CAMERA,
+        &[t::RENDER_SETTINGS, t::RENDER_PRODUCTS],
+    ),
+    (
+        "__dependencies_depOn_usdRenderSettings_products",
+        t::PRODUCTS,
+        &[dependencies::DEPENDENCIES],
+    ),
+];
 
 /// A string value read as a token (`HdRenderVarSchema` types `sourceName`
 /// as a token where the USD attribute is a string).
@@ -117,91 +178,79 @@ impl RenderSettingsFlatteningSceneIndex {
         let index = Rc::new_cyclic(|me| Self {
             input: input.clone(),
             me: me.clone(),
-            dependents: RefCell::new(None),
             observers: Observers::default(),
         });
         let observer: Weak<dyn Observer> = index.me.clone();
         input.add_observer(observer);
-        // Built now, so a later removal can still see what was included.
-        index.dependents();
         index
     }
+}
 
-    fn schema(&self, path: &sdf::Path, schema: &str) -> Option<ContainerHandle> {
-        member_container(&self.input.prim(path).data?, schema)
-    }
+/// The `__usdRenderSettings`, `__usdRenderProduct` or `__usdRenderVar` of
+/// the prim at `path` in `input`.
+fn schema(input: &SceneIndexHandle, path: &sdf::Path, schema: &str) -> Option<ContainerHandle> {
+    member_container(&input.prim(path).data?, schema)
+}
 
-    fn dependents(&self) -> BTreeMap<sdf::Path, BTreeSet<sdf::Path>> {
-        if let Some(d) = self.dependents.borrow().as_ref() {
-            return d.clone();
-        }
-        let mut map: BTreeMap<sdf::Path, BTreeSet<sdf::Path>> = BTreeMap::new();
-        let mut stack = vec![sdf::Path::abs_root()];
-        while let Some(path) = stack.pop() {
-            if self.input.prim(&path).ty == prim_type::RENDER_SETTINGS
-                && let Some(settings) = self.schema(&path, t::USD_RENDER_SETTINGS)
-            {
-                for product in targets(&settings, t::PRODUCTS) {
-                    map.entry(product.clone()).or_default().insert(path.clone());
-                    if let Some(p) = self.schema(&product, t::USD_RENDER_PRODUCT) {
-                        for var in targets(&p, t::ORDERED_VARS) {
-                            map.entry(var).or_default().insert(path.clone());
-                        }
-                    }
-                }
-            }
-            stack.extend(self.input.children(&path));
-        }
-        *self.dependents.borrow_mut() = Some(map.clone());
-        map
+/// The products `settings` includes that the input holds as products, and
+/// their vars it holds as vars, in path order (`_GetProductAndVarPaths`).
+fn product_and_var_paths(
+    input: &SceneIndexHandle,
+    settings: &ContainerHandle,
+) -> (Vec<sdf::Path>, Vec<sdf::Path>) {
+    let mut products = Vec::new();
+    let mut vars: BTreeSet<sdf::Path> = BTreeSet::new();
+    let Some(usd_settings) = member_container(settings, t::USD_RENDER_SETTINGS) else {
+        return (products, Vec::new());
+    };
+    for product in targets(&usd_settings, t::PRODUCTS) {
+        let Some(usd_product) = schema(input, &product, t::USD_RENDER_PRODUCT) else {
+            continue;
+        };
+        vars.extend(targets(&usd_product, t::ORDERED_VARS));
+        products.push(product);
     }
+    let vars = vars
+        .into_iter()
+        .filter(|var| schema(input, var, t::USD_RENDER_VAR).is_some())
+        .collect();
+    (products, vars)
+}
 
-    /// The settings dirtied because the prims at or under `paths` came or
-    /// went, by the dependency map before and after the change.
-    fn changed_dependents(
-        &self,
-        before: &BTreeMap<sdf::Path, BTreeSet<sdf::Path>>,
-        paths: &[&sdf::Path],
-    ) -> Vec<Dirtied> {
-        let after = self.dependents();
-        let mut settings: BTreeSet<sdf::Path> = BTreeSet::new();
-        for map in [before, &after] {
-            for (dependency, dependents) in map {
-                if paths.iter().any(|p| dependency.has_prefix(p)) {
-                    settings.extend(dependents.iter().cloned());
-                }
-            }
+/// The settings prim's `__dependencies`
+/// (`_GetRenderSettingsDependenciesDataSource`).
+fn dependencies_data_source(
+    input: &SceneIndexHandle,
+    settings: &ContainerHandle,
+    path: &sdf::Path,
+) -> DataSource {
+    let (products, vars) = product_and_var_paths(input, settings);
+    let mut entries: Vec<(Token, DataSource)> = SELF_DEPENDENCIES
+        .iter()
+        .map(|(name, field, affected)| {
+            (
+                Token::from(*name),
+                DependencySchema::build(
+                    Some(path),
+                    &Locator::new([t::USD_RENDER_SETTINGS, field]),
+                    &Locator::new(affected.iter().copied()),
+                ),
+            )
+        })
+        .collect();
+    let render_products = Locator::new([t::RENDER_SETTINGS, t::RENDER_PRODUCTS]);
+    for (kind, paths, locator) in [
+        ("product", &products, t::USD_RENDER_PRODUCT),
+        ("var", &vars, t::USD_RENDER_VAR),
+    ] {
+        for (i, dependency) in paths.iter().enumerate() {
+            entries.push((
+                Token::from(format!("renderSettings_depOn_{kind}_{i}")),
+                DependencySchema::build(Some(dependency), &Locator::new([locator]), &render_products),
+            ));
         }
-        settings
-            .into_iter()
-            .filter(|s| self.input.prim(s).is_defined())
-            .map(|path| Dirtied {
-                path,
-                locators: LocatorSet::from(Locator::new([t::RENDER_SETTINGS, t::RENDER_PRODUCTS])),
-            })
-            .collect()
     }
-
-    /// The flattened locators an edit of a settings prim's own data at
-    /// `locators` dirties.
-    fn settings_dirty(locators: &LocatorSet) -> LocatorSet {
-        let schema = Locator::new([t::USD_RENDER_SETTINGS]);
-        let flattened = Locator::new([t::RENDER_SETTINGS]);
-        let mut out = LocatorSet::new();
-        for locator in locators.iter() {
-            if locator.has_prefix_of(&schema) {
-                // The whole of `__usdRenderSettings`, or more.
-                out.insert(flattened.clone());
-            } else if locator.has_prefix(&schema)
-                && let Some(member) = locator.elements().get(1)
-            {
-                for field in affected_by_settings(member.as_str()) {
-                    out.insert(flattened.append(*field));
-                }
-            }
-        }
-        out
-    }
+    container(entries)
 }
 
 /// `renderSettings`, as UsdImaging's `_RenderSettingsDataSource`.
@@ -314,10 +363,11 @@ impl SceneIndex for RenderSettingsFlatteningSceneIndex {
         }));
         Prim {
             ty: input.ty,
-            data: Some(Rc::new(Replaced {
+            data: Some(Rc::new(SettingsPrim {
+                input: self.input.clone(),
+                path: path.clone(),
                 local,
-                name: Token::from(t::RENDER_SETTINGS),
-                source: flattened,
+                flattened,
             })),
         }
     }
@@ -331,88 +381,53 @@ impl SceneIndex for RenderSettingsFlatteningSceneIndex {
     }
 }
 
+/// Notices pass through: dependency forwarding, when a consumer adds it,
+/// dirties the flattened settings (UsdImaging's filter does likewise).
 impl Observer for RenderSettingsFlatteningSceneIndex {
     fn added(&self, _: &dyn SceneIndex, entries: &[Added]) {
-        let before = self.dependents.borrow_mut().take().unwrap_or_default();
         self.observers.send_added(self, entries);
-        let paths: Vec<&sdf::Path> = entries.iter().map(|e| &e.path).collect();
-        let dirtied = self.changed_dependents(&before, &paths);
-        self.observers.send_dirtied(self, &dirtied);
     }
 
     fn removed(&self, _: &dyn SceneIndex, entries: &[Removed]) {
-        let before = self.dependents.borrow_mut().take().unwrap_or_default();
         self.observers.send_removed(self, entries);
-        let paths: Vec<&sdf::Path> = entries.iter().map(|e| &e.path).collect();
-        let dirtied = self.changed_dependents(&before, &paths);
-        self.observers.send_dirtied(self, &dirtied);
     }
 
     fn dirtied(&self, _: &dyn SceneIndex, entries: &[Dirtied]) {
-        let relations = [
-            Locator::new([t::USD_RENDER_SETTINGS, t::PRODUCTS]),
-            Locator::new([t::USD_RENDER_PRODUCT, t::ORDERED_VARS]),
-        ];
-        if entries
-            .iter()
-            .any(|e| relations.iter().any(|l| e.locators.intersects(l)))
-        {
-            *self.dependents.borrow_mut() = None;
-        }
-        let dependents = self.dependents();
-        let products = LocatorSet::from(Locator::new([t::RENDER_SETTINGS, t::RENDER_PRODUCTS]));
-        let included = [
-            Locator::new([t::USD_RENDER_PRODUCT]),
-            Locator::new([t::USD_RENDER_VAR]),
-        ];
-        let mut out: Vec<Dirtied> = Vec::new();
-        for e in entries {
-            let mut locators = e.locators.clone();
-            if self.input.prim(&e.path).ty == prim_type::RENDER_SETTINGS {
-                locators.insert_set(&Self::settings_dirty(&e.locators));
-            }
-            out.push(Dirtied {
-                path: e.path.clone(),
-                locators,
-            });
-            if included.iter().any(|l| e.locators.intersects(l)) {
-                for settings in dependents.get(&e.path).into_iter().flatten() {
-                    out.push(Dirtied {
-                        path: settings.clone(),
-                        locators: products.clone(),
-                    });
-                }
-            }
-        }
-        self.observers.send_dirtied(self, &out);
+        self.observers.send_dirtied(self, entries);
     }
 
     fn renamed(&self, _: &dyn SceneIndex, entries: &[Renamed]) {
-        *self.dependents.borrow_mut() = None;
         self.observers.send_renamed(self, entries);
     }
 }
 
-/// A prim's data with one member replaced.
-struct Replaced {
+/// A settings prim's data with `renderSettings` and `__dependencies` added
+/// (`_RenderSettingsPrimDataSource`).
+struct SettingsPrim {
+    input: SceneIndexHandle,
+    path: sdf::Path,
     local: ContainerHandle,
-    name: Token,
-    source: DataSource,
+    flattened: DataSource,
 }
 
-impl Container for Replaced {
+impl Container for SettingsPrim {
     fn names(&self) -> Vec<Token> {
         let mut names = self.local.names();
-        if !names.contains(&self.name) {
-            names.push(self.name.clone());
+        for name in [t::RENDER_SETTINGS, dependencies::DEPENDENCIES] {
+            if !names.iter().any(|n| n == name) {
+                names.push(Token::from(name));
+            }
         }
         names
     }
 
     fn get(&self, name: &Token) -> Option<DataSource> {
-        if *name == self.name {
-            return Some(self.source.clone());
+        match name.as_str() {
+            t::RENDER_SETTINGS => Some(self.flattened.clone()),
+            dependencies::DEPENDENCIES => {
+                Some(dependencies_data_source(&self.input, &self.local, &self.path))
+            }
+            _ => self.local.get(name),
         }
-        self.local.get(name)
     }
 }
