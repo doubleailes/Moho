@@ -4,10 +4,11 @@
 
 use std::rc::Rc;
 
+use crate::filter::extent_resolving;
 use crate::filter::{
-    FlatteningSceneIndex, LightLinkingSceneIndex, MaterialBindingResolvingSceneIndex,
-    MaterialNodeResolvingSceneIndex, NativeInstancingSceneIndex, PointInstancingSceneIndex,
-    RenderSettingsFlatteningSceneIndex,
+    ExtentResolvingSceneIndex, FlatteningSceneIndex, LightLinkingSceneIndex,
+    MaterialBindingResolvingSceneIndex, MaterialNodeResolvingSceneIndex, NativeInstancingSceneIndex,
+    PointInstancingSceneIndex, RenderSettingsFlatteningSceneIndex,
 };
 use crate::scene_index::{CollectionMembership, SceneIndexHandle};
 use crate::stage::StageSceneIndex;
@@ -31,7 +32,8 @@ pub fn standard(stage: Rc<StageSceneIndex>) -> SceneIndexHandle {
 /// against every receiver, so it runs once, after the merge ([`merged`]).
 pub fn input(stage: Rc<StageSceneIndex>) -> SceneIndexHandle {
     let membership: Rc<dyn CollectionMembership> = stage.clone();
-    let native = NativeInstancingSceneIndex::new(stage);
+    let extents = ExtentResolvingSceneIndex::new(stage, extent_resolving::STANDARD_PURPOSES.iter().copied());
+    let native = NativeInstancingSceneIndex::new(extents);
     let point = PointInstancingSceneIndex::new(native);
     let flat = FlatteningSceneIndex::new(point);
     let bindings = MaterialBindingResolvingSceneIndex::new(flat, Some(membership));
