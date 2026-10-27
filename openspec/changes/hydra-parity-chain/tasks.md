@@ -33,6 +33,12 @@
 - [ ] 4b.2 An update benchmark in `crates/moho-spike` (`bin/update`): on a LoadAll stage, measure the time from the stage edit to the managing observer having received every notice, for (a) a camera `focalLength` edit, (b) a camera transform edit, (c) adding a sphere light with default collections, (d) adding a light linked to one prim. Report the median and worst of N runs, and the count of notices and dirtied entries
 - [ ] 4b.3 Run it on a small fixture and on Moana; record the results in `docs/` beside the spike results. Reported, not gated. Update latency ranks ahead of first-load time in later profiling
 
+## 4c. The index's time as UsdImaging's
+
+- [ ] 4c.1 `StageSceneIndex`: a new index's time is time code 0 (a default-constructed `UsdTimeCode`), not the stage's default time; replacing a held stage resets it to `EarliestTime` (`UsdImagingStageSceneIndex::SetStage` → `_StageGlobals::Clear`, `stageSceneIndex.cpp:379-396`, `:966-970`). Check what openusd offers for both time codes and record it in `docs/openusd-notes.md`
+- [ ] 4c.2 Tests for the scenarios "A new index reads at time 0" and "Replacing the stage"; update tests that relied on the default time (e.g. `Time variance in the generic attribute data`'s "At the default time" stays: `mightBeTimeVarying` does not depend on the time)
+- [ ] 4c.3 Check against the USD 26.08 comparison harness: a point instancer with sampled `protoIndices`, read before any `set_time`, then `set_time(0)`
+
 ## 5. Merging
 
 - [ ] 5.1 `filter/merging.rs`: adding an input notifies root and every listed descendant, defined or not; notices forwarded without root filtering; rename as remove plus add (unchanged)

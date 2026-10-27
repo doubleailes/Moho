@@ -168,6 +168,20 @@ Moho's managing observer, because the consumer's own update time (Crust
 rebuilding its scene, restarting the render) belongs to the consumer's
 benchmark.
 
+### D9. The index starts at time 0, as UsdImaging's
+
+`UsdImagingStageSceneIndex` holds its time in `_StageGlobals::_time`, a
+default-constructed `UsdTimeCode`, so a new index reads at time code 0, not
+at the stage's default time. Moho's earlier spec said "the stage's default
+time", and that showed up while #18's review was being checked: a point
+instancer whose `protoIndices` has only time samples read different
+topology in Moho than in Hydra before the first `set_time`, and the first
+`set_time(0)` sent an extra dirty. Hydra's other quirk is reproduced too:
+replacing a stage already held clears the globals, which sets the time to
+`UsdTimeCode::EarliestTime()` (`stageSceneIndex.cpp:966-970`). The
+"Time variance" requirement is unaffected, since `mightBeTimeVarying` reads
+the opinions and not the time.
+
 ## Risks / Trade-offs
 
 - [Without dependency forwarding, render settings and instance categories
