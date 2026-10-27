@@ -33,9 +33,17 @@ pub trait Adapter {
         None
     }
 
-    /// The locators a change to the property `name` dirties.
+    /// The locators a change to the property `name` dirties (UsdImaging's
+    /// `Update` invalidation: a value or metadata change).
     fn invalidate(&self, _ctx: &PrimContext, _name: &str) -> LocatorSet {
         LocatorSet::new()
+    }
+
+    /// The locators the property `name` coming or going dirties (UsdImaging's
+    /// `Resync` invalidation); [`invalidate`](Self::invalidate)'s unless the
+    /// adapter tells them apart.
+    fn invalidate_resynced(&self, ctx: &PrimContext, name: &str) -> LocatorSet {
+        self.invalidate(ctx, name)
     }
 }
 

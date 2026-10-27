@@ -15,9 +15,11 @@ use moho::schema::PrimvarsSchema;
 use moho::stage::StageSceneIndex;
 
 const SCENE: &str = r#"#usda 1.0
-def Xform "world"
+def Xform "world" (
+    prepend apiSchemas = ["ColorSpaceAPI"]
+)
 {
-    custom string colorSpace:name = "acescg"
+    uniform token colorSpace:name = "lin_ap1_scene"
 
     def Mesh "geo"
     {
@@ -100,7 +102,7 @@ fn points() {
     let points = primvars(&index, "/world/geo").primvar("points").unwrap();
     assert_eq!(points.interpolation(), Some(Token::from("vertex")));
     assert_eq!(points.role(), Some(Token::from("point")));
-    assert_eq!(points.element_size(), Some(1));
+    assert_eq!(points.element_size(), None, "only when it is not 1");
     assert!(matches!(points.primvar_value().unwrap().value(0.0), Some(Value::Vec3fVec(v)) if v.len() == 4));
 }
 
@@ -124,7 +126,20 @@ fn every_primvar_equals_openusd() {
     }
     let mut names: Vec<String> = schema.names().iter().map(ToString::to_string).collect();
     names.sort();
-    assert_eq!(names, ["displayColor", "normals", "pairs", "points", "st"]);
+    // A point-based prim names every custom primvar, authored or not.
+    assert_eq!(
+        names,
+        [
+            "accelerations",
+            "displayColor",
+            "normals",
+            "pairs",
+            "points",
+            "st",
+            "velocities"
+        ]
+    );
+    assert!(schema.primvar("velocities").is_none(), "named, not authored");
 }
 
 #[test]
@@ -157,8 +172,8 @@ fn curves_widths_and_color_space() {
     assert_eq!(color.role(), Some(Token::from("color")));
     assert_eq!(
         color.color_space(),
-        Some(Value::String("acescg".into())),
-        "inherited from /world"
+        Some(Value::Token("lin_ap1_scene".into())),
+        "from /world's ColorSpaceAPI"
     );
 }
 
@@ -225,7 +240,93 @@ fn a_time_change_dirties_animated_points_alone() {
         recorder.take(),
         [Notice::Dirtied(Dirtied {
             path: p("/world/moving"),
-            locators: LocatorSet::from(Locator::parse("primvars/points")),
+            locators: LocatorSet::from(Locator::parse("primvars/points/primvarValue")),
         })]
+    );
+}
+
+#[test]
+fn roles_and_rejected_primvars() {
+    let (_dir, usd) = stage(
+        r#"#usda 1.0
+def Mesh "geo"
+{
+    point3f[] points = [(0, 0, 0)]
+    point3f[] primvars:points = [(9, 9, 9)]
+    float[] primvars:weight = [1] (
+        interpolation = "constant"
+    )
+    int[] primvars:ids = [1] (
+        interpolation = "constant"
+    )
+}
+def BasisCurves "hair"
+{
+    float[] widths = [0.1]
+}
+"#,
+    );
+    let index = StageSceneIndex::new();
+    index.set_stage(usd);
+    let geo = primvars(&index, "/geo");
+    assert_eq!(
+        geo.primvar("points").unwrap().primvar_value().unwrap().value(0.0),
+        Some(Value::Vec3fVec(vec![gf::Vec3f::default()])),
+        "primvars:points is never read"
+    );
+    let data = index.prim(&p("/geo")).data.unwrap();
+    let weight = moho::data_source::locate(&data, &Locator::parse("primvars/weight"))
+        .unwrap()
+        .as_container()
+        .unwrap()
+        .clone();
+    assert!(weight.names().contains(&Token::from("role")), "always named");
+    assert!(weight.get(&Token::from("role")).is_none(), "no role");
+    let hair = primvars(&index, "/hair");
+    assert_eq!(
+        hair.primvar("widths").unwrap().role(),
+        Some(Token::default()),
+        "a custom primvar gives an empty role"
+    );
+}
+
+#[test]
+fn adding_a_primvar_dirties_the_primvars() {
+    let (_dir, index) = setup();
+    let recorder = RecordingObserver::on(index.as_ref());
+    let stage = index.stage().unwrap();
+    stage
+        .create_attribute("/world/geo.primvars:extra", "float[]")
+        .unwrap()
+        .set(vec![1.0f32])
+        .unwrap();
+    index.apply_pending_updates();
+    let notices = recorder.take();
+    assert!(
+        notices.iter().any(|n| matches!(n, Notice::Dirtied(d) if d.path == p("/world/geo") && d.locators.contains(&Locator::parse("primvars")))),
+        "{notices:?}"
+    );
+}
+
+#[test]
+fn an_indices_edit_dirties_as_usd_imaging_does() {
+    let (_dir, index) = setup();
+    let recorder = RecordingObserver::on(index.as_ref());
+    index
+        .stage()
+        .unwrap()
+        .attribute("/world/geo.primvars:st:indices")
+        .unwrap()
+        .set(vec![0i32, 0, 0, 0])
+        .unwrap();
+    index.apply_pending_updates();
+    let notices = recorder.take();
+    // `primvars:st:indices` dirties `primvars/st:indices` (UsdImaging's
+    // quirk, reproduced).
+    assert!(
+        notices.iter().any(
+            |n| matches!(n, Notice::Dirtied(d) if d.locators.contains(&Locator::parse("primvars/st:indices")))
+        ),
+        "{notices:?}"
     );
 }

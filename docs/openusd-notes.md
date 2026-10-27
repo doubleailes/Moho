@@ -305,6 +305,10 @@ Read at `d7d2a29`.
   `Value::Dictionary` read with `Dictionary::get_at(key)` (`identifier`, an
   asset path; `name` and `version`, strings), as `UsdModelAPI`'s asset info
   getters.
+- Primvars: `PrimvarsAPI::authored_primvars()` (C++ `GetAuthoredPrimvars`),
+  `Primvar::from_attribute(attr) -> Option<Primvar>`, `Primvar::indices_attr()`
+  with `Attribute::has_value()` (UsdImaging's `_IsIndexed`),
+  `Prim::has_api_schema("ColorSpaceAPI")`, `Relationship::is_defined()`.
 - `Stage::stage_metadata("upAxis")` gives the raw token when
   `stage_up_axis` refuses it.
 - `Relationship::targets()` (authored targets, unforwarded) for UsdImaging's
@@ -360,6 +364,10 @@ Read at `d7d2a29`.
 - `sdf::Value` has no single-path variant (C++ `VtValue` of `SdfPath`):
   Hydra's single `SdfPath` fields are one-element `Value::PathVec`s, absent
   when Hydra's path would be empty (`data_source.rs`).
+- No `UsdColorSpaceAPI::ComputeColorSpaceName` nor `GfColorSpace`: a colour
+  primvar's `colorSpace` walks `ColorSpaceAPI` prims itself and checks the
+  name against `GfColorSpace`'s built-in names; colour spaces a
+  `ColorSpaceDefinitionAPI` defines are not recognised (`stage/primvars.rs`).
 - No `SdfPath::MakeRelativePath`: the prim origin's prototype-relative scene
   path (`stage/prim_origin.rs`) is built from the path's text, parsed back
   with `sdf::Path::new`, which accepts relative paths and `.`.

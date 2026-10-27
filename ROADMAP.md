@@ -86,5 +86,9 @@ the steps that land in this repository or depend on it.
   Hydra types many fields as one `SdfPath`; Moho holds each as a
   one-element `Value::PathVec` meanwhile (`crates/moho/src/data_source.rs`),
   so a single path and a path array cannot be told apart.
+- `UsdColorSpaceAPI::ComputeColorSpaceName` and `GfColorSpace` (its
+  `IsValid` names, `ColorSpaceDefinitionAPI` lookups). Moho walks
+  `ColorSpaceAPI` and checks names against `GfColorSpace`'s table meanwhile
+  (`crates/moho/src/stage/primvars.rs`), without user-defined colour spaces.
 - `SdfPath::MakeRelativePath`. Moho builds a prototype-relative prim origin
   from the path's text meanwhile (`crates/moho/src/stage/prim_origin.rs`).
