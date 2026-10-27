@@ -18,10 +18,11 @@ const BASIS: &[Member] = &[Member::LeafNested(
     ],
 )];
 
+/// In the sorted order of UsdImaging's mapped data source.
 const NURBS: &[Member] = &[
     Member::Attr(t::CURVE_VERTEX_COUNTS, "curveVertexCounts"),
-    Member::Attr(t::ORDER, "order"),
     Member::Attr(t::KNOTS, "knots"),
+    Member::Attr(t::ORDER, "order"),
     Member::Attr(t::RANGES, "ranges"),
 ];
 
