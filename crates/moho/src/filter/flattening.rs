@@ -13,9 +13,19 @@
 //!   does not define.
 //! - `usdMaterialBindings`: per purpose, the ancestors' bindings then the
 //!   prim's.
+//! - `model` and `__usdUpAxis`: the prim's own data overlaid on its parent's
+//!   flattened data (`HdFlattenedOverlayDataSourceProvider`).
+//! - `geomModel`: the parent's when the prim has none; otherwise the prim's,
+//!   with `drawMode` and `cardVisibility` from the parent where the prim has
+//!   none or `inherited` (`UsdImagingFlattenedGeomModelDataSourceProvider`).
 //!
 //! When a prim's flattened data is dirtied, every descendant is dirtied for
-//! the same locators.
+//! what its providers say descendants inherit
+//! (`ComputeDirtyLocatorsForDescendants`): the whole `xform`, `visibility`
+//! and `purpose`; the same `primvars` locators unless one may change an
+//! interpolation (then all of `primvars`); `usdMaterialBindings` per
+//! purpose; the same `model` and `__usdUpAxis` locators; and only
+//! `geomModel`'s `drawMode` and `cardVisibility`.
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -25,6 +35,7 @@ use openusd::gf;
 use openusd::sdf::{self, Value};
 use openusd::tf::Token;
 
+use crate::data_source::Overlay;
 use crate::data_source::retained::{RetainedVector, container, value};
 use crate::data_source::{Container, ContainerHandle, DataSource, Sampled, SampledHandle};
 use crate::locator::{Locator, LocatorSet};
@@ -34,7 +45,7 @@ use crate::scene_index::{
 use crate::schema::{
     PrimvarsSchema, PurposeSchema, VisibilitySchema, XformSchema, as_bool, member_container,
 };
-use crate::tokens::{imageable, material_bindings, primvars, xform};
+use crate::tokens::{geom_model, imageable, material_bindings, model, primvars, usd_up_axis, xform};
 
 const FLATTENED: &[&str] = &[
     xform::XFORM,
@@ -42,7 +53,44 @@ const FLATTENED: &[&str] = &[
     imageable::PURPOSE,
     primvars::PRIMVARS,
     material_bindings::USD_MATERIAL_BINDINGS,
+    geom_model::GEOM_MODEL,
+    model::MODEL,
+    usd_up_axis::USD_UP_AXIS,
 ];
+
+/// What descendants inherit of the changed `relative` locators (each
+/// relative to the flattened data source `name`), as `name`'s provider's
+/// `ComputeDirtyLocatorsForDescendants` gives them: `None` for the whole
+/// data source.
+fn dirty_for_descendants(name: &str, relative: Vec<Locator>) -> Option<Vec<Locator>> {
+    match name {
+        xform::XFORM | imageable::VISIBILITY | imageable::PURPOSE => None,
+        primvars::PRIMVARS => {
+            // A changed interpolation changes which primvars are inherited.
+            let interpolation = |l: &Locator| {
+                l.elements().len() < 2 || l.elements().get(1).is_some_and(|e| e == primvars::INTERPOLATION)
+            };
+            (!relative.iter().any(interpolation)).then_some(relative)
+        }
+        material_bindings::USD_MATERIAL_BINDINGS => {
+            // The aggregated bindings of a purpose are recomputed.
+            Some(
+                relative
+                    .into_iter()
+                    .filter_map(|l| l.elements().first().map(|e| Locator::new([e.clone()])))
+                    .collect(),
+            )
+        }
+        geom_model::GEOM_MODEL => Some(
+            [geom_model::DRAW_MODE, geom_model::CARD_VISIBILITY]
+                .into_iter()
+                .map(|member| Locator::new([member]))
+                .filter(|member| relative.iter().any(|l| l.intersects(member)))
+                .collect(),
+        ),
+        _ => Some(relative),
+    }
+}
 
 /// A scene index whose prims carry their inherited data resolved.
 pub struct FlatteningSceneIndex {
@@ -138,17 +186,35 @@ impl Observer for FlatteningSceneIndex {
     fn dirtied(&self, _: &dyn SceneIndex, entries: &[Dirtied]) {
         let mut out: Vec<Dirtied> = entries.to_vec();
         for e in entries {
-            // Descendants are dirtied for the changed locators under each
-            // flattened name, or for the name itself when a broader locator
-            // (the universal one) covers it.
+            // Per flattened name, as `HdFlatteningSceneIndex::_PrimDirtied`:
+            // the whole name when a broader locator covers it, else what the
+            // provider says descendants inherit of the changes under it.
             let mut inherited = LocatorSet::new();
             for name in FLATTENED {
                 let flattened = Locator::new([*name]);
-                for changed in e.locators.iter() {
-                    if changed.has_prefix(&flattened) {
-                        inherited.insert(changed.clone());
-                    } else if flattened.has_prefix(changed) {
-                        inherited.insert(flattened.clone());
+                if !e.locators.intersects(&flattened) {
+                    continue;
+                }
+                if e.locators.contains(&flattened) {
+                    inherited.insert(flattened);
+                    continue;
+                }
+                let relative: Vec<Locator> = e
+                    .locators
+                    .iter()
+                    .filter(|l| l.has_prefix(&flattened))
+                    .map(|l| Locator::new(l.elements().iter().skip(1).cloned()))
+                    .collect();
+                match dirty_for_descendants(name, relative) {
+                    None => inherited.insert(flattened),
+                    Some(relative) => {
+                        for l in relative {
+                            let mut absolute = flattened.clone();
+                            for element in l.elements() {
+                                absolute = absolute.append(element.clone());
+                            }
+                            inherited.insert(absolute);
+                        }
                     }
                 }
             }
@@ -255,6 +321,35 @@ impl Flattened {
         })))
     }
 
+    /// The prim's own `name` container overlaid on its parent's flattened
+    /// one (`HdFlattenedOverlayDataSourceProvider`).
+    fn overlaid(&self, name: &str) -> Option<DataSource> {
+        let local = member_container(&self.local, name);
+        let parent = self.parent().and_then(|p| member_container(&p, name));
+        let containers: Vec<ContainerHandle> = local.into_iter().chain(parent).collect();
+        (!containers.is_empty()).then(|| DataSource::Container(Overlay::handle(containers)))
+    }
+
+    /// `UsdImagingFlattenedGeomModelDataSourceProvider`: the parent's when
+    /// the prim has none, else the prim's with `drawMode` and
+    /// `cardVisibility` inherited where it has none of its own (or
+    /// `inherited`).
+    fn geom_model(&self) -> Option<DataSource> {
+        let local = member_container(&self.local, geom_model::GEOM_MODEL);
+        let parent = self
+            .parent()
+            .and_then(|p| member_container(&p, geom_model::GEOM_MODEL));
+        match (local, parent) {
+            (None, None) => None,
+            (Some(local), None) => Some(DataSource::Container(local)),
+            (None, Some(parent)) => Some(DataSource::Container(parent)),
+            (Some(local), Some(parent)) => Some(DataSource::Container(Rc::new(FlattenedGeomModel {
+                local,
+                parent,
+            }))),
+        }
+    }
+
     fn material_bindings(&self) -> Option<DataSource> {
         let local = member_container(&self.local, material_bindings::USD_MATERIAL_BINDINGS);
         let parent = self
@@ -302,6 +397,8 @@ impl Container for Flattened {
             imageable::PURPOSE => self.purpose(),
             primvars::PRIMVARS => self.primvars(),
             material_bindings::USD_MATERIAL_BINDINGS => self.material_bindings(),
+            geom_model::GEOM_MODEL => self.geom_model(),
+            model::MODEL | usd_up_axis::USD_UP_AXIS => self.overlaid(name.as_str()),
             _ => self.local.get(name),
         }
     }
@@ -343,6 +440,50 @@ impl Sampled for WorldMatrix {
         times.sort_by(f32::total_cmp);
         times.dedup();
         Some(times)
+    }
+}
+
+/// A prim's own `geomModel` with the draw mode and card visibility it
+/// inherits.
+struct FlattenedGeomModel {
+    local: ContainerHandle,
+    parent: ContainerHandle,
+}
+
+impl FlattenedGeomModel {
+    /// The prim's own token at `name` unless empty or `inherited`, else the
+    /// parent's.
+    fn inherited(&self, name: &Token) -> Option<DataSource> {
+        if let Some(own) = self.local.get(name) {
+            let token = match own.value() {
+                Some(Value::Token(t)) => t,
+                _ => Token::default(),
+            };
+            if !token.as_str().is_empty() && token != "inherited" {
+                return Some(own);
+            }
+        }
+        self.parent.get(name)
+    }
+}
+
+impl Container for FlattenedGeomModel {
+    fn names(&self) -> Vec<Token> {
+        let mut names = self.local.names();
+        let parent = self.parent.names();
+        for member in [geom_model::DRAW_MODE, geom_model::CARD_VISIBILITY] {
+            if !names.iter().any(|n| n == member) && parent.iter().any(|n| n == member) {
+                names.push(Token::from(member));
+            }
+        }
+        names
+    }
+
+    fn get(&self, name: &Token) -> Option<DataSource> {
+        if name == geom_model::DRAW_MODE || name == geom_model::CARD_VISIBILITY {
+            return self.inherited(name);
+        }
+        self.local.get(name)
     }
 }
 
