@@ -132,3 +132,44 @@ fn edits_dirty_their_schema() {
         Some(false)
     );
 }
+
+#[test]
+fn names_as_usd_imaging() {
+    use moho::data_source::locate;
+    use moho::locator::Locator;
+    use moho::openusd::tf::Token;
+
+    let (_dir, usd) = common::stage(
+        r#"#usda 1.0
+def Xform "group"
+{
+    def Mesh "geo"
+    {
+    }
+}
+def Shader "shader"
+{
+}
+"#,
+    );
+    let index = moho::stage::StageSceneIndex::new();
+    index.set_stage(usd);
+    let names = |path: &str| index.prim(&common::p(path)).data.unwrap().names();
+    let group = names("/group");
+    assert!(
+        group.contains(&Token::from("visibility")),
+        "every Imageable: {group:?}"
+    );
+    assert!(!group.contains(&Token::from("extent")), "not Boundable");
+    assert!(!group.contains(&Token::from("purpose")), "default purpose");
+    let geo = names("/group/geo");
+    assert!(geo.contains(&Token::from("extent")), "every Boundable: {geo:?}");
+    let data = index.prim(&common::p("/group/geo")).data.unwrap();
+    assert!(locate(&data, &Locator::parse("extent")).is_none(), "unauthored");
+    assert!(
+        locate(&data, &Locator::parse("visibility")).is_none(),
+        "unauthored"
+    );
+    let shader = names("/shader");
+    assert!(!shader.contains(&Token::from("visibility")), "not Imageable");
+}

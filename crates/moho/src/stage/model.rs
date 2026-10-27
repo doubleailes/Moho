@@ -5,7 +5,6 @@
 
 use std::rc::Rc;
 
-use openusd::gf;
 use openusd::sdf::{self, Value};
 use openusd::tf::Token;
 use openusd::usd::{self, Object as _};
@@ -16,6 +15,7 @@ use crate::locator::{Locator, LocatorSet};
 use crate::stage::PrimContext;
 use crate::stage::adapter::Adapter;
 use crate::stage::attribute::MappedAttributeValue;
+use crate::stage::imageable::extent_corner;
 use crate::stage::table::{Member, TableContainer};
 use crate::tokens::{geom_model, imageable, model as t};
 
@@ -39,20 +39,6 @@ fn extents_hint(ctx: &PrimContext) -> Option<usd::Attribute> {
         .has_authored_value()
         .unwrap_or(false)
         .then_some(attribute)
-}
-
-fn corner(value: Value, index: usize) -> Option<Value> {
-    match value {
-        Value::Vec3fVec(v) => v.get(index).map(|c| {
-            Value::Vec3d(gf::Vec3d {
-                x: f64::from(c.x),
-                y: f64::from(c.y),
-                z: f64::from(c.z),
-            })
-        }),
-        Value::Vec3dVec(v) => v.get(index).copied().map(Value::Vec3d),
-        _ => None,
-    }
 }
 
 /// `extentsHint`: a range per purpose, as many as the attribute holds pairs
@@ -90,10 +76,10 @@ impl Container for ExtentsHint {
         let locator = Locator::new([t::EXTENTS_HINT]);
         let min =
             MappedAttributeValue::data_source(self.attribute.clone(), &self.ctx, locator.clone(), move |v| {
-                corner(v, 2 * i)
+                extent_corner(v, 2 * i)
             });
         let max = MappedAttributeValue::data_source(self.attribute.clone(), &self.ctx, locator, move |v| {
-            corner(v, 2 * i + 1)
+            extent_corner(v, 2 * i + 1)
         });
         Some(container([(imageable::MIN, min), (imageable::MAX, max)]))
     }

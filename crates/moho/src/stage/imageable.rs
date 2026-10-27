@@ -1,14 +1,18 @@
 //! Visibility, purpose and extent, as UsdImaging's prim data source exposes
-//! them: visibility only when authored and `false` only when invisible;
-//! purpose as an inheritable opinion when authored, else a fallback; extent
-//! when authored.
+//! them: `visibility` named on every Imageable, given when authored, `false`
+//! only when invisible at the index's time (unsampled); purpose, on an
+//! Imageable whose purpose is authored or not `default`, as an inheritable
+//! opinion when authored, else a fallback; `extent` named on every Boundable,
+//! given when authored.
 
 use openusd::gf;
 use openusd::sdf::Value;
 use openusd::tf::Token;
 
-use crate::data_source::DataSource;
+use std::rc::Rc;
+
 use crate::data_source::retained::{container, value};
+use crate::data_source::{Container, DataSource};
 use crate::locator::{Locator, LocatorSet};
 use crate::stage::PrimContext;
 use crate::stage::adapter::Adapter;
@@ -43,25 +47,77 @@ fn purpose(ctx: &PrimContext) -> Option<(Token, bool)> {
     Some((token, authored))
 }
 
-fn invisible(value: Value) -> Option<Value> {
+/// `visibility`: `false` when the attribute reads `invisible` at the
+/// index's time, else nothing (inherited), as `UsdImagingDataSourceVisibility`
+/// (which does not vary across the shutter).
+struct Visibility {
+    attribute: openusd::usd::Attribute,
+    ctx: PrimContext,
+}
+
+impl Container for Visibility {
+    fn names(&self) -> Vec<Token> {
+        vec![Token::from(t::VISIBILITY)]
+    }
+
+    fn get(&self, name: &Token) -> Option<DataSource> {
+        if name != t::VISIBILITY {
+            return None;
+        }
+        let read = self
+            .attribute
+            .get_at::<Value>(self.ctx.globals.time())
+            .ok()
+            .flatten();
+        matches!(read, Some(Value::Token(t)) if t == t::INVISIBLE).then(|| value(false))
+    }
+}
+
+/// `purpose`: `purpose` and `inheritable` when authored, else `fallback`
+/// (`UsdImagingDataSourcePurpose`, which names all three).
+struct Purpose {
+    token: Token,
+    authored: bool,
+}
+
+impl Container for Purpose {
+    fn names(&self) -> Vec<Token> {
+        [t::PURPOSE, t::INHERITABLE, t::FALLBACK]
+            .map(Token::from)
+            .to_vec()
+    }
+
+    fn get(&self, name: &Token) -> Option<DataSource> {
+        match name.as_str() {
+            t::PURPOSE if self.authored => Some(value(Value::Token(self.token.clone()))),
+            t::INHERITABLE if self.authored => Some(value(true)),
+            t::FALLBACK if !self.authored => Some(value(Value::Token(self.token.clone()))),
+            _ => None,
+        }
+    }
+}
+
+/// One corner of an extent, as a double vector; a missing corner reads
+/// (0, 0, 0), as `UsdImagingDataSourceExtentCoordinate` answers.
+pub(crate) fn extent_corner(value: Value, corner: usize) -> Option<Value> {
+    let zero = gf::Vec3d {
+        x: 0.0,
+        y: 0.0,
+        z: 0.0,
+    };
     match value {
-        Value::Token(t) if t == t::INVISIBLE => Some(Value::Bool(false)),
+        Value::Vec3fVec(v) => Some(Value::Vec3d(v.get(corner).map_or(zero, |c| gf::Vec3d {
+            x: f64::from(c.x),
+            y: f64::from(c.y),
+            z: f64::from(c.z),
+        }))),
+        Value::Vec3dVec(v) => Some(Value::Vec3d(v.get(corner).copied().unwrap_or(zero))),
         _ => None,
     }
 }
 
-fn extent_corner(value: Value, corner: usize) -> Option<Value> {
-    match value {
-        Value::Vec3fVec(v) => v.get(corner).map(|c| {
-            Value::Vec3d(gf::Vec3d {
-                x: f64::from(c.x),
-                y: f64::from(c.y),
-                z: f64::from(c.z),
-            })
-        }),
-        Value::Vec3dVec(v) => v.get(corner).copied().map(Value::Vec3d),
-        _ => None,
-    }
+fn is_a(ctx: &PrimContext, schema: &str) -> bool {
+    ctx.prim().is_some_and(|p| p.is_a(schema).unwrap_or(false))
 }
 
 impl Adapter for ImageableAdapter {
@@ -70,13 +126,13 @@ impl Adapter for ImageableAdapter {
             return Vec::new();
         }
         let mut names = Vec::new();
-        if authored(ctx, t::VISIBILITY) {
+        if is_a(ctx, "Imageable") {
             names.push(Token::from(t::VISIBILITY));
+            if purpose(ctx).is_some() {
+                names.push(Token::from(t::PURPOSE));
+            }
         }
-        if purpose(ctx).is_some() {
-            names.push(Token::from(t::PURPOSE));
-        }
-        if authored(ctx, t::EXTENT) {
+        if is_a(ctx, "Boundable") {
             names.push(Token::from(t::EXTENT));
         }
         names
@@ -87,25 +143,22 @@ impl Adapter for ImageableAdapter {
             return None;
         }
         match name.as_str() {
-            t::VISIBILITY if authored(ctx, t::VISIBILITY) => {
+            t::VISIBILITY if is_a(ctx, "Imageable") && authored(ctx, t::VISIBILITY) => {
                 let attribute = ctx.prim()?.attribute(t::VISIBILITY);
-                let locator = Locator::new([t::VISIBILITY]);
-                let visibility = MappedAttributeValue::data_source(attribute, ctx, locator, invisible);
-                Some(container([(t::VISIBILITY, visibility)]))
+                if attribute.might_be_time_varying().unwrap_or(false) {
+                    ctx.globals
+                        .flag_time_varying(&ctx.path, Locator::new([t::VISIBILITY]));
+                }
+                Some(DataSource::Container(Rc::new(Visibility {
+                    attribute,
+                    ctx: ctx.clone(),
+                })))
             }
-            t::PURPOSE => {
+            t::PURPOSE if is_a(ctx, "Imageable") => {
                 let (token, authored) = purpose(ctx)?;
-                let entries = if authored {
-                    vec![
-                        (t::PURPOSE, value(Value::Token(token))),
-                        (t::INHERITABLE, value(true)),
-                    ]
-                } else {
-                    vec![(t::FALLBACK, value(Value::Token(token)))]
-                };
-                Some(container(entries))
+                Some(DataSource::Container(Rc::new(Purpose { token, authored })))
             }
-            t::EXTENT if authored(ctx, t::EXTENT) => {
+            t::EXTENT if is_a(ctx, "Boundable") && authored(ctx, t::EXTENT) => {
                 let attribute = ctx.prim()?.attribute(t::EXTENT);
                 let locator = Locator::new([t::EXTENT]);
                 let min = MappedAttributeValue::data_source(attribute.clone(), ctx, locator.clone(), |v| {
