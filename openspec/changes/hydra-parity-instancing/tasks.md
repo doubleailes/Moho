@@ -27,7 +27,7 @@
 
 ## 4. Flattening
 
-- [ ] 4.1 Add flattening of `__usdUpAxis` and `model` (overlay) and `geomModel` (UsdImaging's provider) to `filter/flattening.rs`, with dirty propagation
+- [x] 4.1 Add flattening of `__usdUpAxis` and `model` (overlay) and `geomModel` (UsdImaging's provider) to `filter/flattening.rs`, with dirty propagation
 - [ ] 4.2 Remove the top-level flattening from `chain::standard`; flattening runs inside native propagation only
 
 ## 5. Instance proxy path translation
