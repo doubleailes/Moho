@@ -113,8 +113,9 @@ chunk a `chain::input` over its masked `LoadAll` stage, added, read through
 They are kept as the record of that run. They are **not comparable** with
 the current (D): its memory is (C)'s whole stage, not a chunk's, and its
 chain is `chain::standard` over the whole stage, not the merged chain over
-chunks. Its digest differs too wherever light links cross chunks. A new run
-of the current (D) has not been recorded here.
+chunks. Its digest differs too wherever light links cross chunks. Runs of the
+current (D) on ALab and Moana are recorded in
+`openspec/changes/hydra-parity-instancing/design.md` ("Cost measured").
 
 One run of the streamed (D), (A) and (B) on Moana, same machine, openusd
 `68a867a`, Moho `5574673` (`scripts/streaming-spike.sh --skip-c --with-d`
