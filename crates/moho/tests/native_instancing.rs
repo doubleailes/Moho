@@ -714,3 +714,79 @@ def Scope "Looks"
         );
     }
 }
+
+#[test]
+fn removing_the_instance_a_prototype_came_from_keeps_the_others_instanced() {
+    use moho::scene_index::testing::{Notice, RecordingObserver};
+
+    let (_dir, usd) = common::stage(
+        r#"#usda 1.0
+def Xform "asset"
+{
+    def Mesh "geo"
+    {
+    }
+}
+def Xform "world"
+{
+    def Xform "a" (
+        instanceable = true
+        references = </asset>
+    )
+    {
+    }
+    def Xform "b" (
+        instanceable = true
+        references = </asset>
+    )
+    {
+    }
+}
+"#,
+    );
+    let stage_index = StageSceneIndex::new();
+    stage_index.set_stage(usd);
+    let chain = moho::chain::standard(stage_index.clone());
+    let recorder = RecordingObserver::on(chain.as_ref());
+    stage_index.stage().unwrap().remove_prim("/world/a").unwrap();
+    stage_index.apply_pending_updates();
+    let notices = recorder.take();
+    // openusd composes /world/b under a new prototype: it is resynced.
+    assert!(
+        notices
+            .iter()
+            .any(|n| matches!(n, Notice::Added(a) if a.path == p("/world/b"))),
+        "{notices:?}"
+    );
+    assert!(
+        notices.iter().all(|n| match n {
+            Notice::Added(a) => !a
+                .path
+                .root_prim_name()
+                .unwrap_or_default()
+                .starts_with("__Prototype_"),
+            Notice::Removed(r) => !r
+                .path
+                .root_prim_name()
+                .unwrap_or_default()
+                .starts_with("__Prototype_"),
+            _ => true,
+        }),
+        "USD prototypes stay pruned: {notices:?}"
+    );
+    let instancer = instancer_of(chain.as_ref(), "/world/b");
+    assert_eq!(
+        read(chain.as_ref(), &instancer, "instancerTopology/instanceLocations"),
+        Some(Value::PathVec(vec![p("/world/b")]))
+    );
+    let prototype = instancer.append_path("UsdNiPrototype/geo").unwrap();
+    assert_eq!(chain.prim(&prototype).ty, "mesh");
+    assert!(
+        chain
+            .children(&sdf::Path::abs_root())
+            .iter()
+            .all(|c| !c.name().unwrap_or_default().starts_with("__Prototype_")),
+        "{:?}",
+        chain.children(&sdf::Path::abs_root())
+    );
+}

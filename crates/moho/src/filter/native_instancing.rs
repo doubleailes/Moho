@@ -301,20 +301,24 @@ impl Observer for PrototypePruningSceneIndex {
     }
 
     fn removed(&self, _: &dyn SceneIndex, entries: &[Removed]) {
+        // Judged against the prototypes as they were: Moho's stage index
+        // removes a prototype's descendants by entries of their own, after
+        // the prototype's (UsdImaging's sends the prototype only).
         let kept: Vec<Removed> = entries
             .iter()
-            .filter(|e| {
-                if e.path.is_abs_root() {
-                    self.prototypes.borrow_mut().clear();
-                    true
-                } else if e.path.is_root_prim() {
-                    !self.prototypes.borrow_mut().remove(&e.path)
-                } else {
-                    !self.pruned(&e.path)
-                }
-            })
+            .filter(|e| e.path.is_abs_root() || !self.pruned(&e.path))
             .cloned()
             .collect();
+        {
+            let mut prototypes = self.prototypes.borrow_mut();
+            for e in entries {
+                if e.path.is_abs_root() {
+                    prototypes.clear();
+                } else if e.path.is_root_prim() {
+                    prototypes.remove(&e.path);
+                }
+            }
+        }
         self.observers.send_removed(self, &kept);
     }
 
