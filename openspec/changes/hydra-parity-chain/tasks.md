@@ -13,7 +13,7 @@
 - [ ] 2.1 Rewrite `filter/light_linking.rs` as a port of `HdsiLightLinkingSceneIndex` and its cache (design D2): `group_<n>` ids, trivial expressions, the evaluator over the input, `light/{lightLink, shadowLink, lightFilterLink}` only where `collections` holds the collection
 - [ ] 2.2 `categories` on non-instanced rprims only, absent when empty; `instanceCategories` on native instancers per instance location; `categories` on point instancers; `__dependencies` on instancers
 - [ ] 2.3 Invalidation: union of dirty expressions evaluated once, `categories` dirtied on its matches, link locators on lights whose id changed
-- [ ] 2.4 Light filter prims in `stage/light.rs`: type `lightFilter`, collections, `light`, `material` with terminal `lightFilter` and `lightFilter:shaderId`
+- [x] 2.4 Light filter prims in `stage/light.rs`: type `lightFilter`, collections, `light`, `material` with terminal `lightFilter` and `lightFilter:shaderId`
 - [ ] 2.5 Remove light linking from `chain::standard`; remove `CollectionMembership` from `scene_index.rs` and its implementation on the stage index
 
 ## 3. Chain and renderer filters

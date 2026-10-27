@@ -11,6 +11,14 @@
 //!
 //! `material` is the light's network: the light prim is its one node, by
 //! its absolute path, feeding the terminal `light` (`stage/material.rs`).
+//!
+//! A light filter (a `LightFilter`, or a prim of a type derived from it) is
+//! UsdImaging's light filter adapter: type `lightFilter`, and `material`,
+//! its network with the filter prim as the one node feeding the terminal
+//! `lightFilter`, identified by `lightFilter:shaderId`. It has no `light`
+//! of its own (the light linking filter gives it one), and its collections
+//! come from the collection adapter. It represents its descendants, as a
+//! material does.
 
 use std::rc::Rc;
 
@@ -27,7 +35,7 @@ use crate::stage::adapter::Adapter;
 use crate::stage::attribute::AttributeValue;
 use crate::stage::material::networks;
 use crate::tokens::light as t;
-use crate::tokens::material;
+use crate::tokens::{material, prim_type};
 
 /// Hydra's light parameter tokens and the `inputs:` attributes
 /// `LookupLightParamAttribute` reads for them.
@@ -211,4 +219,31 @@ fn dome_offset(prim: &usd::Prim) -> gf::Mat4d {
     m.0[9] = -2.0 * (i * r);
     m.0[10] = 1.0 - 2.0 * (i * i);
     m
+}
+
+/// The adapter of light filters (`UsdImagingLightFilterAdapter`).
+pub struct LightFilterAdapter;
+
+impl Adapter for LightFilterAdapter {
+    fn prim_type(&self, _ctx: &PrimContext) -> Token {
+        Token::from(prim_type::LIGHT_FILTER)
+    }
+
+    fn names(&self, _ctx: &PrimContext) -> Vec<Token> {
+        vec![Token::from(material::MATERIAL)]
+    }
+
+    fn get(&self, ctx: &PrimContext, name: &Token) -> Option<DataSource> {
+        (name == material::MATERIAL).then(|| networks(ctx, Some(material::LIGHT_FILTER)))
+    }
+
+    /// As `UsdImagingLightFilterAdapter::InvalidateImagingSubprim`: an
+    /// `inputs:*` edit dirties the whole `material` (its node is named by
+    /// the filter's path, so no single parameter is named).
+    fn invalidate(&self, _ctx: &PrimContext, name: &str) -> LocatorSet {
+        if name.starts_with("inputs:") {
+            return Locator::new([material::MATERIAL]).into();
+        }
+        LocatorSet::new()
+    }
 }

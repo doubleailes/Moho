@@ -199,3 +199,16 @@ Lands last, after `hydra-parity-materials`. Consumers build
 `chain::standard`, apply their renderer filters (light linking at 4,
 dependency forwarding at 1000), then batch by prim type and observe with a
 prim factory.
+
+## Deviations recorded while implementing
+
+- **A light filter has no `light` at the stage index** (spec "Light
+  filters" said it answers its parameters by name in `light`).
+  `UsdImagingLightFilterAdapter::GetImagingSubprimData` gives a light
+  filter `material` (terminal `lightFilter`) over the base prim data, and no
+  `light`; checked with USD 26.08 (the comparison harness). Only the light
+  linking filter gives one, holding the three link ids. Moho follows
+  UsdImaging, as the user's parity decision says; the filter's parameters
+  are in its `material` node's `parameters`. A light filter's descendants
+  are represented by it (`RepresentsSelfAndDescendents`): a shader under it
+  dirties its `material`.

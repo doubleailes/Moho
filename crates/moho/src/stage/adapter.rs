@@ -119,6 +119,9 @@ impl AdapterRegistry {
             Rc::new(crate::stage::point_instancer::PointInstancerAdapter),
         );
         registry.set_type("Material", Rc::new(crate::stage::material::MaterialAdapter));
+        for filter in ["LightFilter", "PluginLightFilter"] {
+            registry.set_type(filter, Rc::new(crate::stage::light::LightFilterAdapter));
+        }
         registry.set_type("BasisCurves", Rc::new(crate::stage::curves::BASIS_CURVES));
         registry.set_type("NurbsCurves", Rc::new(crate::stage::curves::NURBS_CURVES));
         {
