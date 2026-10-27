@@ -211,3 +211,118 @@ fn material_bindings_concatenate_down() {
     input.dirty_prims([(p("/a"), LocatorSet::from(Locator::parse("usdMaterialBindings")))]);
     assert_eq!(recorder.take().len(), 2, "/a and /a/b");
 }
+
+const MODELS: &str = r#"#usda 1.0
+(
+    upAxis = "Z"
+)
+def Xform "asset" (
+    kind = "component"
+    assetInfo = {
+        string name = "asset"
+    }
+    prepend apiSchemas = ["GeomModelAPI"]
+)
+{
+    uniform token model:drawMode = "bounds"
+    uniform token model:cardGeometry = "cross"
+
+    def Xform "part" (
+        prepend apiSchemas = ["GeomModelAPI"]
+    )
+    {
+        uniform token model:cardGeometry = "box"
+        def Mesh "geo"
+        {
+        }
+    }
+}
+"#;
+
+fn read(flat: &FlatteningSceneIndex, path: &str, locator: &str) -> Option<Value> {
+    locate(&flat.prim(&p(path)).data?, &Locator::parse(locator)).and_then(|d| d.value())
+}
+
+#[test]
+fn the_up_axis_reaches_every_prim() {
+    let (_dir, stage) = stage(MODELS);
+    let stage_index = StageSceneIndex::new();
+    stage_index.set_stage(stage);
+    let flat = FlatteningSceneIndex::new(stage_index);
+    for path in ["/asset", "/asset/part", "/asset/part/geo"] {
+        assert_eq!(
+            read(&flat, path, "__usdUpAxis/upAxis"),
+            Some(Value::Token(Token::from("Z"))),
+            "{path}"
+        );
+    }
+}
+
+#[test]
+fn model_data_is_inherited() {
+    let (_dir, stage) = stage(MODELS);
+    let stage_index = StageSceneIndex::new();
+    stage_index.set_stage(stage);
+    let flat = FlatteningSceneIndex::new(stage_index);
+    assert_eq!(
+        read(&flat, "/asset/part/geo", "model/modelPath"),
+        read(&flat, "/asset", "model/modelPath"),
+        "the model's own data reaches its descendants"
+    );
+    assert!(read(&flat, "/asset", "model/modelPath").is_some());
+    // A prim with its own geomModel inherits the draw mode it lacks.
+    assert_eq!(
+        read(&flat, "/asset/part", "geomModel/drawMode"),
+        Some(Value::Token(Token::from("bounds")))
+    );
+    assert_eq!(
+        read(&flat, "/asset/part", "geomModel/cardGeometry"),
+        Some(Value::Token(Token::from("box"))),
+        "its own data stays"
+    );
+    // A prim without one takes its parent's whole.
+    assert_eq!(
+        read(&flat, "/asset/part/geo", "geomModel/cardGeometry"),
+        Some(Value::Token(Token::from("box")))
+    );
+}
+
+#[test]
+fn descendants_are_dirtied_for_what_they_inherit() {
+    let input = RetainedSceneIndex::new();
+    let empty = || Prim::new("", RetainedContainer::default().into_handle());
+    input.add_prims([(p("/a"), empty()), (p("/a/b"), empty())]);
+    let flat = FlatteningSceneIndex::new(input.clone());
+    let recorder = RecordingObserver::on(flat.as_ref());
+    let child_locators = |locators: &[&str]| -> Vec<String> {
+        input.dirty_prims([(
+            p("/a"),
+            locators.iter().map(|l| Locator::parse(l)).collect::<LocatorSet>(),
+        )]);
+        recorder
+            .take()
+            .into_iter()
+            .filter_map(|n| match n {
+                Notice::Dirtied(d) if d.path == p("/a/b") => Some(d.locators),
+                _ => None,
+            })
+            .flat_map(|set| set.iter().map(ToString::to_string).collect::<Vec<_>>())
+            .collect()
+    };
+    assert_eq!(child_locators(&["xform/matrix"]), ["xform"]);
+    assert_eq!(child_locators(&["visibility/visibility"]), ["visibility"]);
+    assert_eq!(
+        child_locators(&["primvars/tint/primvarValue"]),
+        ["primvars/tint/primvarValue"]
+    );
+    assert_eq!(child_locators(&["primvars/tint/interpolation"]), ["primvars"]);
+    assert_eq!(
+        child_locators(&["usdMaterialBindings/preview/0"]),
+        ["usdMaterialBindings/preview"]
+    );
+    assert_eq!(child_locators(&["model/assetName"]), ["model/assetName"]);
+    assert_eq!(child_locators(&["geomModel/drawMode"]), ["geomModel/drawMode"]);
+    assert!(child_locators(&["geomModel/cardGeometry"]).is_empty());
+    assert_eq!(child_locators(&["geomModel"]), ["geomModel"]);
+    assert!(child_locators(&["mesh/topology"]).is_empty());
+}
