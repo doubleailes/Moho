@@ -212,3 +212,18 @@ prim factory.
   are in its `material` node's `parameters`. A light filter's descendants
   are represented by it (`RepresentsSelfAndDescendents`): a shader under it
   dirties its `material`.
+- **Light linking reads its input when built.** `HdsiLightLinkingSceneIndex`
+  learns lights and filters from added notices only (a render index's
+  merging scene index sends them when the chain is inserted); built over an
+  input already populated, it would know none. Moho's is often built over a
+  populated chain, so it reads the lights and filters its input holds when
+  made, as a first population (which dirties nothing, as Hydra's first added
+  batch). Its notices and data then match Hydra's (checked with USD 26.08,
+  the comparison harness, light linking and dependency forwarding over a
+  merging index).
+- **Light linking keeps its tables while unobserved.** Hydra's returns
+  early from every notice while nothing observes it, so its cache goes
+  stale. Moho's keeps the cache current and only skips computing the
+  dirtied entries, which would go nowhere.
+- **Category order.** Hydra lists a prim's categories in hash order; Moho
+  lists them in id order (`group_0` first).

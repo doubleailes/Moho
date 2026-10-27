@@ -4,26 +4,20 @@ use std::rc::Rc;
 
 use crate::filter::extent_resolving::{self, ExtentResolvingSceneIndex};
 use crate::filter::{
-    InstanceProxyPathTranslationSceneIndex, LightLinkingSceneIndex, MaterialBindingResolvingSceneIndex,
-    NativeInstancingSceneIndex, PointInstancingSceneIndex, RenderSettingsFlatteningSceneIndex,
+    InstanceProxyPathTranslationSceneIndex, MaterialBindingResolvingSceneIndex, NativeInstancingSceneIndex,
+    PointInstancingSceneIndex, RenderSettingsFlatteningSceneIndex,
 };
-use crate::scene_index::{CollectionMembership, SceneIndexHandle};
+use crate::scene_index::SceneIndexHandle;
 use crate::stage::StageSceneIndex;
 use crate::tokens::material_bindings;
 
 /// The standard chain over `stage`: extent resolving, point instancer
 /// propagation, native instancer propagation (which flattens the stage and
 /// each prototype), instance proxy path translation (of
-/// `usdMaterialBindings`), material binding resolving, render settings
-/// flattening, then light linking. Binding collections are judged over the
-/// scene index, as UsdImaging judges them; the stage index answers
-/// collection membership for light linking until `hydra-parity-chain`.
-///
-/// Up to binding resolving this is `UsdImagingCreateSceneIndices`' order
-/// with `addDrawModeSceneIndex = false`; `hydra-parity-chain` moves light
-/// linking out, as Hydra's renderers append it.
+/// `usdMaterialBindings`), material binding resolving, then render settings
+/// flattening. Light linking is not in it: a renderer adds it (see
+/// [`LightLinkingSceneIndex`](crate::filter::LightLinkingSceneIndex)).
 pub fn standard(stage: Rc<StageSceneIndex>) -> SceneIndexHandle {
-    let membership: Rc<dyn CollectionMembership> = stage.clone();
     let extents = ExtentResolvingSceneIndex::new(stage, extent_resolving::STANDARD_PURPOSES.iter().copied());
     let point = PointInstancingSceneIndex::new(extents);
     let native = NativeInstancingSceneIndex::new(point);
@@ -31,6 +25,5 @@ pub fn standard(stage: Rc<StageSceneIndex>) -> SceneIndexHandle {
     let proxies =
         InstanceProxyPathTranslationSceneIndex::new(native, [material_bindings::USD_MATERIAL_BINDINGS]);
     let bindings = MaterialBindingResolvingSceneIndex::new(proxies);
-    let settings = RenderSettingsFlatteningSceneIndex::new(bindings);
-    LightLinkingSceneIndex::new(settings, Some(membership))
+    RenderSettingsFlatteningSceneIndex::new(bindings)
 }
