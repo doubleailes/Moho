@@ -280,3 +280,25 @@ the same step. No rollback beyond reverting the rev.
   dirties `renderSettings/renderProducts`, not the whole `renderSettings`.
   A `products` edit dirties `renderProducts` (UsdImaging rebuilds
   `__dependencies` only).
+- **Task 2.5, the private prototype identity.** `__usdPrimInfo` no longer
+  names `niPrototypeIdentity`, and its token is crate-private; the
+  container still answers it by name, which is how native instancing reads
+  it through the filters above the stage index (extent resolving overlays
+  forward unnamed members). `hydra-parity-instancing` removes it.
+- **Task 2.11, adapters.** The comparison is `adapters.md`. Reproduced as
+  UsdImaging's quirks: `primvars:<n>:indices` dirties
+  `primvars/<n>:indices`; `camera` lists USD attribute names and answers
+  Hydra's and any attribute's; a geom subset's edits dirty top-level
+  `indices` and `type`; `geomXformVectors` is never invalidated; members
+  that are named but answer nothing (`visibility`, `xform`, `extent`,
+  `primvars`, a gprim's custom primvars). Not reproduced: a field asset
+  listing `fieldDataType` twice (listed once). Limited by openusd: a colour
+  space's validity is checked against `GfColorSpace`'s built-in names only
+  (no `ColorSpaceDefinitionAPI`), and openusd's accumulated xform vectors
+  read a rotation's angles in the stack's order where C++ reads ZYX angles.
+  Found outside the families and left for later changes: render prims
+  carry the base prim data UsdImaging skips for them, and Points,
+  HermiteCurves, TetMesh and NurbsPatch have no adapter.
+- **D4, a material under an instancer.** The whole-stage pass empties
+  renderable types only, so a material under a point instancer keeps the
+  type `material` (Moho emptied every type there before), as UsdImaging.
