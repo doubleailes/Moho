@@ -28,34 +28,34 @@ fn read(index: &dyn SceneIndex, path: &str, name: &str) -> Option<Value> {
     locate(&index.prim(&p(path)).data?, &Locator::parse(name)).and_then(|d| d.value())
 }
 
-/// A scene input holding the hierarchy, and a chunk holding one element's
-/// payload contents, as S0's streaming does.
-fn scene_and_chunk() -> (Rc<RetainedSceneIndex>, Rc<RetainedSceneIndex>) {
+/// An input holding the hierarchy, and another holding one element's
+/// contents.
+fn two_inputs() -> (Rc<RetainedSceneIndex>, Rc<RetainedSceneIndex>) {
     let scene = RetainedSceneIndex::new();
     scene.add_prims([
         (p("/world"), prim("", &[("a", 1)])),
         (p("/world/elem"), prim("", &[("fromScene", 1), ("shared", 1)])),
         (p("/world/other"), prim("", &[])),
     ]);
-    let chunk = RetainedSceneIndex::new();
-    chunk.add_prims([
+    let element = RetainedSceneIndex::new();
+    element.add_prims([
         (p("/world"), prim("", &[("ignored", 1)])),
         (p("/world/elem"), prim("", &[("fromChunk", 2), ("shared", 2)])),
         (p("/world/elem/geo"), prim("mesh", &[])),
     ]);
-    (scene, chunk)
+    (scene, element)
 }
 
 #[test]
 fn two_inputs_share_a_prim() {
-    let (scene, chunk) = scene_and_chunk();
+    let (scene, element) = two_inputs();
     let merged = MergingSceneIndex::new();
-    merged.add_input_scene(chunk.clone(), p("/world/elem"));
+    merged.add_input_scene(element.clone(), p("/world/elem"));
     merged.add_input_scene(scene.clone(), sdf_root());
     assert_eq!(
         read(merged.as_ref(), "/world/elem", "shared"),
         Some(Value::Int(2)),
-        "the chunk is stronger"
+        "the element input is stronger"
     );
     assert_eq!(
         read(merged.as_ref(), "/world/elem", "fromScene"),
@@ -71,47 +71,51 @@ fn two_inputs_share_a_prim() {
         "an input answers only under its root"
     );
     assert_eq!(merged.prim(&p("/world/elem/geo")).ty, "mesh");
-    assert_eq!(
-        merged.children(&p("/world")),
-        [p("/world/elem"), p("/world/other")]
-    );
+    // The union of the inputs' children, in no specified order.
+    let mut children = merged.children(&p("/world"));
+    children.sort();
+    assert_eq!(children, [p("/world/elem"), p("/world/other")]);
 }
 
 #[test]
-fn a_chunk_comes_and_goes() {
-    let (scene, chunk) = scene_and_chunk();
+fn an_input_comes_and_goes() {
+    let (scene, element) = two_inputs();
     let merged = MergingSceneIndex::new();
     merged.add_input_scene(scene.clone(), sdf_root());
     let recorder = RecordingObserver::on(merged.as_ref());
-    let chunk_handle: SceneIndexHandle = chunk.clone();
-    merged.insert_input_scene(0, chunk_handle.clone(), p("/world/elem"));
-    let added = recorder.take();
-    assert!(
-        added.contains(&Notice::Added(Added {
-            path: p("/world/elem/geo"),
-            ty: Token::from("mesh")
-        })),
-        "{added:?}"
+    let element_handle: SceneIndexHandle = element.clone();
+    merged.insert_input_scene(0, element_handle.clone(), p("/world/elem"));
+    assert_eq!(
+        recorder.take(),
+        [
+            Notice::Added(Added {
+                path: p("/world/elem"),
+                ty: Token::default()
+            }),
+            Notice::Added(Added {
+                path: p("/world/elem/geo"),
+                ty: Token::from("mesh")
+            }),
+        ],
+        "the root and what the input lists under it, not its ancestors"
     );
     assert_eq!(
         read(merged.as_ref(), "/world/elem", "shared"),
         Some(Value::Int(2))
     );
 
-    merged.remove_input_scene(&chunk_handle);
-    let notices = recorder.take();
-    assert!(
-        notices.contains(&Notice::Removed(Removed {
-            path: p("/world/elem/geo")
-        })),
-        "{notices:?}"
-    );
-    assert!(
-        notices.contains(&Notice::Added(Added {
-            path: p("/world/elem"),
-            ty: Token::default()
-        })),
-        "{notices:?}"
+    merged.remove_input_scene(&element_handle);
+    assert_eq!(
+        recorder.take(),
+        [
+            Notice::Removed(Removed {
+                path: p("/world/elem/geo")
+            }),
+            Notice::Added(Added {
+                path: p("/world/elem"),
+                ty: Token::default()
+            }),
+        ]
     );
     assert!(!merged.prim(&p("/world/elem/geo")).is_defined());
     assert_eq!(
@@ -120,7 +124,7 @@ fn a_chunk_comes_and_goes() {
         "back to the scene input"
     );
 
-    chunk.dirty_prims([(p("/world/elem/geo"), Default::default())]);
+    element.dirty_prims([(p("/world/elem/geo"), Default::default())]);
     assert!(
         recorder.take().is_empty(),
         "a removed input's notices are ignored"
@@ -128,10 +132,85 @@ fn a_chunk_comes_and_goes() {
 }
 
 #[test]
-fn a_weaker_input_removes_a_shared_prim() {
-    let (scene, chunk) = scene_and_chunk();
+fn an_undefined_root_is_added() {
+    let input = RetainedSceneIndex::new();
+    input.add_prims([(p("/w/geo"), prim("mesh", &[]))]);
     let merged = MergingSceneIndex::new();
-    merged.add_input_scene(chunk.clone(), p("/world/elem"));
+    let recorder = RecordingObserver::on(merged.as_ref());
+    // The input does not define `/w/x`, its root.
+    merged.add_input_scene(input.clone(), p("/w/x"));
+    assert_eq!(
+        recorder.take(),
+        [Notice::Added(Added {
+            path: p("/w/x"),
+            ty: Token::default()
+        })]
+    );
+}
+
+#[test]
+fn a_notice_outside_a_root_is_forwarded() {
+    let input = RetainedSceneIndex::new();
+    input.add_prims([(p("/a"), prim("", &[])), (p("/b/x"), prim("mesh", &[]))]);
+    let merged = MergingSceneIndex::new();
+    merged.add_input_scene(input.clone(), p("/a"));
+    let recorder = RecordingObserver::on(merged.as_ref());
+    input.dirty_prims([(p("/b/x"), Locator::parse("xform").into())]);
+    input.add_prims([(p("/b/y"), prim("mesh", &[]))]);
+    assert_eq!(
+        recorder.take(),
+        [
+            Notice::Dirtied(Dirtied {
+                path: p("/b/x"),
+                locators: Locator::parse("xform").into()
+            }),
+            Notice::Added(Added {
+                path: p("/b/y"),
+                ty: Token::from("mesh")
+            }),
+        ],
+        "forwarded unfiltered, as HdMergingSceneIndex does"
+    );
+}
+
+#[test]
+fn an_added_entry_takes_the_merged_type() {
+    let strong = RetainedSceneIndex::new();
+    strong.add_prims([(p("/a"), prim("", &[]))]);
+    let weak = RetainedSceneIndex::new();
+    weak.add_prims([(p("/a"), prim("", &[]))]);
+    let merged = MergingSceneIndex::new();
+    merged.add_input_scene(strong.clone(), p("/a"));
+    merged.add_input_scene(weak.clone(), p("/a"));
+    let recorder = RecordingObserver::on(merged.as_ref());
+    strong.add_prims([(p("/a/x"), prim("mesh", &[]))]);
+    weak.add_prims([(p("/a/x"), prim("camera", &[]))]);
+    // Outside every root, no input gives a type: the entry's is emptied.
+    weak.add_prims([(p("/b"), prim("camera", &[]))]);
+    assert_eq!(
+        recorder.take(),
+        [
+            Notice::Added(Added {
+                path: p("/a/x"),
+                ty: Token::from("mesh")
+            }),
+            Notice::Added(Added {
+                path: p("/a/x"),
+                ty: Token::from("mesh")
+            }),
+            Notice::Added(Added {
+                path: p("/b"),
+                ty: Token::default()
+            }),
+        ]
+    );
+}
+
+#[test]
+fn a_weaker_input_removes_a_shared_prim() {
+    let (scene, element) = two_inputs();
+    let merged = MergingSceneIndex::new();
+    merged.add_input_scene(element.clone(), p("/world/elem"));
     merged.add_input_scene(scene.clone(), sdf_root());
     let recorder = RecordingObserver::on(merged.as_ref());
     scene.remove_prims([p("/world/elem")]);
@@ -163,7 +242,10 @@ fn a_weaker_input_removes_a_shared_prim() {
 fn ancestors_of_a_root_exist() {
     let deep = RetainedSceneIndex::new();
     deep.add_prims([(p("/a/b/c"), prim("mesh", &[]))]);
+    let other = RetainedSceneIndex::new();
+    other.add_prims([(p("/x"), prim("", &[]))]);
     let merged = MergingSceneIndex::new();
+    merged.add_input_scene(other.clone(), p("/x"));
     let recorder = RecordingObserver::on(merged.as_ref());
     merged.add_input_scene(deep.clone(), p("/a/b/c"));
     assert_eq!(
@@ -176,7 +258,21 @@ fn ancestors_of_a_root_exist() {
     );
     assert!(merged.prim(&p("/a")).is_defined());
     assert_eq!(merged.children(&p("/a")), [p("/a/b")]);
-    assert_eq!(merged.children(&sdf_root()), [p("/a")]);
+    let mut roots = merged.children(&sdf_root());
+    roots.sort();
+    assert_eq!(roots, [p("/a"), p("/x")]);
+}
+
+#[test]
+fn a_single_input_answers_every_path() {
+    let deep = RetainedSceneIndex::new();
+    deep.add_prims([(p("/a/b/c"), prim("mesh", &[])), (p("/z"), prim("camera", &[]))]);
+    let merged = MergingSceneIndex::new();
+    merged.add_input_scene(deep.clone(), p("/a/b/c"));
+    // As HdMergingSceneIndex: with one input, its prims are the merge's,
+    // under its root or not.
+    assert_eq!(merged.prim(&p("/z")).ty, "camera");
+    assert_eq!(merged.children(&p("/a")), [p("/a/b")]);
 }
 
 fn sdf_root() -> moho::openusd::sdf::Path {
@@ -228,41 +324,6 @@ impl SceneIndex for Renaming {
 }
 
 #[test]
-fn renames_outside_a_root_stay_hidden() {
-    let inner = RetainedSceneIndex::new();
-    inner.add_prims([
-        (p("/a/x"), prim("mesh", &[])),
-        (p("/hidden/y"), prim("mesh", &[])),
-    ]);
-    let input = Renaming::new(inner);
-    let merged = MergingSceneIndex::new();
-    merged.add_input_scene(input.clone(), p("/a"));
-    let recorder = RecordingObserver::on(merged.as_ref());
-
-    input.rename("/hidden/y", "/hidden/z");
-    assert_eq!(recorder.take(), [], "neither side is under /a");
-
-    input.rename("/a/x", "/a/w");
-    assert_eq!(
-        recorder.take(),
-        [
-            Notice::Removed(Removed { path: p("/a/x") }),
-            Notice::Added(Added {
-                path: p("/a/w"),
-                ty: Token::from("mesh")
-            }),
-        ]
-    );
-
-    input.rename("/a/w", "/hidden/w");
-    assert_eq!(
-        recorder.take(),
-        [Notice::Removed(Removed { path: p("/a/w") })],
-        "moved out of /a: removed only"
-    );
-}
-
-#[test]
 fn an_index_added_at_two_roots_reaches_both() {
     let inner = RetainedSceneIndex::new();
     inner.add_prims([(p("/a"), prim("", &[])), (p("/b"), prim("", &[]))]);
@@ -296,54 +357,46 @@ fn prims_under_undefined_ancestors_are_merged() {
     let merged = MergingSceneIndex::new();
     let recorder = RecordingObserver::on(merged.as_ref());
     merged.add_input_scene(deep.clone(), sdf_root());
+    let added = |path: &str, ty: &str| {
+        Notice::Added(Added {
+            path: p(path),
+            ty: Token::from(ty),
+        })
+    };
     assert_eq!(
         recorder.take(),
-        [Notice::Added(Added {
-            path: p("/a/b/geo"),
-            ty: Token::from("mesh")
-        })]
+        [
+            added("/", ""),
+            added("/a", ""),
+            added("/a/b", ""),
+            added("/a/b/geo", "mesh")
+        ],
+        "every prim the input lists, defined or not"
     );
 
-    // A second input holds the mesh too: removing the first keeps it.
+    // A second input holds them too: removing the first keeps them.
     let other = RetainedSceneIndex::new();
-    other.add_prims([(p("/a/b/geo"), prim("mesh", &[]))]);
+    other.add_prims([
+        (sdf_root(), prim("", &[])),
+        (p("/a"), prim("", &[])),
+        (p("/a/b"), prim("", &[])),
+        (p("/a/b/geo"), prim("mesh", &[])),
+    ]);
     merged.add_input_scene(other.clone(), sdf_root());
     recorder.take();
     let handle: SceneIndexHandle = deep;
     merged.remove_input_scene(&handle);
+    let mut notices = recorder.take();
+    notices.sort_by_key(|n| format!("{n:?}"));
     assert_eq!(
-        recorder.take(),
-        [Notice::Added(Added {
-            path: p("/a/b/geo"),
-            ty: Token::from("mesh")
-        })]
+        notices,
+        [
+            added("/", ""),
+            added("/a", ""),
+            added("/a/b", ""),
+            added("/a/b/geo", "mesh")
+        ]
     );
-}
-
-#[test]
-fn merged_children_are_in_input_order() {
-    let strong = RetainedSceneIndex::new();
-    strong.add_prims([(p("/w/b"), prim("", &[])), (p("/w/a"), prim("", &[]))]);
-    let weak = RetainedSceneIndex::new();
-    weak.add_prims([(p("/w/a"), prim("", &[])), (p("/w/c"), prim("", &[]))]);
-    let deep = RetainedSceneIndex::new();
-    deep.add_prims([(p("/w/d/e"), prim("", &[]))]);
-    let merged = MergingSceneIndex::new();
-    merged.add_input_scene(deep.clone(), p("/w/d/e"));
-    merged.add_input_scene(strong.clone(), sdf_root());
-    merged.add_input_scene(weak.clone(), sdf_root());
-    // The deep input is strongest, but implied prims come after every
-    // input's own children.
-    let strong_order = strong.children(&p("/w"));
-    let weak_order = weak.children(&p("/w"));
-    let mut expected: Vec<_> = strong_order.clone();
-    for c in weak_order {
-        if !expected.contains(&c) {
-            expected.push(c);
-        }
-    }
-    expected.push(p("/w/d"));
-    assert_eq!(merged.children(&p("/w")), expected);
 }
 
 /// An input mounted at `/` can change the root's data (the scene globals):
@@ -376,13 +429,13 @@ fn an_input_at_the_root_notifies_the_root() {
 
 #[test]
 fn an_input_does_not_re_add_its_ancestors() {
-    let (scene, chunk) = scene_and_chunk();
+    let (scene, element) = two_inputs();
     let merged = MergingSceneIndex::new();
     merged.add_input_scene(scene.clone(), sdf_root());
     let recorder = RecordingObserver::on(merged.as_ref());
     // Only the new input's own prims are added, as HdMergingSceneIndex
     // does.
-    merged.add_input_scene(chunk.clone(), p("/world/elem"));
+    merged.add_input_scene(element.clone(), p("/world/elem"));
     let added: Vec<String> = recorder
         .take()
         .into_iter()
@@ -425,4 +478,25 @@ fn many_inputs_are_found_by_path() {
     assert!(!merged.prim(&p("/r5/deep")).is_defined());
     assert!(!merged.prim(&p("/r5")).is_defined());
     assert_eq!(merged.children(&sdf_root()).len(), 7);
+}
+
+#[test]
+fn a_rename_is_a_removal_and_an_addition() {
+    let inner = RetainedSceneIndex::new();
+    inner.add_prims([(p("/a/x"), prim("mesh", &[]))]);
+    let input = Renaming::new(inner);
+    let merged = MergingSceneIndex::new();
+    merged.add_input_scene(input.clone(), p("/a"));
+    let recorder = RecordingObserver::on(merged.as_ref());
+    input.rename("/a/x", "/a/w");
+    assert_eq!(
+        recorder.take(),
+        [
+            Notice::Removed(Removed { path: p("/a/x") }),
+            Notice::Added(Added {
+                path: p("/a/w"),
+                ty: Token::from("mesh")
+            }),
+        ]
+    );
 }
