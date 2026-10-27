@@ -5,8 +5,8 @@
 //! Earlier inputs are stronger: a prim takes the first non-empty type, and
 //! its data overlays the inputs' containers, stronger first. The ancestors
 //! of every root exist, with empty data where no input holds them. Adding an
-//! input notifies added its root's ancestors that had no prim, then its
-//! subtree; removing one notifies removed what no other input holds and
+//! input notifies its subtree added (not the ancestors of its root, as
+//! Hydra's); removing one notifies removed what no other input holds and
 //! re-added what one does. Nothing is computed for notices while no one
 //! observes the index. With many inputs, a prim is answered from the inputs
 //! at its ancestors (Hydra's path table), not by scanning them all.
@@ -111,26 +111,13 @@ impl MergingSceneIndex {
     /// Inserts `index` at `root` at `position` in strength order (0 is the
     /// strongest).
     ///
-    /// Notifies added, as `HdMergingSceneIndex`, the strict ancestors of
-    /// `root` from the first one no input holds a prim at, then the new
-    /// input's prims at and under `root`.
+    /// Notifies added the new input's prims at and under `root`, not the
+    /// ancestors of `root` it makes exist: `HdMergingSceneIndex`'s
+    /// `_AddStrictPrefixesOfSceneRoots` skips every valid root (its test is
+    /// inverted), so Hydra never notifies them either.
     pub fn insert_input_scene(&self, position: usize, index: SceneIndexHandle, root: sdf::Path) {
         let observer: Weak<dyn Observer> = self.me.clone();
         index.add_observer(observer);
-        let observed = !self.observers.is_empty();
-        let mut paths: Vec<sdf::Path> = Vec::new();
-        if observed {
-            // `_AddStrictPrefixesOfSceneRoots`, read before the input joins.
-            let mut prefixes: Vec<sdf::Path> = root.strict_ancestors_below_root().collect();
-            prefixes.reverse();
-            let mut has_prim = true;
-            for prefix in prefixes {
-                has_prim = has_prim && self.prim(&prefix).is_defined();
-                if !has_prim {
-                    paths.push(prefix);
-                }
-            }
-        }
         {
             let mut inputs = self.inputs.borrow_mut();
             let position = position.min(inputs.len());
@@ -154,11 +141,10 @@ impl MergingSceneIndex {
                 *self.table.borrow_mut() = table;
             }
         }
-        if !observed {
+        if self.observers.is_empty() {
             return;
         }
-        paths.extend(subtree(index.as_ref(), &root));
-        let added: Vec<Added> = paths
+        let added: Vec<Added> = subtree(index.as_ref(), &root)
             .into_iter()
             .map(|path| {
                 let ty = self.prim(&path).ty;
