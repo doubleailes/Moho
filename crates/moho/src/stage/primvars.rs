@@ -69,16 +69,14 @@ const INSTANCER_CUSTOM: &[(&str, &str)] = &[
 const INSTANCE: &str = "instance";
 use crate::tokens::instancing::{INSTANCE_ROTATIONS, INSTANCE_SCALES, INSTANCE_TRANSLATIONS};
 
-/// The colour spaces `GfColorSpace::IsValid` knows (nanocolor's table, by
-/// short and descriptive name).
-///
-/// Workaround, an upstream candidate in `ROADMAP.md`: openusd has no
-/// `UsdColorSpaceAPI::ComputeColorSpaceName` nor `GfColorSpace`.
 /// `UsdColorSpaceAPI::ComputeColorSpaceName` for `attribute` of the prim at
 /// `prim`: the attribute's own `colorSpace`, else the nearest prim, from its
 /// own up, applying `ColorSpaceAPI` with a non-empty `colorSpace:name` (an
 /// unknown name ends the search with none), else the attribute's `colorSpace`
 /// fallback; `None` where that is empty.
+///
+/// Workaround, an upstream candidate in `ROADMAP.md`: openusd has no
+/// `UsdColorSpaceAPI::ComputeColorSpaceName`.
 pub(crate) fn compute_color_space_name(
     stage: &openusd::usd::Stage,
     prim: &sdf::Path,
@@ -116,6 +114,11 @@ pub(crate) fn compute_color_space_name(
     own().filter(|t| !t.as_str().is_empty())
 }
 
+/// The colour spaces `GfColorSpace::IsValid` knows (nanocolor's table, by
+/// short and descriptive name).
+///
+/// Workaround, an upstream candidate in `ROADMAP.md`: openusd has no
+/// `GfColorSpace`.
 const COLOR_SPACES: &[&str] = &[
     "lin_ap1_scene",
     "ACEScg",
