@@ -1,10 +1,12 @@
 //! Scene indices that take other scene indices as input: flattening,
 //! merging, and the resolving filters.
 
+pub mod dependency_forwarding;
 pub mod extent_resolving;
 pub mod flattening;
 pub mod instance_proxy_path_translation;
 
+pub use dependency_forwarding::DependencyForwardingSceneIndex;
 pub use extent_resolving::ExtentResolvingSceneIndex;
 
 pub use flattening::FlatteningSceneIndex;

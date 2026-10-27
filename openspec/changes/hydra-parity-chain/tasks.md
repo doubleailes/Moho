@@ -5,7 +5,7 @@
 ## 1. Dependencies
 
 - [x] 1.1 Add `HdDependenciesSchema`'s layout to `tokens.rs` and `schema.rs`
-- [ ] 1.2 Add `filter/dependency_forwarding.rs`, a port of `HdDependencyForwardingSceneIndex` (reverse map from `__dependencies`, transitive dirtying, cycle protection, dependents of added and removed prims)
+- [x] 1.2 Add `filter/dependency_forwarding.rs`, a port of `HdDependencyForwardingSceneIndex` (reverse map from `__dependencies`, transitive dirtying, cycle protection, dependents of added and removed prims)
 - [ ] 1.3 Render settings flattening: declare Hydra's `__dependencies` entries; delete its internal dependents table and self-dirtying
 
 ## 2. Light linking

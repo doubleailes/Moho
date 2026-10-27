@@ -101,6 +101,28 @@ pub trait SceneIndex {
 /// A shared scene index handle.
 pub type SceneIndexHandle = Rc<dyn SceneIndex>;
 
+/// Passes renames to `observer` as removals of the old paths, then
+/// additions of every prim at and under the new paths in `sender`, defined
+/// or not (`HdSceneIndexObserver::ConvertPrimsRenamedToRemovedAndAdded`). A
+/// rename to the same path is dropped.
+pub fn renamed_as_removed_and_added(observer: &dyn Observer, sender: &dyn SceneIndex, entries: &[Renamed]) {
+    let mut removed = Vec::new();
+    let mut added = Vec::new();
+    for entry in entries.iter().filter(|e| e.old != e.new) {
+        removed.push(Removed {
+            path: entry.old.clone(),
+        });
+        let mut queue = vec![entry.new.clone()];
+        while let Some(path) = queue.pop() {
+            let ty = sender.prim(&path).ty;
+            queue.extend(sender.children(&path).into_iter().rev());
+            added.push(Added { path, ty });
+        }
+    }
+    observer.removed(sender, &removed);
+    observer.added(sender, &added);
+}
+
 /// Answers whether a USD collection includes a path, for light linking
 /// without a stage of its own (material binding resolving judges collections
 /// over the scene index, as UsdImaging). `StageSceneIndex` answers through openusd's
