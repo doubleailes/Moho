@@ -58,6 +58,7 @@ fn hash_source(source: &DataSource, h: &mut DefaultHasher) {
         DataSource::Sampled(s) => {
             let _ = write!(HashWriter(h), "{:?}", s.value(0.0));
         }
+        DataSource::Block => h.write_u8(b'!'),
     }
 }
 

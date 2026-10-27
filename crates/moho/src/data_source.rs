@@ -68,9 +68,18 @@ pub enum DataSource {
     Container(ContainerHandle),
     Vector(VectorHandle),
     Sampled(SampledHandle),
+    /// A block (`HdBlockDataSource`): in an [`Overlay`], it hides what
+    /// weaker containers give at its name. Read on its own, it is no data:
+    /// [`locate`] answers `None` for it.
+    Block,
 }
 
 impl DataSource {
+    /// Whether this is a block.
+    pub fn is_block(&self) -> bool {
+        matches!(self, DataSource::Block)
+    }
+
     /// This data source as a container.
     pub fn as_container(&self) -> Option<&ContainerHandle> {
         match self {
@@ -107,18 +116,82 @@ impl std::fmt::Debug for DataSource {
             DataSource::Container(c) => f.debug_tuple("Container").field(&c.names()).finish(),
             DataSource::Vector(v) => f.debug_tuple("Vector").field(&v.len()).finish(),
             DataSource::Sampled(s) => f.debug_tuple("Sampled").field(&s.value(0.0)).finish(),
+            DataSource::Block => f.write_str("Block"),
         }
     }
 }
 
 /// The data source `locator` names under `container`, or the container
-/// itself for the empty locator.
+/// itself for the empty locator. A block is no data: it answers `None`.
 pub fn locate(container: &ContainerHandle, locator: &Locator) -> Option<DataSource> {
     let mut current = DataSource::Container(container.clone());
     for element in locator.elements() {
         current = current.as_container()?.get(element)?;
     }
-    Some(current)
+    (!current.is_block()).then_some(current)
+}
+
+/// Containers overlaid, stronger first, as `HdOverlayContainerDataSource`.
+///
+/// Its names are the union of its containers' (a blocked name included, as
+/// Hydra lists it). A name answers from the containers that have it,
+/// strongest first: containers found there are overlaid in turn, and the
+/// first data source that is not a container ends the search. That data
+/// source is the answer when no container came before it; a block answers
+/// nothing, hiding what weaker containers give at that name.
+pub struct Overlay(Vec<ContainerHandle>);
+
+impl Overlay {
+    /// The overlay of `containers`, strongest first.
+    pub fn new(containers: impl IntoIterator<Item = ContainerHandle>) -> Self {
+        Self(containers.into_iter().collect())
+    }
+
+    /// The overlay of `containers` as a handle; a single container is
+    /// returned as it is.
+    pub fn handle(containers: impl IntoIterator<Item = ContainerHandle>) -> ContainerHandle {
+        let mut containers: Vec<ContainerHandle> = containers.into_iter().collect();
+        if containers.len() == 1
+            && let Some(only) = containers.pop()
+        {
+            return only;
+        }
+        Rc::new(Self(containers))
+    }
+}
+
+impl Container for Overlay {
+    fn names(&self) -> Vec<Token> {
+        let mut names: Vec<Token> = Vec::new();
+        for c in &self.0 {
+            for name in c.names() {
+                if !names.contains(&name) {
+                    names.push(name);
+                }
+            }
+        }
+        names
+    }
+
+    fn get(&self, name: &Token) -> Option<DataSource> {
+        let mut containers: Vec<ContainerHandle> = Vec::new();
+        for c in &self.0 {
+            let Some(child) = c.get(name) else {
+                continue;
+            };
+            match child {
+                DataSource::Container(child) => containers.push(child),
+                // Weaker data never replaces the containers found before it.
+                _ if !containers.is_empty() => break,
+                DataSource::Block => return None,
+                other => return Some(other),
+            }
+        }
+        match containers.len() {
+            0 => None,
+            _ => Some(DataSource::Container(Overlay::handle(containers))),
+        }
+    }
 }
 
 /// The offsets to sample over `[start, end]`, given every sample offset in
@@ -266,6 +339,11 @@ pub mod retained {
     pub fn container(entries: impl IntoIterator<Item = (impl Into<Token>, DataSource)>) -> DataSource {
         RetainedContainer::new(entries).into_data_source()
     }
+
+    /// A block (`HdBlockDataSource`), to hide weaker data in an overlay.
+    pub fn block() -> DataSource {
+        DataSource::Block
+    }
 }
 
 #[cfg(test)]
@@ -328,6 +406,63 @@ mod tests {
             Some(vec![0.0, 1.0, 2.0])
         );
         assert_eq!(bracketing_sample_times(&[0.0], -1.0, 1.0), None);
+    }
+
+    #[test]
+    fn a_block_hides_weaker_data() {
+        let stronger = RetainedContainer::new([("__usdPrimInfo", container([("niPrototypePath", block())]))])
+            .into_handle();
+        let weaker = RetainedContainer::new([(
+            "__usdPrimInfo",
+            container([
+                (
+                    "niPrototypePath",
+                    value(Value::PathVec(vec![openusd::sdf::Path::abs_root()])),
+                ),
+                ("kind", value(Token::from("component"))),
+            ]),
+        )])
+        .into_handle();
+        let overlay = Overlay::handle([stronger, weaker]);
+        assert!(locate(&overlay, &Locator::parse("__usdPrimInfo/niPrototypePath")).is_none());
+        assert_eq!(
+            locate(&overlay, &Locator::parse("__usdPrimInfo/kind")).and_then(|d| d.value()),
+            Some(Value::Token(Token::from("component"))),
+            "a sibling of the block still reads through"
+        );
+    }
+
+    #[test]
+    fn an_overlay_keeps_the_strongest_value() {
+        let stronger = RetainedContainer::new([("a", value(1i32)), ("c", container([("x", value(1i32))]))])
+            .into_handle();
+        let weaker = RetainedContainer::new([
+            ("a", value(2i32)),
+            ("b", value(3i32)),
+            ("c", container([("y", value(2i32))])),
+        ])
+        .into_handle();
+        let overlay = Overlay::handle([stronger, weaker]);
+        assert_eq!(
+            overlay.names(),
+            [Token::from("a"), Token::from("c"), Token::from("b")]
+        );
+        assert_eq!(
+            overlay.get(&Token::from("a")).and_then(|d| d.value()),
+            Some(Value::Int(1))
+        );
+        assert_eq!(
+            overlay.get(&Token::from("b")).and_then(|d| d.value()),
+            Some(Value::Int(3))
+        );
+        assert!(locate(&overlay, &Locator::parse("c/x")).is_some());
+        assert!(locate(&overlay, &Locator::parse("c/y")).is_some());
+    }
+
+    #[test]
+    fn a_located_block_is_no_data() {
+        let prim = RetainedContainer::new([("visibility", block())]).into_handle();
+        assert!(locate(&prim, &Locator::parse("visibility")).is_none());
     }
 
     #[test]
