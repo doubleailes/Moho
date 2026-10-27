@@ -643,3 +643,57 @@ def Scope "lib"
     assert!(names(&net, "nodes/surface/inputConnections").is_empty());
     assert!(locate(&net, &Locator::parse("nodes/surface/parameters/diffuseColor")).is_none());
 }
+
+#[test]
+fn an_edit_beside_a_cyclic_graph_terminates() {
+    // UsdImaging's `_IsConnectionDirty` overflows its stack on a cycle
+    // (checked against USD 26.08); Moho terminates with what an acyclic
+    // walk answers: the whole material for a shader the terminal does not
+    // reach, the terminal for one in the cycle.
+    let (_dir, usd) = stage(
+        r#"#usda 1.0
+def Material "m"
+{
+    token outputs:surface.connect = </m/s.outputs:surface>
+    def Shader "s"
+    {
+        uniform token info:id = "UsdPreviewSurface"
+        color3f inputs:diffuseColor.connect = </m/t.outputs:rgb>
+        token outputs:surface
+    }
+    def Shader "t"
+    {
+        uniform token info:id = "UsdUVTexture"
+        float inputs:b.connect = </m/s.outputs:surface>
+        float inputs:x = 1
+        float3 outputs:rgb
+    }
+    def Shader "u"
+    {
+        uniform token info:id = "UsdUVTexture"
+        float inputs:x = 1
+        float3 outputs:rgb
+    }
+}
+"#,
+    );
+    let index = StageSceneIndex::new();
+    index.set_stage(usd.clone());
+    let recorder = RecordingObserver::on(index.as_ref());
+    usd.attribute("/m/u.inputs:x").unwrap().set(2.0f32).unwrap();
+    index.apply_pending_updates();
+    let notices = recorder.take();
+    assert_eq!(dirtied(&notices, "/m"), ["material"], "{notices:?}");
+    usd.attribute("/m/t.inputs:x").unwrap().set(2.0f32).unwrap();
+    index.apply_pending_updates();
+    let notices = recorder.take();
+    assert_eq!(
+        dirtied(&notices, "/m"),
+        [
+            "material//nodes/t",
+            "material//terminals/surface",
+            "material/__all/nodes/t"
+        ],
+        "{notices:?}"
+    );
+}
