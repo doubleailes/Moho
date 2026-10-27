@@ -144,6 +144,7 @@ fn text(source: &DataSource, out: &mut String) {
             }
         }
         DataSource::Sampled(s) => out.push_str(&format!("{:?}", s.value(0.0))),
+        DataSource::Block => out.push_str("<block>"),
     }
 }
 

@@ -15,7 +15,7 @@ use openusd::sdf;
 use openusd::tf::Token;
 
 use crate::data_source::retained::RetainedContainer;
-use crate::data_source::{Container, ContainerHandle, DataSource};
+use crate::data_source::{ContainerHandle, Overlay};
 use crate::scene_index::{
     Added, Dirtied, Observer, Observers, Prim, Removed, Renamed, SceneIndex, SceneIndexHandle,
 };
@@ -190,7 +190,7 @@ impl SceneIndex for MergingSceneIndex {
                 .is_root_or_ancestor(path)
                 .then(|| RetainedContainer::default().into_handle()),
             1 => data.pop(),
-            _ => Some(Rc::new(Overlay(data))),
+            _ => Some(Overlay::handle(data)),
         };
         Prim { ty, data }
     }
@@ -258,34 +258,5 @@ impl Observer for MergingSceneIndex {
         self.forward_removed(&roots, entries.iter().map(|e| e.old.clone()));
         let added: Vec<sdf::Path> = entries.iter().flat_map(|e| subtree(sender, &e.new)).collect();
         self.forward_added(&roots, added);
-    }
-}
-
-/// Containers overlaid, stronger first: a name answers from the first
-/// container that has it, and nested containers overlay in turn.
-struct Overlay(Vec<ContainerHandle>);
-
-impl Container for Overlay {
-    fn names(&self) -> Vec<Token> {
-        let mut names: Vec<Token> = Vec::new();
-        for c in &self.0 {
-            for name in c.names() {
-                if !names.contains(&name) {
-                    names.push(name);
-                }
-            }
-        }
-        names
-    }
-
-    fn get(&self, name: &Token) -> Option<DataSource> {
-        let sources: Vec<DataSource> = self.0.iter().filter_map(|c| c.get(name)).collect();
-        let first = sources.first()?.clone();
-        let containers: Vec<ContainerHandle> =
-            sources.iter().filter_map(|s| s.as_container().cloned()).collect();
-        if first.as_container().is_some() && containers.len() > 1 {
-            return Some(DataSource::Container(Rc::new(Overlay(containers))));
-        }
-        Some(first)
     }
 }

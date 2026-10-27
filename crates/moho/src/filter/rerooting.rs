@@ -62,6 +62,7 @@ fn reroot_source(source: DataSource, map: &Map) -> DataSource {
             inner,
             map: map.clone(),
         })),
+        DataSource::Block => DataSource::Block,
     }
 }
 
