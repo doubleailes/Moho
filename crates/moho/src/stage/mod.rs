@@ -294,7 +294,8 @@ impl StageSceneIndex {
             return;
         };
         self.memberships.borrow_mut().clear();
-        let roots = pending.resync_roots();
+        let mut roots = pending.resync_roots();
+        let known_prototypes = self.populated_prototypes();
         let mut removed = Vec::new();
         let mut added = Vec::new();
         for root in &roots {
@@ -318,6 +319,23 @@ impl StageSceneIndex {
                     .map(|path| Removed { path }),
             );
             added.extend(now);
+        }
+        // Workaround, an upstream candidate in `ROADMAP.md`: when an edit
+        // retires a prototype (its source instance went), openusd composes
+        // the remaining instances under a new `/__Prototype_N` and reports
+        // neither it nor the instances re-pointed to it. USD keeps the
+        // prototype, or resyncs both. Resync them here, so that native
+        // instancing, which follows notices as UsdImaging's does, sees them.
+        if roots.iter().any(|r| known_prototypes.contains(r)) {
+            let (prototypes, instances) = self.repointed_prototypes(&known_prototypes);
+            for path in prototypes.into_iter().chain(instances) {
+                self.cache.borrow_mut().retain(|p, _| !p.has_prefix(&path));
+                self.globals.forget_under(&path);
+                // An instance has no children here: its prim info now names
+                // the new prototype.
+                added.extend(self.populate(&path));
+                roots.push(path);
+            }
         }
         let mut dirty: BTreeMap<sdf::Path, LocatorSet> = BTreeMap::new();
         // A shader or node graph resynced (added, removed, replaced) changes
@@ -364,6 +382,48 @@ impl StageSceneIndex {
         self.observers.send_removed(self, &removed);
         self.observers.send_added(self, &added);
         self.observers.send_dirtied(self, &dirtied);
+    }
+
+    /// The USD prototypes the index has populated.
+    fn populated_prototypes(&self) -> BTreeSet<sdf::Path> {
+        self.populated
+            .borrow()
+            .iter()
+            .filter(|p| p.is_root_prim() && p.name().is_some_and(|n| n.starts_with("__Prototype_")))
+            .cloned()
+            .collect()
+    }
+
+    /// The prototypes the stage holds that the index has not populated, and
+    /// the populated instances composed under one of them.
+    fn repointed_prototypes(&self, known: &BTreeSet<sdf::Path>) -> (Vec<sdf::Path>, Vec<sdf::Path>) {
+        let Some(stage) = self.stage() else {
+            return (Vec::new(), Vec::new());
+        };
+        let fresh: BTreeSet<sdf::Path> = stage
+            .prototypes()
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|p| !known.contains(p))
+            .collect();
+        if fresh.is_empty() {
+            return (Vec::new(), Vec::new());
+        }
+        let populated: Vec<sdf::Path> = self.populated.borrow().iter().cloned().collect();
+        let instances = populated
+            .into_iter()
+            .filter(|path| {
+                stage.prim(path).ok().is_some_and(|prim| {
+                    prim.is_instance().unwrap_or(false)
+                        && prim
+                            .prototype()
+                            .ok()
+                            .flatten()
+                            .is_some_and(|p| fresh.contains(&p))
+                })
+            })
+            .collect();
+        (fresh.into_iter().collect(), instances)
     }
 
     /// The nearest `Material` ancestor of a `Shader` or `NodeGraph` prim,

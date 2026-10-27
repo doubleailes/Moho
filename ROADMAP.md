@@ -77,6 +77,14 @@ the steps that land in this repository or depend on it.
   codes). Without the fields, Moho ignores every prim-level info-only
   change, and misses the plugin-field resyncs
   (`crates/moho/src/stage/pending.rs`).
+- Prototypes kept when their source instance goes: removing the instance a
+  prototype was composed from makes openusd compose the others under a new
+  `/__Prototype_N`, and its commit notice names neither the new prototype
+  nor the instances re-pointed to it (USD keeps the prototype). The stage
+  index resyncs both itself meanwhile (`crates/moho/src/stage/mod.rs`).
+  Also, openusd numbers prototypes from `__Prototype_0` where USD numbers
+  from `__Prototype_1`, so propagated prototype paths differ from
+  UsdImaging's by that number.
 - A single-path value (`Value::Path`, C++ `VtValue` holding an `SdfPath`).
   Hydra types many fields as one `SdfPath`; Moho holds each as a
   one-element `Value::PathVec` meanwhile (`crates/moho/src/data_source.rs`),
