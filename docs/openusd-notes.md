@@ -185,10 +185,10 @@ the root edit target (`crates/moho-spike/tests/probe.rs` asserts all of it):
   only an authored `membershipExpression` (as C++
   `ResolveCompleteMembershipExpression`): it is empty for an includes/excludes
   collection.
-- Material networks: `shade::Material::get(&Stage, path)`; `Connectable::outputs()`
-  lists declared outputs too (Moho keeps those with authored connections or
-  values); `Shader::get`, `Shader::id() -> Result<Option<String>>` (`info:id`
-  in id mode), `Connectable::authored_inputs()`; `Input`/`Output::
+- Material networks (superseded in part by `hydra-parity-materials`
+  below): `shade::Material::get(&Stage, path)`; `Connectable::outputs()`
+  lists declared outputs too; `Shader::get`, `Connectable::authored_inputs()`;
+  `Input`/`Output::
   value_producing_attributes(ProducerFilter::{Any, ShaderOutputsOnly}) ->
   Vec<ShadingAttribute>` follows node-graph outputs and interface inputs (C++
   `UsdShadeUtils::GetValueProducingAttributes`); `ShadingAttribute::{Input,
@@ -321,6 +321,66 @@ Read at `d7d2a29`.
   `new(ACTIVE | LOADED, ABSTRACT)`, or `new(ACTIVE, ABSTRACT)` with unloaded
   prims included: `DEFINED` is not required, so `over`s are visited.
 
+## Materials and lights (`hydra-parity-materials`)
+
+Read at `d7d2a29`.
+
+- `info:implementationSource`: `shade::NodeDefAPI::from_prim_unchecked(prim)`
+  (any generated schema has `from_prim_unchecked`), `implementation() ->
+  Result<ImplementationSource>` reads the raw token, and an unauthored,
+  mistyped or unknown value is `Id` (C++ `GetImplementationSource`, which
+  warns). `shader_id() -> Result<Option<Token>>` is `info:id` in `Id` mode
+  only. C++ `UsdShadeNodeDefAPI(prim)` is valid only where the API is
+  applied (`UsdAPISchemaBase::_IsCompatible` checks `HasAPI`): Moho asks
+  `Prim::has_api_schema("NodeDefAPI")`, true for every `Shader`.
+- `info:*` attributes: `Prim::property_names() -> Result<Vec<Token>>` lists
+  authored and schema-declared names, sorted, then `propertyOrder` applied
+  (C++ `GetPropertyNames`); `nodeTypeInfo` scans it for `info:`.
+- `sdrMetadata`: the prim's raw metadata, `Prim::metadata::<Value>("sdrMetadata")`,
+  a `Value::Dictionary` (`sdf::Dictionary::new()` when absent, as C++ hands
+  an empty `VtDictionary`). `Shader::sdr_metadata()` converts to a
+  `HashMap<Token, String>`, which Hydra does not.
+- `config:*`: `Prim::attributes_in_namespace("config:")` (a trailing `:` is
+  accepted) and `Attribute::get_at::<Value>(None)`, the default time, as
+  C++ `attr.Get(&value)`.
+- Authored inputs and outputs: `Prim::authored_attributes_in_namespace(ns)`
+  keeps composed order, where C++ `GetAuthoredPropertiesInNamespace` sorts
+  into dictionary order before applying `propertyOrder`. Moho sorts with
+  `sdf::element_cmp` and reapplies `propertyOrder` (`sdf::apply_ordering`)
+  in `stage/material.rs`. The `propertyOrder` itself:
+  `Prim::metadata::<Value>("propertyOrder")` with `Value::try_as_token_vec`.
+- Interface input consumers: `shade::NodeGraphInterface::interface_input_consumers(&self,
+  transitive: bool) -> Result<InterfaceInputConsumersMap>` on `Material`
+  (C++ `ComputeInterfaceInputConsumersMap`): every authored input of the
+  container has an entry, consumers or not, in composed order (C++'s map is
+  unordered); `consumers(&Input) -> Option<&[Input]>`, `iter()`.
+  `Material::from_prim_unchecked(prim)` views any prim (a light) as C++
+  `UsdShadeMaterial(prim)` does.
+- Display data: `usd::Object::display_name()` and `usd::Property::display_group()`
+  (`Result<Option<String>>`), composed with the schema's declared values
+  (a light input's `Intensity`, `Basic`).
+- Terminals: `Material::surface_source(&[&str]) -> Result<Option<ResolvedTerminal>,
+  SchemaError>` (and `displacement_source`, `volume_source`), C++
+  `ComputeSurfaceSource`'s context walk with the universal fallback;
+  `ResolvedTerminal::sources()[0].attribute().attribute().prim()` is the
+  shader. A context that is not a namespaced identifier is an error.
+- Connections: `ShadingAttribute::connected_sources() -> Result<ConnectedSources>`
+  (`into_sources()`; `ConnectionSource::{prim, path, name, full_name,
+  source_type}`), valid when the source attribute is defined, as C++
+  `GetConnectedSources`. `ConnectableAPI::from_prim(prim) -> Result<Option<_>>`
+  is `Some` where the prim has a connectable behavior (C++'s validity).
+  `Input::from_attribute(attr) -> Option<Input>`, `Input::base_name()`.
+- Lights: `lux::LightAPI::from_prim_unchecked(prim)`;
+  `shader_id_for(&[&str]) -> Result<Option<Token>>` (C++ `GetShaderId`: the
+  first context whose `<context>:light:shaderId` is non-empty, else
+  `light:shaderId`, `None` when empty) and `shader_id_attr_for(context) ->
+  Result<Option<Attribute>>` (C++ `GetShaderIdAttrForRenderContext`).
+  `light:shaderId`'s fallback is the light type's name (`SphereLight`) from
+  the schema registry.
+- `Attribute::role() -> Result<Option<sdf::Role>>` (`Role::Color` for a
+  parameter's colour space); `Stage::stage_metadata("upAxis")` for a
+  `DomeLight_1`'s `scene` pole; `gf::Mat4d::IDENTITY`, row-major in `.0`.
+
 ## Gaps
 
 - Splines (`Ts`): a `.spline` block only round-trips as a dictionary. There
@@ -374,3 +434,10 @@ Read at `d7d2a29`.
 - No `SdfPath::MakeRelativePath`: the prim origin's prototype-relative scene
   path (`stage/prim_origin.rs`) is built from the path's text, parsed back
   with `sdf::Path::new`, which accepts relative paths and `.`.
+- No shader registry (Sdr): a node outside `id` mode (`sourceAsset`,
+  `sourceCode`) has an empty `nodeIdentifier`, where UsdImaging asks Sdr
+  for one (`stage/material.rs`); its `nodeTypeInfo` carries what a consumer
+  needs to resolve it.
+- `Prim::authored_attributes_in_namespace` lists in composed order where
+  C++ sorts into dictionary order first; Moho sorts material inputs and
+  outputs itself (`stage/material.rs`).
