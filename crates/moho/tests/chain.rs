@@ -179,10 +179,13 @@ fn values_through_the_chain_equal_openusd() {
         read(chain.as_ref(), "/world/key", "light/intensity"),
         Some(Value::Float(5.0))
     );
-    assert_eq!(
-        read(chain.as_ref(), "/world/key", "light/lightLink"),
-        Some(Value::Token(Default::default()))
-    );
+    // Light linking is a renderer filter: the standard chain gives no link
+    // ids and no categories.
+    assert_eq!(read(chain.as_ref(), "/world/key", "light/lightLink"), None);
+    for path in ["/world/geo", "/world/hair", "/world/ball"] {
+        let data = chain.prim(&p(path)).data.unwrap();
+        assert!(!data.names().iter().any(|n| n == "categories"), "{path}");
+    }
     assert_eq!(
         read(chain.as_ref(), "/world/cam", "camera/focalLength"),
         Some(Value::Float(3.5))

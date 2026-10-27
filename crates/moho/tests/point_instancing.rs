@@ -2,8 +2,6 @@
 
 mod common;
 
-use std::rc::Rc;
-
 use common::{TempDir, open, p, stage};
 use moho::data_source::locate;
 use moho::filter::{LightLinkingSceneIndex, NativeInstancingSceneIndex, PointInstancingSceneIndex};
@@ -11,7 +9,7 @@ use moho::locator::Locator;
 use moho::openusd::gf;
 use moho::openusd::sdf::{self, Value};
 use moho::openusd::tf::Token;
-use moho::scene_index::{CollectionMembership, SceneIndex};
+use moho::scene_index::SceneIndex;
 use moho::stage::StageSceneIndex;
 
 const PEBBLES: &str = r#"#usda 1.0
@@ -194,14 +192,15 @@ def Xform "world"
     stage_index.set_stage(open(&root));
     let native = NativeInstancingSceneIndex::new(stage_index.clone());
     let point = PointInstancingSceneIndex::new(native);
-    let membership: Rc<dyn CollectionMembership> = stage_index.clone();
-    let linking = LightLinkingSceneIndex::new(point, Some(membership));
+    let linking = LightLinkingSceneIndex::new(point);
 
     let category = match read(linking.as_ref(), &p("/key"), "light/lightLink") {
         Some(Value::Token(t)) => t,
         other => panic!("{other:?}"),
     };
-    let per_instance = |instancer: &sdf::Path| -> Vec<bool> {
+    assert_eq!(category, "group_0");
+    // Each instance location's categories, `None` where none includes it.
+    let per_instance = |instancer: &sdf::Path| -> Vec<Option<bool>> {
         let data = linking.prim(instancer).data.unwrap();
         let values = locate(&data, &Locator::parse("instanceCategories/categoriesValues")).unwrap();
         let values = values.as_vector().unwrap().clone();
@@ -209,11 +208,7 @@ def Xform "world"
             .map(|i| {
                 values
                     .get(i)
-                    .unwrap()
-                    .as_container()
-                    .unwrap()
-                    .names()
-                    .contains(&category)
+                    .map(|c| c.as_container().unwrap().names().contains(&category))
             })
             .collect()
     };
@@ -223,13 +218,20 @@ def Xform "world"
     };
     assert_eq!(
         per_instance(&native_instancer),
-        [true, false],
+        [Some(true), None],
         "/world/a linked, /world/b not"
     );
+    // A point instancer has no instance locations: its `categories`, judged
+    // at its own path, hold for all its instances.
+    let scatter = linking.prim(&p("/world/scatter")).data.unwrap();
+    assert!(locate(&scatter, &Locator::parse("instanceCategories")).is_none());
     assert_eq!(
-        per_instance(&p("/world/scatter")),
-        [true, true],
-        "judged at the point instancer's path"
+        locate(&scatter, &Locator::parse("categories"))
+            .unwrap()
+            .as_container()
+            .unwrap()
+            .names(),
+        [category]
     );
 }
 

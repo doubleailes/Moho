@@ -3,10 +3,10 @@
 mod common;
 
 use common::{p, stage};
+use moho::collection::CollectionExpressionEvaluator;
 use moho::data_source::locate;
 use moho::locator::Locator;
 use moho::openusd::sdf::Value;
-use moho::openusd::sdf::path_expr::{PathExpressionEval, PredicateLibrary};
 use moho::scene_index::SceneIndex;
 use moho::scene_index::testing::{Notice, RecordingObserver};
 use moho::stage::StageSceneIndex;
@@ -57,9 +57,11 @@ fn a_light_link_collection() {
     .and_then(|d| d.value()) else {
         panic!("no expression");
     };
-    let eval = PathExpressionEval::<()>::build(&expression, &PredicateLibrary::new()).unwrap();
-    assert!(eval.match_path(&p("/world/a/c"), &|_| ()).value);
-    assert!(!eval.match_path(&p("/world/a/b"), &|_| ()).value);
+    // Judged over the scene index with Hydra's predicates, as light linking
+    // judges it.
+    let eval = CollectionExpressionEvaluator::new(&expression);
+    assert!(eval.matches(index.as_ref(), &p("/world/a/c")));
+    assert!(!eval.matches(index.as_ref(), &p("/world/a/b")));
 
     let recorder = RecordingObserver::on(index.as_ref());
     index

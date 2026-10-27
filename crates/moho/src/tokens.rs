@@ -262,10 +262,14 @@ pub mod light {
     pub const PORTALS: &str = "portals";
     /// A `DomeLight_1`'s pole axis alignment.
     pub const DOME_OFFSET: &str = "domeOffset";
-    /// The light-link and shadow-link category ids the light linking filter
-    /// writes into `light`.
+    /// The linking collections (`HdTokens->lightLink`, `shadowLink`,
+    /// `filterLink`), and the `light` members the light linking filter
+    /// writes their category ids to: `lightLink`, `shadowLink`, and
+    /// `lightFilterLink` for `filterLink`.
     pub const LIGHT_LINK: &str = "lightLink";
     pub const SHADOW_LINK: &str = "shadowLink";
+    pub const FILTER_LINK: &str = "filterLink";
+    pub const LIGHT_FILTER_LINK: &str = "lightFilterLink";
 }
 
 /// `HdDependenciesSchema` and `HdDependencySchema`: a prim's declared

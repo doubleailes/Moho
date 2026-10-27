@@ -43,9 +43,7 @@ use openusd::usd::{self, PrimPredicate, PrimStatus, Stage, StageBuilder, StageSi
 
 use crate::data_source::{Container, DataSource};
 use crate::locator::{Locator, LocatorSet};
-use crate::scene_index::{
-    Added, CollectionMembership, Dirtied, Observer, Observers, Prim, Removed, SceneIndex,
-};
+use crate::scene_index::{Added, Dirtied, Observer, Observers, Prim, Removed, SceneIndex};
 
 use pending::{Pending, Recorder};
 
@@ -142,8 +140,6 @@ pub struct StageSceneIndex {
     cache: RefCell<HashMap<sdf::Path, Prim>>,
     /// Every prim announced to observers and not since removed.
     populated: RefCell<BTreeSet<sdf::Path>>,
-    /// Collection membership queries, until the stage changes.
-    memberships: RefCell<HashMap<(sdf::Path, String), Option<usd::MembershipQuery>>>,
     /// Whether unloaded prims are prims of the index (UsdImaging's
     /// `includeUnloadedPrims`).
     include_unloaded: Cell<bool>,
@@ -164,7 +160,6 @@ impl StageSceneIndex {
             adapters,
             cache: RefCell::new(HashMap::new()),
             populated: RefCell::new(BTreeSet::new()),
-            memberships: RefCell::new(HashMap::new()),
             include_unloaded: Cell::new(false),
             observers: Observers::default(),
         })
@@ -208,7 +203,6 @@ impl StageSceneIndex {
         }
         self.cache.borrow_mut().clear();
         self.populated.borrow_mut().clear();
-        self.memberships.borrow_mut().clear();
         self.globals.forget_under(&sdf::Path::abs_root());
         if had_stage {
             self.observers.send_removed(
@@ -293,7 +287,6 @@ impl StageSceneIndex {
         else {
             return;
         };
-        self.memberships.borrow_mut().clear();
         let mut roots = pending.resync_roots();
         let known_prototypes = self.populated_prototypes();
         let mut removed = Vec::new();
@@ -635,25 +628,6 @@ fn prune_material_descendants(stage: &Stage, paths: Vec<sdf::Path>) -> Vec<sdf::
         kept.push(path);
     }
     kept
-}
-
-impl CollectionMembership for StageSceneIndex {
-    fn includes(&self, collection_prim: &sdf::Path, name: &str, path: &sdf::Path) -> Option<bool> {
-        let key = (collection_prim.clone(), name.to_owned());
-        if !self.memberships.borrow().contains_key(&key) {
-            let query = self.stage().and_then(|stage| {
-                let prim = stage.prim(collection_prim).ok()?;
-                usd::CollectionAPI::from_prim_unchecked(prim, name)
-                    .membership_query()
-                    .ok()
-            });
-            self.memberships.borrow_mut().insert(key.clone(), query);
-        }
-        self.memberships
-            .borrow()
-            .get(&key)
-            .and_then(|q| q.as_ref().map(|q| q.is_included(path)))
-    }
 }
 
 impl SceneIndex for StageSceneIndex {
