@@ -86,8 +86,15 @@ the steps that land in this repository or depend on it.
   `UsdNotice::ObjectsChanged::GetChangedFields`). UsdImaging resyncs a prim
   whose changed metadata includes a plugin field (such as the stage's
   `renderSettingsPrimPath`) and ignores built-in fields (`kind`, time
-  codes). Without the fields, Moho ignores every prim-level info-only
-  change, and misses the plugin-field resyncs
+  codes). Moho reads them (`CommittedChange::changed_fields`, at `d7d2a29`)
+  only for `typeName` (below), so it ignores every other prim-level
+  info-only change, and misses the plugin-field resyncs
+  (`crates/moho/src/stage/pending.rs`).
+- A prim's `typeName` edit reported as a resync. openusd reports it as
+  info-only (`pcp/change.rs`: "`typeName` restructures nothing"); USD
+  composes the new prim type info and notifies the prim as resynced
+  (`stage.cpp`, `_ProcessPendingChanges`), so UsdImaging repopulates it.
+  Moho promotes a `typeName` info change to a resync
   (`crates/moho/src/stage/pending.rs`).
 - Prototypes kept when their source instance goes: removing the instance a
   prototype was composed from makes openusd compose the others under a new
