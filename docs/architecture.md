@@ -99,7 +99,8 @@ index plugin).
   and `renderSettings`. Collection membership comes from the stage index,
   through `CollectionMembership`, until the later changes judge collection
   expressions over the scene index (`moho::collection`, Hydra's evaluator
-  and predicate library).
+  and predicate library). The material binding resolver given no oracle
+  already judges them so, as UsdImaging does.
 - **`MergingSceneIndex`** combines several inputs over one namespace
   (`add_input_scene(index, root)`, `remove_input_scene`). It lists children
   in input order, strongest first, then the prims implied by deeper roots;

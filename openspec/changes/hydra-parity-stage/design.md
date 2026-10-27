@@ -302,3 +302,13 @@ the same step. No rollback beyond reverting the rev.
 - **D4, a material under an instancer.** The whole-stage pass empties
   renderable types only, so a material under a point instancer keeps the
   type `material` (Moho emptied every type there before), as UsdImaging.
+- **D11, a binding resolver without an oracle.** Dropping
+  `membershipExpression` left `MaterialBindingResolvingSceneIndex::new(input,
+  None)` binding no collection at all. Without an oracle it now judges
+  membership as UsdImaging's `_ComputeResolveInfo` does
+  (`materialBindingsResolvingSceneIndex.cpp`): the collection prim's
+  `collections/<name>/membershipExpression` read from the input scene
+  index and evaluated over it by `CollectionExpressionEvaluator` (Hydra's
+  predicates); a collection without an expression includes nothing.
+  `chain::standard` still passes the stage's oracle until
+  `hydra-parity-materials`.
