@@ -143,3 +143,40 @@ def Camera "cam"
     assert_eq!(sampled.value(0.0), Some(Value::Float(2.0)));
     assert_eq!(sampled.value(1.0), Some(Value::Float(4.0)));
 }
+
+#[test]
+fn the_camera_container_is_usd_imaging_s() {
+    use moho::openusd::tf::Token;
+    use moho::scene_index::testing::{Notice, RecordingObserver};
+
+    let (_dir, usd) = stage(SCENE);
+    let index = StageSceneIndex::new();
+    index.set_stage(usd.clone());
+    let data = index.prim(&p("/persp")).data.unwrap();
+    let camera = locate(&data, &Locator::parse("camera")).unwrap();
+    let names = camera.as_container().unwrap().names();
+    assert!(
+        names.contains(&Token::from("shutter:open")),
+        "USD names: {names:?}"
+    );
+    assert!(names.contains(&Token::from("stereoRole")));
+    assert!(!names.contains(&Token::from("shutterOpen")));
+    let read = |l: &str| locate(&data, &Locator::parse(l)).and_then(|d| d.value());
+    assert_eq!(read("camera/shutterOpen"), Some(Value::Double(-0.25)));
+    assert_eq!(read("camera/shutter:open"), Some(Value::Double(-0.25)));
+    assert_eq!(read("camera/stereoRole"), Some(Value::Token("mono".into())));
+
+    let recorder = RecordingObserver::on(index.as_ref());
+    usd.attribute("/persp.stereoRole")
+        .unwrap()
+        .set(Token::from("left"))
+        .unwrap();
+    index.apply_pending_updates();
+    let notices = recorder.take();
+    assert!(
+        notices.iter().any(
+            |n| matches!(n, Notice::Dirtied(d) if d.locators.contains(&Locator::parse("camera/stereoRole")))
+        ),
+        "{notices:?}"
+    );
+}
