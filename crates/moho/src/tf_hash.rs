@@ -49,7 +49,6 @@ pub(crate) fn combine_strings(strings: &[&str]) -> u64 {
 
 /// `TfHash::Combine` of a `std::map<std::string, std::string>`: each entry in
 /// key order, its key then its value.
-#[allow(dead_code)] // native instance aggregation, next
 pub(crate) fn combine_map(map: &BTreeMap<String, String>) -> u64 {
     let mut h = HashState::default();
     for (key, value) in map {

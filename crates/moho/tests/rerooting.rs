@@ -103,19 +103,20 @@ fn a_binding_inside_a_native_prototype_names_the_propagated_material() {
     let all = walk(chain.as_ref(), &sdf::Path::abs_root());
     let geo = all
         .iter()
-        .find(|p| p.as_str().contains("MohoNiPropagatedPrototypes") && p.name() == Some("geo"))
+        .find(|p| p.as_str().contains("/UsdNiPrototype/") && p.name() == Some("geo"))
         .unwrap();
     let material = bound(chain.as_ref(), geo).unwrap();
-    assert!(
-        material.as_str().contains("MohoNiPropagatedPrototypes") && material.as_str().ends_with("/Looks/red"),
-        "{material}"
-    );
+    let prototype = geo.parent().unwrap();
+    assert_eq!(material, prototype.append_path("Looks/red").unwrap());
     assert_eq!(
         chain.prim(&material).ty,
         "material",
         "the target is a prim of the index"
     );
-    assert!(!material.as_str().contains("__Prototype_"), "{material}");
+    assert!(
+        !material.root_prim_name().unwrap().starts_with("__Prototype_"),
+        "not the USD prototype: {material}"
+    );
 }
 
 #[test]
