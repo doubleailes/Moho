@@ -306,3 +306,157 @@ fn each_family_edit_dirties_its_locators() {
         Some(Value::PathVec(vec![p("/Looks/blue")]))
     );
 }
+
+#[test]
+fn renderer_filters_are_applied_by_phase_then_order() {
+    use moho::chain::{InsertionOrder, RendererFilter, renderer_filters};
+    use moho::scene_index::{RetainedSceneIndex, SceneIndexHandle};
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
+    let built: Rc<RefCell<Vec<&'static str>>> = Rc::default();
+    let filter = |name: &'static str, phase: i32, order: InsertionOrder| {
+        let built = built.clone();
+        RendererFilter::new(phase, order, move |input: SceneIndexHandle| {
+            built.borrow_mut().push(name);
+            input
+        })
+    };
+    let input: SceneIndexHandle = RetainedSceneIndex::new();
+    renderer_filters(
+        input,
+        &[
+            filter("dependency forwarding", 1000, InsertionOrder::AtEnd),
+            filter("light linking", 4, InsertionOrder::AtStart),
+            filter("fix", 0, InsertionOrder::AtEnd),
+            filter("late in phase 4", 4, InsertionOrder::AtEnd),
+            filter("early in phase 4", 4, InsertionOrder::AtStart),
+        ],
+    );
+    assert_eq!(
+        *built.borrow(),
+        [
+            "fix",
+            "light linking",
+            "early in phase 4",
+            "late in phase 4",
+            "dependency forwarding"
+        ]
+    );
+}
+
+const COMPOSITION: &str = r#"#usda 1.0
+(
+    renderSettingsPrimPath = "/Render/settings"
+)
+def Xform "asset"
+{
+    def Mesh "geo"
+    {
+    }
+}
+def Scope "Looks"
+{
+    def Material "red"
+    {
+    }
+}
+def Xform "world"
+{
+    def PointInstancer "scatter"
+    {
+        rel prototypes = [</world/scatter/protos/rock>]
+        int[] protoIndices = [0, 0]
+        point3f[] positions = [(0, 0, 0), (1, 0, 0)]
+        def Scope "protos"
+        {
+            def Xform "rock"
+            {
+                def Xform "inst" (
+                    instanceable = true
+                    references = </asset>
+                )
+                {
+                }
+            }
+        }
+    }
+    def Xform "a" (
+        instanceable = true
+        references = </asset>
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        rel material:binding = </Looks/red>
+    }
+    def SphereLight "key"
+    {
+        bool collection:lightLink:includeRoot = 0
+        rel collection:lightLink:includes = </world/a>
+    }
+}
+def Scope "Render"
+{
+    def RenderSettings "settings"
+    {
+        rel products = </Render/beauty>
+    }
+    def RenderProduct "beauty"
+    {
+    }
+}
+"#;
+
+#[test]
+fn the_standard_chain_composes_and_links_no_lights() {
+    let (_dir, usd) = stage(COMPOSITION);
+    let stage_index = StageSceneIndex::new();
+    stage_index.set_stage(usd);
+    let chain = moho::chain::standard(stage_index);
+    // A native instance inside a point instancer prototype is scattered.
+    let copy = match read(chain.as_ref(), "/world/scatter", "instancerTopology/prototypes") {
+        Some(Value::PathVec(mut v)) => v.pop().unwrap(),
+        other => panic!("{other:?}"),
+    };
+    let instance = copy.append_path("inst").unwrap();
+    let instancer = match read(chain.as_ref(), instance.as_str(), "instance/instancer") {
+        Some(Value::PathVec(mut v)) => v.pop().unwrap(),
+        other => panic!("{other:?}"),
+    };
+    assert_eq!(
+        read(chain.as_ref(), instancer.as_str(), "instancedBy/paths"),
+        Some(Value::PathVec(vec![p("/world/scatter")]))
+    );
+    // A binding on an instance reaches its prototype's mesh.
+    let instancer = match read(chain.as_ref(), "/world/a", "instance/instancer") {
+        Some(Value::PathVec(mut v)) => v.pop().unwrap(),
+        other => panic!("{other:?}"),
+    };
+    let prototype = match read(chain.as_ref(), instancer.as_str(), "instancerTopology/prototypes") {
+        Some(Value::PathVec(mut v)) => v.pop().unwrap(),
+        other => panic!("{other:?}"),
+    };
+    let geo = prototype.append_path("geo").unwrap();
+    assert_eq!(
+        resolved(chain.as_ref(), geo.as_str()),
+        Some(Value::PathVec(vec![p("/Looks/red")]))
+    );
+    // Render settings are flattened.
+    let settings = chain.prim(&p("/Render/settings")).data.unwrap();
+    assert!(locate(&settings, &Locator::parse("renderSettings/renderProducts")).is_some());
+    // No light linking: no link ids, no categories anywhere.
+    assert_eq!(read(chain.as_ref(), "/world/key", "light/lightLink"), None);
+    let mut stack = vec![sdf::Path::abs_root()];
+    while let Some(path) = stack.pop() {
+        if let Some(data) = chain.prim(&path).data {
+            assert!(
+                !data
+                    .names()
+                    .iter()
+                    .any(|n| n == "categories" || n == "instanceCategories"),
+                "{path}"
+            );
+        }
+        stack.extend(chain.children(&path));
+    }
+}
