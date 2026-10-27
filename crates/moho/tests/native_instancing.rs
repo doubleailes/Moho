@@ -690,6 +690,34 @@ def Scope "Looks"
     }
 
     #[test]
+    fn an_instance_prims_renderable_type_is_blanked() {
+        let text = format!(
+            "{ASSETS}{}",
+            r#"def Sphere "ball" (
+    instanceable = true
+    references = </asset>
+)
+{
+}
+def Material "look" (
+    instanceable = true
+    references = </asset>
+)
+{
+}
+"#
+        );
+        let (_dir, chain) = chain(&text);
+        assert!(read(chain.as_ref(), &p("/ball"), "instance/instancer").is_some());
+        assert_eq!(chain.prim(&p("/ball")).ty, "", "drawn through its instancer only");
+        assert_eq!(
+            chain.prim(&p("/look")).ty,
+            "material",
+            "a material is not a renderable type"
+        );
+    }
+
+    #[test]
     fn instances_under_an_over_are_not_aggregated() {
         let text = format!(
             "{ASSETS}{}",
