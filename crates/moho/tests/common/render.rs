@@ -17,7 +17,7 @@ def Scope "Render"
         rel camera = </cam>
         int2 resolution = (1920, 1080)
         uniform token renderingColorSpace = "acescg"
-        int crust:samplesPerPixel = 64
+        int myRenderer:samplesPerPixel = 64
         rel products = [</Render/beauty>, </Render/aovs>]
     }
     def RenderProduct "beauty"

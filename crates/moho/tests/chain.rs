@@ -250,7 +250,7 @@ fn each_family_edit_dirties_its_locators() {
             "/Render/color",
             "sourceName",
             Value::String("C".into()),
-            "renderVar/sourceName",
+            "__usdRenderVar/sourceName",
         ),
     ];
     for (path, attribute, value, locator) in edits {
@@ -280,7 +280,9 @@ fn each_family_edit_dirties_its_locators() {
         .set("D".to_owned())
         .unwrap();
     stage_index.apply_pending_updates();
-    assert!(dirtied(&recorder.take(), "/Render/settings").contains(&"renderSettings".to_owned()));
+    assert!(
+        dirtied(&recorder.take(), "/Render/settings").contains(&"renderSettings/renderProducts".to_owned())
+    );
     // A binding change re-resolves descendants.
     stage
         .relationship("/world.material:binding")

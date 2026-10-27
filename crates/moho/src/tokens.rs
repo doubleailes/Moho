@@ -328,14 +328,21 @@ pub mod volume {
     pub const VECTOR_DATA_ROLE_HINT: &str = "vectorDataRoleHint";
 }
 
-/// UsdRender as Moho's stage index exposes it (`renderSettings`,
-/// `renderProduct`, `renderVar`, `renderPass`), and the flattened
-/// `HdRenderSettingsSchema`.
+/// UsdRender as UsdImaging's stage index exposes it
+/// (`UsdImagingUsdRenderSettingsSchema`, `UsdImagingUsdRenderProductSchema`,
+/// `UsdImagingUsdRenderVarSchema`, `HdRenderPassSchema`), and as the
+/// flattening gives it (`HdRenderSettingsSchema`, `HdRenderProductSchema`,
+/// `HdRenderVarSchema`).
 pub mod render {
-    pub const RENDER_SETTINGS: &str = "renderSettings";
-    pub const RENDER_PRODUCT: &str = "renderProduct";
-    pub const RENDER_VAR: &str = "renderVar";
+    pub const USD_RENDER_SETTINGS: &str = "__usdRenderSettings";
+    pub const USD_RENDER_PRODUCT: &str = "__usdRenderProduct";
+    pub const USD_RENDER_VAR: &str = "__usdRenderVar";
     pub const RENDER_PASS: &str = "renderPass";
+    pub const PASS_TYPE: &str = "passType";
+    pub const RENDER_SOURCE: &str = "renderSource";
+
+    /// The flattened settings (`HdRenderSettingsSchema`).
+    pub const RENDER_SETTINGS: &str = "renderSettings";
     pub const NAMESPACED_SETTINGS: &str = "namespacedSettings";
     pub const RENDER_PRODUCTS: &str = "renderProducts";
     pub const RENDER_VARS: &str = "renderVars";
@@ -346,4 +353,18 @@ pub mod render {
     pub const PATH: &str = "path";
     pub const TYPE: &str = "type";
     pub const NAME: &str = "name";
+    pub const PRODUCT_TYPE: &str = "productType";
+    pub const PRODUCT_NAME: &str = "productName";
+    pub const RESOLUTION: &str = "resolution";
+    pub const PIXEL_ASPECT_RATIO: &str = "pixelAspectRatio";
+    pub const ASPECT_RATIO_CONFORM_POLICY: &str = "aspectRatioConformPolicy";
+    pub const DATA_WINDOW_NDC: &str = "dataWindowNDC";
+    pub const DISABLE_MOTION_BLUR: &str = "disableMotionBlur";
+    pub const DISABLE_DEPTH_OF_FIELD: &str = "disableDepthOfField";
+    pub const INCLUDED_PURPOSES: &str = "includedPurposes";
+    pub const MATERIAL_BINDING_PURPOSES: &str = "materialBindingPurposes";
+    pub const RENDERING_COLOR_SPACE: &str = "renderingColorSpace";
+    pub const DATA_TYPE: &str = "dataType";
+    pub const SOURCE_NAME: &str = "sourceName";
+    pub const SOURCE_TYPE: &str = "sourceType";
 }
