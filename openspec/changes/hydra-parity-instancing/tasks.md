@@ -5,7 +5,7 @@
 
 ## 1. Building blocks
 
-- [ ] 1.1 Add a re-rooting scene index (`UsdImagingRerootingSceneIndex`): prims, children and notices moved from a source root to a destination root, data wrapped by the existing re-rooting container; tests for prims, children, notices and path values
+- [x] 1.1 Add a re-rooting scene index (`UsdImagingRerootingSceneIndex`): prims, children and notices moved from a source root to a destination root, data wrapped by the existing re-rooting container; tests for prims, children, notices and path values
 - [x] 1.2 Add a private `TfHash` port (SpookyHash `ArchHash64`, `Tf_HashState` folding, `Combine` over strings and over a sorted string map); tests against 0.2's golden values
 
 ## 2. Point instancer propagation
