@@ -102,3 +102,80 @@ Invalidation as `InvalidateImagingSubprim`: `inputs:*` → `light` and
 Lands after `hydra-parity-instancing`. Consumers read `materialBindings`,
 choose a network context (`__all` for every node), and read lights through
 `light` or `material`.
+
+## Deviations recorded while implementing
+
+Checked against USD 26.08's `UsdImagingCreateSceneIndices` (the comparison
+harness): material, binding and light data match field for field, but for
+the order of `interface/parameters` (C++ iterates an unordered map) and
+Moho's single-path `PathVec`s; the notices of the edits below match, but
+for `__usdAttributes`.
+
+- **Task 4.1, a collection edit on the binding prim still re-resolves.**
+  UsdImaging's `MaterialBindingAPI` adapter dirties `usdMaterialBindings`
+  for a `collection:*` edit on a prim applying the API
+  (`materialBindingAPIAdapter.cpp`, `InvalidateImagingSubprim`), and
+  flattening carries it to the descendants, so `a_collection_edit_reresolves`
+  stays, as `a_collection_edit_on_a_binding_prim_reresolves`.
+  `editing_a_collection_elsewhere_reresolves` became its inverse
+  (`editing_a_collection_elsewhere_dirties_no_bound_prim`).
+- **Task 4.2, removing a shader notifies nothing.** UsdImaging resyncs a
+  removed shader as a prim with no adapter: nothing reaches its material
+  (checked with the harness). `removing_a_shader_dirties_its_material`
+  became `removing_a_shader_notifies_nothing`; the network read again has
+  lost the shader.
+- **A material represents its descendants** (beyond the tasks, as the
+  last of M10's stage-side support). UsdImaging's material adapter is
+  `RepresentsSelfAndDescendents`: shaders and node graphs under a material
+  are no prims of the stage index, and their edits dirty the material as
+  `InvalidateImagingSubprimFromDescendent` does: the terminals whose
+  connections reach the shader, and its node in that context and `__all`,
+  named by the prim's name alone (`material/mtlx/nodes/ss` for
+  `graph/ss`, UsdImaging's quirk), else the whole `material`;
+  `ui:nodegraph:*` edits alone dirty nothing. Not reproduced: a prim of
+  another type resynced under a material (UsdImaging populates it as a
+  prim then); light filters, also `RepresentsSelfAndDescendents`, wait for
+  `hydra-parity-chain`.
+- **Task 2.5, `config:*` dirties nothing.** UsdImaging's material adapter
+  invalidates an authored output, an input reached through a terminal's
+  connections, or any `inputs:*` (all `material`); a `config:*` edit falls
+  through to the prim's base invalidation, which ignores it. Moho does the
+  same. Its adapters invalidate per property, so a batch editing an output
+  and, say, a transform also dirties `xform`, which UsdImaging skips once
+  the material's own locators are non-empty.
+- **Binding names as UsdImaging** (beyond the tasks, the instancing
+  implementer's note). `materialBindings` is named on every prim
+  (`_PrimDataSource::GetNames`) and given only with opinions; it names
+  every purpose its opinions name. The stage index's `usdMaterialBindings`
+  names `""`, `preview` and `full`, and each level both kinds of binding,
+  whatever is bound; flattening keeps a lone side's opinions as they are
+  and leaves a purpose neither binds empty.
+- **The binding edge case against UsdShade.** With a strong direct binding
+  and a weaker matching collection binding on one prim, UsdImaging picks the
+  direct binding and UsdShade's `ComputeBoundMaterial` the collection's.
+  Moho follows UsdImaging; `equals_openusd_bound_material` leaves that
+  prim out.
+- **Collection evaluators are cached** per collection prim and name, and
+  dropped when that prim is dirtied for `collections`, or added, removed
+  or renamed; UsdImaging builds one per match.
+- **Dome lights** (beyond the spec's three names). UsdImaging's dome
+  adapters overlay `light` with `portals` (both domes) and `domeOffset`
+  (`DomeLight_1`, a quarter turn about X for a `Z` pole), and dirty `light`
+  for `portals` and `poleAxis`. Moho adds them; the spec is corrected.
+- **Light quirks reproduced.** A `<context>:light:shaderId` edit and a
+  plain attribute edit (`treatAsPoint`) dirty nothing; a light's
+  `material` interface lists its authored inputs (the light viewed as a
+  `UsdShadeMaterial`); a light input with no value answers its fallback in
+  `parameters` but is not named there.
+- **Parameter and terminal quirks reproduced.** A terminal's
+  `upstreamNodeOutputName` is the output its material output connects to
+  (a node graph's), not the resolved shader's; in `__all`, a terminal other
+  than `surface`, `displacement` and `volume` names the connected prim
+  itself (a node graph); `inputs:sourceColorSpace` is named among a
+  texture's parameters but gives nothing, and becomes `inputs:file`'s
+  `colorSpace`; a colour or asset parameter without a colour space gives
+  the empty token.
+- **Property order.** openusd lists authored properties in composed order;
+  Moho sorts a material's inputs and outputs in dictionary order and
+  applies `propertyOrder`, as C++ `GetAuthoredPropertiesInNamespace`
+  (an openusd upstream candidate).
