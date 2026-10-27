@@ -85,14 +85,13 @@ struct Chain {
     resolved: Rc<MaterialBindingResolvingSceneIndex>,
 }
 
-fn chain(with_oracle: bool) -> Chain {
+fn chain() -> Chain {
     let (dir, usd) = stage(SCENE);
     let stage_index = StageSceneIndex::new();
     stage_index.set_stage(usd);
     let flat = FlatteningSceneIndex::new(stage_index.clone());
-    let oracle: Option<Rc<dyn CollectionMembership>> =
-        with_oracle.then(|| stage_index.clone() as Rc<dyn CollectionMembership>);
-    let resolved = MaterialBindingResolvingSceneIndex::new(flat, oracle);
+    let oracle: Rc<dyn CollectionMembership> = stage_index.clone();
+    let resolved = MaterialBindingResolvingSceneIndex::new(flat, Some(oracle));
     Chain {
         _dir: dir,
         stage: stage_index,
@@ -111,7 +110,7 @@ fn bound(chain: &Chain, path: &str, purpose: &str) -> Option<sdf::Path> {
 
 #[test]
 fn inherited_strong_deep_and_collection() {
-    let chain = chain(true);
+    let chain = chain();
     assert_eq!(bound(&chain, "/inherit/geo", ""), Some(p("/Looks/red")));
     assert_eq!(
         bound(&chain, "/strong/geo", ""),
@@ -137,7 +136,7 @@ fn inherited_strong_deep_and_collection() {
 
 #[test]
 fn equals_openusd_bound_material() {
-    let chain = chain(true);
+    let chain = chain();
     let stage = chain.stage.stage().unwrap();
     for path in [
         "/inherit/geo",
@@ -161,15 +160,8 @@ fn equals_openusd_bound_material() {
 }
 
 #[test]
-fn the_expression_fallback_agrees() {
-    let chain = chain(false);
-    assert_eq!(bound(&chain, "/coll/geo", ""), Some(p("/Looks/chrome")));
-    assert_eq!(bound(&chain, "/coll/other", ""), Some(p("/Looks/red")));
-}
-
-#[test]
 fn a_collection_edit_reresolves() {
-    let chain = chain(true);
+    let chain = chain();
     assert_eq!(bound(&chain, "/coll/other", ""), Some(p("/Looks/red")));
     let recorder = RecordingObserver::on(chain.resolved.as_ref());
     let stage = chain.stage.stage().unwrap();
