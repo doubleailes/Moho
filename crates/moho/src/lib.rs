@@ -23,6 +23,9 @@ pub mod locator;
 pub mod scene_index;
 pub mod schema;
 pub mod stage;
+// Used by the instancing filters, which `hydra-parity-instancing` brings next.
+#[allow(dead_code)]
+mod tf_hash;
 pub mod tokens;
 
 /// The pinned openusd, re-exported so consumers build against exactly the
