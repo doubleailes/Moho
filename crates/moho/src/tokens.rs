@@ -82,6 +82,14 @@ pub mod xform {
     pub const XFORM: &str = "xform";
     pub const MATRIX: &str = "matrix";
     pub const RESET_XFORM_STACK: &str = "resetXformStack";
+
+    /// `UsdImagingGeomXformVectorsSchema`.
+    pub const GEOM_XFORM_VECTORS: &str = "geomXformVectors";
+    pub const TRANSLATION: &str = "translation";
+    pub const ROTATION: &str = "rotation";
+    pub const SCALE: &str = "scale";
+    pub const PIVOT: &str = "pivot";
+    pub const ROTATION_ORDER: &str = "rotationOrder";
 }
 
 /// `HdMeshSchema`, `HdMeshTopologySchema` and `HdSubdivisionTagsSchema`.

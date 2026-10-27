@@ -148,3 +148,51 @@ fn edits_dirty_xform() {
         openusd_local(&index, "/trs", None)
     );
 }
+
+#[test]
+fn xform_vectors_and_names_as_usd_imaging() {
+    use moho::data_source::locate;
+    use moho::locator::Locator;
+    use moho::openusd::gf;
+    use moho::openusd::sdf::Value;
+    use moho::openusd::tf::Token;
+
+    let (_dir, usd) = common::stage(
+        r#"#usda 1.0
+def Xform "moved"
+{
+    double3 xformOp:translate = (1, 2, 3)
+    uniform token[] xformOpOrder = ["xformOp:translate"]
+}
+def Xform "still"
+{
+}
+"#,
+    );
+    let index = moho::stage::StageSceneIndex::new();
+    index.set_stage(usd);
+    let moved = index.prim(&common::p("/moved")).data.unwrap();
+    assert_eq!(
+        locate(&moved, &Locator::parse("geomXformVectors/translation")).and_then(|d| d.value()),
+        Some(Value::Vec3d(gf::Vec3d {
+            x: 1.0,
+            y: 2.0,
+            z: 3.0
+        }))
+    );
+    assert_eq!(
+        locate(&moved, &Locator::parse("geomXformVectors/rotationOrder")).and_then(|d| d.value()),
+        Some(Value::Token(Token::from("RotationOrderXYZ")))
+    );
+    let still = index.prim(&common::p("/still")).data.unwrap();
+    let names = still.names();
+    assert!(
+        names.contains(&Token::from("xform")),
+        "every Xformable names xform"
+    );
+    assert!(
+        locate(&still, &Locator::parse("xform")).is_none(),
+        "with no effect, no data"
+    );
+    assert!(!names.contains(&Token::from("geomXformVectors")));
+}
