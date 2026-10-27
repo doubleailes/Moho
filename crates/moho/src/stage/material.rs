@@ -25,6 +25,7 @@
 //! `inputs:sourceColorSpace` is listed among a texture's parameters but
 //! gives nothing (it becomes the `colorSpace` of `inputs:file`).
 
+use std::collections::BTreeSet;
 use std::rc::Rc;
 
 use openusd::sdf::{self, Role, Value};
@@ -68,10 +69,20 @@ impl Adapter for MaterialAdapter {
         (name == t::MATERIAL).then(|| networks(ctx, None))
     }
 
-    fn invalidate(&self, _ctx: &PrimContext, _name: &str) -> LocatorSet {
-        // Any property of the material can change its networks (terminals,
-        // interface inputs).
-        LocatorSet::from(Locator::new([t::MATERIAL]))
+    /// As `UsdImagingMaterialAdapter::InvalidateImagingSubprim`: an authored
+    /// output, or an input (through the terminal connections it feeds or as
+    /// an interface value), dirties the whole `material`; anything else,
+    /// `config:*` among it, dirties nothing of it.
+    fn invalidate(&self, ctx: &PrimContext, name: &str) -> LocatorSet {
+        let Some(prim) = ctx.prim() else {
+            return LocatorSet::new();
+        };
+        let output = name.starts_with(OUTPUTS) && authored_outputs(&prim).iter().any(|o| o.name() == name);
+        if output || name.starts_with(INPUTS) {
+            LocatorSet::from(Locator::new([t::MATERIAL]))
+        } else {
+            LocatorSet::new()
+        }
     }
 }
 
@@ -735,4 +746,115 @@ impl Container for NodeTypeInfo {
             .unwrap_or(false)
             .then(|| AttributeValue::unflagged(attribute, &self.ctx))
     }
+}
+
+/// `_CreateTerminalLocator`: `material/<context>/terminals/<terminal>` for
+/// an output's base name, its first namespace element taken as the context.
+fn terminal_locator(base: &str) -> Locator {
+    match base.split_once(':') {
+        None => Locator::new([t::MATERIAL, t::UNIVERSAL, t::TERMINALS, base]),
+        Some((context, rest)) => Locator::new([t::MATERIAL, context, t::TERMINALS, rest]),
+    }
+}
+
+/// `UsdImagingMaterialAdapter::InvalidateImagingSubprimFromDescendent`: what
+/// a change to the properties `properties` of `descendant`, a shader or node
+/// graph that `material` represents, dirties on the material. A terminal
+/// whose upstream connections reach the descendant dirties its terminal and
+/// the descendant's node (by the descendant's name alone, as UsdImaging names
+/// it) in its context and in `__all`; failing any, the whole `material`.
+/// Changes to `ui:nodegraph:*` properties alone dirty nothing.
+pub(crate) fn invalidate_from_descendant(
+    material: &usd::Prim,
+    descendant: &usd::Prim,
+    properties: &BTreeSet<String>,
+) -> LocatorSet {
+    let mut locators = LocatorSet::new();
+    if properties.iter().all(|p| p.starts_with("ui:nodegraph:")) {
+        return locators;
+    }
+    let descendant_name = descendant.path().name().unwrap_or_default().to_owned();
+    for output in authored_outputs(material) {
+        let dirty = connected_sources(&output).iter().any(|source| {
+            let mut seen = BTreeSet::new();
+            connection_dirty(descendant, properties, material, source, &mut seen)
+        });
+        if !dirty {
+            continue;
+        }
+        let full = output.name();
+        let base = full.strip_prefix(OUTPUTS).unwrap_or(full);
+        locators.insert(terminal_locator(base));
+        for context in [render_context(full), t::ALL] {
+            locators.insert(Locator::new([
+                t::MATERIAL,
+                context,
+                t::NODES,
+                descendant_name.as_str(),
+            ]));
+        }
+    }
+    if locators.is_empty() {
+        locators.insert(Locator::new([t::MATERIAL]));
+    }
+    locators
+}
+
+/// The valid sources `attribute` connects to.
+fn connected_sources(attribute: &usd::Attribute) -> Vec<openusd_schemas::shade::ConnectionSource> {
+    let shading = match openusd_schemas::shade::Output::from_attribute(attribute.clone()) {
+        Some(output) => ShadingAttribute::Output(output),
+        None => match Input::from_attribute(attribute.clone()) {
+            Some(input) => ShadingAttribute::Input(input),
+            None => return Vec::new(),
+        },
+    };
+    shading
+        .connected_sources()
+        .map(|s| s.into_sources())
+        .unwrap_or_default()
+}
+
+/// `_IsConnectionDirty`: whether walking upstream from `source` reaches
+/// `dirty` (or, at the material, the dirty property itself).
+fn connection_dirty(
+    dirty: &usd::Prim,
+    properties: &BTreeSet<String>,
+    material: &usd::Prim,
+    source: &openusd_schemas::shade::ConnectionSource,
+    seen: &mut BTreeSet<sdf::Path>,
+) -> bool {
+    if seen.contains(source.path()) {
+        return false;
+    }
+    let prim = source.prim();
+    if prim.path() == material.path() {
+        if prim.path() == dirty.path() && properties.contains(source.full_name()) {
+            return true;
+        }
+        seen.insert(source.path().clone());
+        return false;
+    }
+    if prim.path() == dirty.path() {
+        return true;
+    }
+    if source.source_type() == openusd_schemas::shade::AttributeType::Output {
+        let output = prim.attribute(source.full_name());
+        if output.is_defined().unwrap_or(false) {
+            for upstream in connected_sources(&output) {
+                if connection_dirty(dirty, properties, material, &upstream, seen) {
+                    return true;
+                }
+            }
+        }
+    }
+    for input in authored_inputs(prim) {
+        for upstream in connected_sources(input.attribute()) {
+            if connection_dirty(dirty, properties, material, &upstream, seen) {
+                return true;
+            }
+        }
+    }
+    seen.insert(source.path().clone());
+    false
 }

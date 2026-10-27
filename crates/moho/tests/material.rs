@@ -222,10 +222,18 @@ fn a_shader_edit_dirties_its_material() {
         .unwrap();
     index.apply_pending_updates();
     let notices = recorder.take();
-    assert!(
-        dirtied(&notices, "/preview").contains(&"material".to_owned()),
+    // As UsdImaging's material adapter: the terminal the shader feeds, and
+    // the shader's node in its context and in `__all`.
+    assert_eq!(
+        dirtied(&notices, "/preview"),
+        [
+            "material//nodes/surface",
+            "material//terminals/surface",
+            "material/__all/nodes/surface"
+        ],
         "{notices:?}"
     );
+    assert!(dirtied(&notices, "/preview/surface").is_empty());
     let net = network(&index, "/preview", "");
     assert_eq!(
         value(&net, &["nodes", "surface", "parameters", "roughness", "value"]),
@@ -234,18 +242,52 @@ fn a_shader_edit_dirties_its_material() {
 }
 
 #[test]
-fn removing_a_shader_dirties_its_material() {
+fn a_nested_shader_edit_dirties_its_node_by_name() {
+    let (_dir, index) = setup();
+    let recorder = RecordingObserver::on(index.as_ref());
+    index
+        .stage()
+        .unwrap()
+        .attribute("/mtlx/graph/ss.inputs:base")
+        .unwrap()
+        .set(0.1f32)
+        .unwrap();
+    index.apply_pending_updates();
+    let notices = recorder.take();
+    // UsdImaging names the node by the prim's name, not its path in the
+    // material (`graph/ss`).
+    assert_eq!(
+        dirtied(&notices, "/mtlx"),
+        [
+            "material/__all/nodes/ss",
+            "material/mtlx/nodes/ss",
+            "material/mtlx/terminals/surface"
+        ],
+        "{notices:?}"
+    );
+}
+
+#[test]
+fn removing_a_shader_notifies_nothing() {
+    // As UsdImaging: a prim gone from the stage has no adapter, and its
+    // material is not told. The network read again has lost it.
     let (_dir, index) = setup();
     let recorder = RecordingObserver::on(index.as_ref());
     index.stage().unwrap().remove_prim("/preview/tex").unwrap();
     index.apply_pending_updates();
     let notices = recorder.take();
-    assert!(
-        dirtied(&notices, "/preview").contains(&"material".to_owned()),
-        "{notices:?}"
-    );
+    assert!(dirtied(&notices, "/preview").is_empty(), "{notices:?}");
     let net = network(&index, "/preview", "");
     assert!(locate(&net, &Locator::parse("nodes/tex")).is_none());
+}
+
+#[test]
+fn a_material_holds_its_shaders() {
+    // The material represents its descendants: they are not prims.
+    let (_dir, index) = setup();
+    assert!(index.children(&p("/preview")).is_empty());
+    assert!(!index.prim(&p("/preview/surface")).is_defined());
+    assert!(!index.prim(&p("/mtlx/graph/ss")).is_defined());
 }
 
 #[test]
@@ -433,6 +475,28 @@ fn node_type_info_for_a_source_asset_shader() {
         )
         .is_none()
     );
+}
+
+#[test]
+fn interface_and_config_edits() {
+    let (_dir, index) = networks();
+    let recorder = RecordingObserver::on(index.as_ref());
+    let stage = index.stage().unwrap();
+    stage.attribute("/m.inputs:gain").unwrap().set(3.0f32).unwrap();
+    index.apply_pending_updates();
+    assert_eq!(dirtied(&recorder.take(), "/m"), ["material"]);
+    // UsdImaging's material adapter does not invalidate `config`.
+    stage
+        .attribute("/m.config:mtlx:version")
+        .unwrap()
+        .set(Value::String("1.39".into()))
+        .unwrap();
+    index.apply_pending_updates();
+    assert!(dirtied(&recorder.take(), "/m").is_empty());
+    // A disconnected shader dirties the whole material.
+    stage.attribute("/m/loose.inputs:x").unwrap().set(2.0f32).unwrap();
+    index.apply_pending_updates();
+    assert_eq!(dirtied(&recorder.take(), "/m"), ["material"]);
 }
 
 #[test]

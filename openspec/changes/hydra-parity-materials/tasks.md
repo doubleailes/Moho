@@ -16,7 +16,7 @@
 - [x] 2.2 Add `config` and `interface` (`parameters` with `displayName`, `displayGroup`, `mappings`; `parameterOrder`) to every context
 - [x] 2.3 Add `nodeTypeInfo` for shaders not in `id` mode; `nodeIdentifier` empty when no identifier resolves
 - [x] 2.4 Delete `__materialNodes`, `__materialNodeGraph` and off-stage connections (`stage/material.rs`, `tokens.rs`); a connection to a prim the stage does not hold is dropped
-- [ ] 2.5 Add the material invalidation for `config:*` and interface inputs as UsdImaging's material adapter does
+- [x] 2.5 Add the material invalidation for `config:*` and interface inputs as UsdImaging's material adapter does
 
 ## 3. Lights
 
