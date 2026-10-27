@@ -36,6 +36,12 @@ schemas:    typed accessors over containers (MeshSchema, XformSchema, ...)
   `value(0.0)` is the value at the index's time, and a shutter offset reads
   around it for motion blur. Changing the time dirties exactly the locators
   whose data might vary over time.
+- **Paths are path arrays.** openusd's `sdf::Value` has no single-path
+  variant, so a Hydra field typed as one `SdfPath` (a resolved binding's
+  `path`, `instance/instancer`, `__usdPrimInfo/niPrototypePath`,
+  `sceneGlobals/activeRenderSettingsPrim`) is a one-element
+  `Value::PathVec`, absent where Hydra's path would be empty. A field Hydra
+  types as a path array is a `PathVec` of any length.
 - **The renderer decides.** Dirty locators say what changed. Whether to
   update in place is the consumer's call, and it refuses what it cannot
   prove.

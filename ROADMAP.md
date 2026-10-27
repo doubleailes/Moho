@@ -78,5 +78,9 @@ the steps that land in this repository or depend on it.
   `UsdNotice::ObjectsChanged::GetChangedFields`). Moho dirties every prim
   with an info-only change for its `kind` meanwhile
   (`crates/moho/src/stage/mod.rs`).
+- A single-path value (`Value::Path`, C++ `VtValue` holding an `SdfPath`).
+  Hydra types many fields as one `SdfPath`; Moho holds each as a
+  one-element `Value::PathVec` meanwhile (`crates/moho/src/data_source.rs`),
+  so a single path and a path array cannot be told apart.
 - `SdfPath::MakeRelativePath`. Moho builds a prototype-relative prim origin
   from the path's text meanwhile (`crates/moho/src/stage/prim_origin.rs`).
