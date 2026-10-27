@@ -838,6 +838,11 @@ fn connection_dirty(
     if prim.path() == dirty.path() {
         return true;
     }
+    // Marked before walking upstream, where UsdImaging marks it after: a
+    // cyclic graph would otherwise recurse until the stack overflows (as
+    // C++ does). A source met again while its walk is under way answers
+    // `false`, which leaves the result of an acyclic walk unchanged.
+    seen.insert(source.path().clone());
     if source.source_type() == openusd_schemas::shade::AttributeType::Output {
         let output = prim.attribute(source.full_name());
         if output.is_defined().unwrap_or(false) {
@@ -855,6 +860,5 @@ fn connection_dirty(
             }
         }
     }
-    seen.insert(source.path().clone());
     false
 }

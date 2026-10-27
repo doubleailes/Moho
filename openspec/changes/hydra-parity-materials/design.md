@@ -140,6 +140,12 @@ for `__usdAttributes`.
   reports a `typeName` edit as info-only, so the stage index promotes it
   (an openusd upstream candidate). Light filters, also
   `RepresentsSelfAndDescendents`, wait for `hydra-parity-chain`.
+- **A cyclic shader graph terminates** (PR #19 review). UsdImaging's
+  `_IsConnectionDirty` marks a connection seen only after walking upstream
+  of it, so an edit that makes it walk a cycle overflows the stack (USD
+  26.08 crashes). Moho marks it before, and answers what an acyclic walk
+  would: the terminal for a shader the cycle holds, else the whole
+  `material`. The network itself is UsdImaging's, field for field.
 - **Task 2.5, `config:*` dirties nothing.** UsdImaging's material adapter
   invalidates an authored output, an input reached through a terminal's
   connections, or any `inputs:*` (all `material`); a `config:*` edit falls
