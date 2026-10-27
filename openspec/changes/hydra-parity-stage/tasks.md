@@ -26,8 +26,8 @@
 
 ## 3. Extent resolving
 
-- [ ] 3.1 Add `filter/extent_resolving.rs` (`ExtentResolvingSceneIndex`, purposes `geometry`, `render`, `proxy`): own `extent` wins, else the union of the hint's ranges; an `extentsHint` dirty also dirties `extent`
-- [ ] 3.2 Put it first after the stage index in `chain::standard`
+- [x] 3.1 Add `filter/extent_resolving.rs` (`ExtentResolvingSceneIndex`, purposes `geometry`, `render`, `proxy`): own `extent` wins, else the union of the hint's ranges; an `extentsHint` dirty also dirties `extent`
+- [x] 3.2 Put it first after the stage index in `chain::standard`
 
 ## 4. Dropping streaming
 

@@ -1,7 +1,10 @@
 //! Scene indices that take other scene indices as input: flattening,
 //! merging, and the resolving filters.
 
+pub mod extent_resolving;
 pub mod flattening;
+
+pub use extent_resolving::ExtentResolvingSceneIndex;
 
 pub use flattening::FlatteningSceneIndex;
 pub mod merging;
