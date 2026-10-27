@@ -107,3 +107,64 @@ fn a_resync_forgets_the_subtree() {
         "a removed prim is no longer time-varying"
     );
 }
+
+const SAMPLED_TOPOLOGY: &str = r#"#usda 1.0
+def PointInstancer "scatter"
+{
+    rel prototypes = [</scatter/a>, </scatter/b>]
+    int[] protoIndices.timeSamples = {
+        0: [0, 1],
+        10: [1, 1],
+    }
+    point3f[] positions = [(0, 0, 0), (1, 0, 0)]
+    def Mesh "a"
+    {
+    }
+    def Mesh "b"
+    {
+    }
+}
+"#;
+
+/// The instance indices per prototype of `/scatter`.
+fn instance_indices(index: &StageSceneIndex) -> Vec<Value> {
+    let data = index.prim(&common::p("/scatter")).data.unwrap();
+    let indices = locate(&data, &Locator::parse("instancerTopology/instanceIndices")).unwrap();
+    let indices = indices.as_vector().unwrap();
+    (0..indices.len())
+        .map(|i| indices.get(i).unwrap().value().unwrap())
+        .collect()
+}
+
+#[test]
+fn a_new_index_reads_at_time_0() {
+    let (_dir, usd) = stage(SAMPLED_TOPOLOGY);
+    let index = StageSceneIndex::new();
+    index.set_stage(usd);
+    assert_eq!(index.time(), TimeCode::new(0.0));
+    assert_eq!(
+        instance_indices(&index),
+        [Value::IntVec(vec![0]), Value::IntVec(vec![1])],
+        "the samples at frame 0, not the (absent) default"
+    );
+    let recorder = RecordingObserver::on(index.as_ref());
+    index.set_time(TimeCode::new(0.0));
+    assert!(recorder.take().is_empty(), "already at time 0");
+    index.set_time(TimeCode::new(10.0));
+    assert!(!recorder.take().is_empty());
+    assert_eq!(
+        instance_indices(&index),
+        [Value::IntVec(vec![]), Value::IntVec(vec![0, 1])]
+    );
+}
+
+#[test]
+fn replacing_the_stage_resets_the_time_to_the_earliest() {
+    let (_dir, usd) = stage(SCENE);
+    let index = StageSceneIndex::new();
+    index.set_stage(usd);
+    index.set_time(TimeCode::new(2.0));
+    let (_other_dir, other) = stage(SCENE);
+    index.set_stage(other);
+    assert!(index.time().is_earliest());
+}

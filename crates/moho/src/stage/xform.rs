@@ -122,15 +122,12 @@ struct LocalMatrix {
 
 impl Sampled for LocalMatrix {
     fn value(&self, offset: f32) -> Option<Value> {
-        let time = self
-            .globals
-            .time()
-            .map(|t| TimeCode::new(t.value() + f64::from(offset)));
+        let time = TimeCode::new(self.globals.time().value() + f64::from(offset));
         self.query.local_transform(time).ok().map(Value::Matrix4d)
     }
 
     fn sample_times(&self, start: f32, end: f32) -> Option<Vec<f32>> {
-        let now = self.globals.time()?.value();
+        let now = self.globals.time().value();
         let times = self.query.time_samples().ok()?;
         #[allow(clippy::cast_possible_truncation)]
         let offsets: Vec<f32> = times.iter().map(|t| (t - now) as f32).collect();

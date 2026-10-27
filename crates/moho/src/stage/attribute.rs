@@ -73,11 +73,7 @@ impl AttributeValue {
 
 impl Sampled for AttributeValue {
     fn value(&self, offset: f32) -> Option<Value> {
-        // At the default time there is no timeline to offset along.
-        let time = self
-            .globals
-            .time()
-            .map(|t| TimeCode::new(t.value() + f64::from(offset)));
+        let time = TimeCode::new(self.globals.time().value() + f64::from(offset));
         self.attribute
             .get_at::<Value>(time)
             .ok()
@@ -86,7 +82,7 @@ impl Sampled for AttributeValue {
     }
 
     fn sample_times(&self, start: f32, end: f32) -> Option<Vec<f32>> {
-        let now = self.globals.time()?.value();
+        let now = self.globals.time().value();
         let times = self.attribute.time_sample_times().ok()?;
         // Offsets are relative to the index's time; f32 holds them exactly
         // enough for frame-relative sampling.

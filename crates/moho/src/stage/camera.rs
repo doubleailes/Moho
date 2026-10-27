@@ -196,10 +196,7 @@ struct LinearExposureScale {
 
 impl Sampled for LinearExposureScale {
     fn value(&self, offset: f32) -> Option<Value> {
-        let time = self
-            .globals
-            .time()
-            .map(|t| TimeCode::new(t.value() + f64::from(offset)));
+        let time = TimeCode::new(self.globals.time().value() + f64::from(offset));
         let read = |i: usize, fallback: f32| -> f32 {
             match self
                 .attributes
@@ -221,7 +218,7 @@ impl Sampled for LinearExposureScale {
 
     /// The union of every input's bracketing samples.
     fn sample_times(&self, start: f32, end: f32) -> Option<Vec<f32>> {
-        let now = self.globals.time()?.value();
+        let now = self.globals.time().value();
         let mut times: Vec<f32> = Vec::new();
         for attribute in &self.attributes {
             let samples = attribute.time_sample_times().unwrap_or_default();

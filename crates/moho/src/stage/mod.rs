@@ -57,18 +57,29 @@ pub fn stage_builder() -> StageBuilder {
 }
 
 /// State every data source of one stage scene index shares: the current
-/// time, and the data that may vary over time.
-#[derive(Default)]
+/// time, and the data that may vary over time
+/// (`UsdImagingStageSceneIndex::_StageGlobals`).
 pub struct Globals {
-    time: Cell<Option<TimeCode>>,
+    time: Cell<TimeCode>,
     /// Per prim, the locators of data sources built so far whose value may
     /// vary over time (Hydra's `FlagAsTimeVarying`).
     time_varying: RefCell<BTreeMap<sdf::Path, LocatorSet>>,
 }
 
+impl Default for Globals {
+    /// Time code 0, a default-constructed `UsdTimeCode`'s, as
+    /// `_StageGlobals` starts.
+    fn default() -> Self {
+        Self {
+            time: Cell::new(TimeCode::new(0.0)),
+            time_varying: RefCell::default(),
+        }
+    }
+}
+
 impl Globals {
-    /// The index's current time, `None` for the default time.
-    pub fn time(&self) -> Option<TimeCode> {
+    /// The index's current time.
+    pub fn time(&self) -> TimeCode {
         self.time.get()
     }
 
@@ -192,8 +203,9 @@ impl StageSceneIndex {
     }
 
     /// Replaces the stage: every prim held is removed (one removal of the
-    /// absolute root), then every prim of `stage` the default traversal
-    /// reaches is added. Edits made to `stage` from now on are queued until
+    /// absolute root) and the time is reset to `TimeCode::EARLIEST` (as
+    /// `_StageGlobals::Clear`), then every prim of `stage` the default
+    /// traversal reaches is added. Edits made to `stage` from now on are queued until
     /// [`apply_pending_updates`](Self::apply_pending_updates).
     pub fn set_stage(&self, stage: Stage) {
         let previous = self.current.borrow_mut().take();
@@ -211,6 +223,8 @@ impl StageSceneIndex {
                     path: sdf::Path::abs_root(),
                 }],
             );
+            // `_StageGlobals::Clear`.
+            self.globals.time.set(TimeCode::EARLIEST);
         }
         let pending = Rc::new(RefCell::new(Pending::default()));
         let sink = stage.add_sink(Recorder(pending.clone()));
@@ -463,8 +477,11 @@ impl StageSceneIndex {
         Some((ancestor, prim))
     }
 
-    /// The index's current time, `None` for the default time.
-    pub fn time(&self) -> Option<TimeCode> {
+    /// The index's current time: time code 0 for a new index (a
+    /// default-constructed `UsdTimeCode`, as `UsdImagingStageSceneIndex`'s),
+    /// `TimeCode::EARLIEST` once a held stage was replaced, else the last
+    /// time set.
+    pub fn time(&self) -> TimeCode {
         self.globals.time()
     }
 
@@ -472,10 +489,10 @@ impl StageSceneIndex {
     /// built so far whose value may vary over time; the same time notifies
     /// nothing.
     pub fn set_time(&self, time: TimeCode) {
-        if self.globals.time() == Some(time) {
+        if self.globals.time() == time {
             return;
         }
-        self.globals.time.set(Some(time));
+        self.globals.time.set(time);
         let dirtied: Vec<Dirtied> = self
             .globals
             .time_varying

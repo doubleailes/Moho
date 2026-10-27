@@ -55,6 +55,14 @@ mxpv/openusd#175) were read at `68a867a`.
   (raw: `colorSpace` is a `Value::String`), `type_name() -> Option<ValueTypeName>`
   (`as_token()`), `connections()`; `Prim::relationships()`,
   `Relationship::targets()` and `forwarded_targets()`.
+- `usd::TimeCode` (`usd/timecode.rs`) is always a numeric time: the
+  default time is the `None` arm of `impl Into<Option<TimeCode>>` at the
+  call site (`Attribute::get_at`). `TimeCode::new(0.0)` is C++'s
+  default-constructed `UsdTimeCode` (time code 0), where a stage index
+  starts; `TimeCode::EARLIEST` (`f64::MIN`, C++ `EarliestTime()`) and
+  `is_earliest()` are where it resets when its stage is replaced. A query
+  at `EARLIEST` resolves the earliest sample; an offset added to it stays
+  `EARLIEST` (`f64::MIN` absorbs it).
 - `Stage::start_time_code`, `end_time_code` and
   `has_authored_time_code_range` read the root and session layers only, as in
   USD.
