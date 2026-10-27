@@ -16,7 +16,7 @@ def Xform "world"
 {
     def Mesh "moving"
     {
-        float crust:anim.timeSamples = {
+        float myRenderer:anim.timeSamples = {
             1: 10,
             2: 20,
             3: 30,
@@ -24,7 +24,7 @@ def Xform "world"
     }
     def Mesh "still"
     {
-        float crust:anim = 5
+        float myRenderer:anim = 5
     }
 }
 "#;
@@ -32,7 +32,11 @@ def Xform "world"
 fn value_source(index: &StageSceneIndex, prim: &str) -> DataSource {
     let data = index.prim(&p(prim)).data.unwrap();
     let attrs = locate(&data, &Locator::parse("__usdAttributes")).unwrap();
-    let entry = attrs.as_container().unwrap().get(&"crust:anim".into()).unwrap();
+    let entry = attrs
+        .as_container()
+        .unwrap()
+        .get(&"myRenderer:anim".into())
+        .unwrap();
     entry.as_container().unwrap().get(&"value".into()).unwrap()
 }
 
@@ -57,7 +61,7 @@ fn one_animated_prim_is_dirtied() {
         recorder.take(),
         [Notice::Dirtied(Dirtied {
             path: p("/world/moving"),
-            locators: LocatorSet::from(Locator::new(["__usdAttributes", "crust:anim"])),
+            locators: LocatorSet::from(Locator::new(["__usdAttributes", "myRenderer:anim"])),
         })]
     );
     assert_eq!(moving.value(), Some(Value::Float(30.0)));
