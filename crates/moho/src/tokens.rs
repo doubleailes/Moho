@@ -271,6 +271,22 @@ pub mod usd_prim_info {
     pub(crate) const NI_PROTOTYPE_IDENTITY: &str = "niPrototypeIdentity";
 }
 
+/// `UsdImagingGeomModelSchema` (`geomModel`): `GeomModelAPI`'s draw mode
+/// data.
+pub mod geom_model {
+    pub const GEOM_MODEL: &str = "geomModel";
+    pub const APPLY_DRAW_MODE: &str = "applyDrawMode";
+    pub const DRAW_MODE: &str = "drawMode";
+    pub const DRAW_MODE_COLOR: &str = "drawModeColor";
+    pub const CARD_GEOMETRY: &str = "cardGeometry";
+    pub const CARD_TEXTURE_X_POS: &str = "cardTextureXPos";
+    pub const CARD_TEXTURE_Y_POS: &str = "cardTextureYPos";
+    pub const CARD_TEXTURE_Z_POS: &str = "cardTextureZPos";
+    pub const CARD_TEXTURE_X_NEG: &str = "cardTextureXNeg";
+    pub const CARD_TEXTURE_Y_NEG: &str = "cardTextureYNeg";
+    pub const CARD_TEXTURE_Z_NEG: &str = "cardTextureZNeg";
+}
+
 /// `HdInstancerTopologySchema`, `HdInstanceSchema`, `HdInstancedBySchema` and
 /// the instancer primvars.
 pub mod instancing {

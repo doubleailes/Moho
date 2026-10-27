@@ -17,7 +17,8 @@
 //! and each instance prim gets `instance`, naming its instancer and index.
 //! `<scope>` is `/` for top-level instances, and the enclosing propagated
 //! prototype for instances nested in a prototype, at any depth. The numbered
-//! `/__Prototype_N` prims are hidden.
+//! `/__Prototype_N` prims are hidden. An instance whose `niPrototypePath` is
+//! absent (blocked) is not aggregated, nor is one strictly under an `over`.
 
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -224,6 +225,16 @@ impl NativeInstancingSceneIndex {
         while let Some(path) = stack.pop() {
             if self.prim_info(&path, usd_prim_info::NI_PROTOTYPE_PATH).is_some() {
                 instances.push(path);
+                continue;
+            }
+            // Nothing strictly under an `over` is aggregated: UsdImaging's
+            // point instancer prototype pass blocks `niPrototypePath` there.
+            // That pass runs after this filter in Moho's chain until
+            // `hydra-parity-instancing` puts point instancing first, so the
+            // walk stops at the `over` itself.
+            if self.prim_info(&path, usd_prim_info::SPECIFIER)
+                == Some(Value::Token(Token::from(usd_prim_info::OVER)))
+            {
                 continue;
             }
             stack.extend(self.input.children(&path));

@@ -20,20 +20,21 @@
 //! copy's path values are re-rooted level by level.
 
 use std::cell::RefCell;
+use std::collections::BTreeSet;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::rc::{Rc, Weak};
 
 use openusd::sdf::{self, Value};
 use openusd::tf::Token;
 
-use crate::data_source::retained::{container, value};
-use crate::data_source::{Container, ContainerHandle, DataSource};
+use crate::data_source::retained::{RetainedContainer, block, container, value};
+use crate::data_source::{Container, ContainerHandle, DataSource, Overlay, locate};
 use crate::locator::Locator;
 use crate::scene_index::{
     Added, Dirtied, Observer, Observers, Prim, Removed, Renamed, SceneIndex, SceneIndexHandle,
 };
 use crate::schema::{XformSchema, member_container};
-use crate::tokens::{instancing as t, xform};
+use crate::tokens::{geom_model, instancing as t, prim_type, usd_prim_info, xform};
 
 struct Instancer {
     /// The instancer's output path: its input path for a top-level one, or
@@ -62,6 +63,10 @@ struct Model {
     /// an instancer's `ForInstancer<hash>` scope, and the copies of its
     /// prototypes that are instance proxies, under that scope.
     extra_children: std::collections::BTreeMap<sdf::Path, Vec<sdf::Path>>,
+    /// The prims whose descendants are unrenderable (UsdImaging's
+    /// `_instancersAndOvers`): instancers and `over` prims, output paths,
+    /// found over the whole stage and in every copy.
+    instancers_and_overs: BTreeSet<sdf::Path>,
 }
 
 impl Model {
@@ -134,14 +139,71 @@ impl Model {
             .any(|i| self.extra_children.get(&i.path).is_some_and(|c| c.contains(out)))
     }
 
-    /// Whether `out` is drawn only through an instancer: it lies under an
-    /// instancer, but in none of that instancer's copies.
-    fn hidden(&self, out: &sdf::Path) -> bool {
-        self.instancers.iter().any(|i| {
-            out.has_prefix(&i.path)
-                && *out != i.path
-                && !i.copies.iter().any(|(copy, _)| out.has_prefix(copy))
+    /// Whether `out` lies strictly under an instancer or an `over`, as
+    /// UsdImaging's point instancer prototype scene index judges it: over
+    /// the whole stage for a prim in no copy, and from the copy's root down
+    /// for a prim in a copy (a copy does not see what lies above its
+    /// original).
+    fn unrenderable(&self, out: &sdf::Path) -> bool {
+        let scope = self.innermost(out).map(|step| step.copy.clone());
+        out.strict_ancestors()
+            .filter(|a| scope.as_ref().is_none_or(|root| a.has_prefix(root)))
+            .any(|a| self.instancers_and_overs.contains(&a))
+    }
+}
+
+/// Whether a prim hides its descendants: an instancer, or a prim whose
+/// specifier is `over` (UsdImaging's `_IsOverOrInstance`).
+fn is_over_or_instancer(prim: &Prim) -> bool {
+    if prim.ty == prim_type::INSTANCER {
+        return true;
+    }
+    let specifier = prim
+        .data
+        .as_ref()
+        .and_then(|d| {
+            locate(
+                d,
+                &Locator::new([usd_prim_info::USD_PRIM_INFO, usd_prim_info::SPECIFIER]),
+            )
         })
+        .and_then(|d| d.value());
+    matches!(specifier, Some(Value::Token(t)) if t == usd_prim_info::OVER)
+}
+
+/// A type the whole-stage pass empties (UsdImaging's
+/// `IsRenderablePrimType`): any but the empty type and `material`.
+fn is_renderable(ty: &Token) -> bool {
+    !ty.as_str().is_empty() && ty != prim_type::MATERIAL
+}
+
+/// A prim under an instancer or an `over` made unrenderable, as UsdImaging's
+/// `_MakeUnrenderable`: an empty type unless it is not renderable anyway,
+/// `__usdPrimInfo/niPrototypePath` blocked so native instancing does not
+/// aggregate it, and `geomModel/applyDrawMode` false.
+fn make_unrenderable(prim: Prim) -> Prim {
+    let ty = if is_renderable(&prim.ty) {
+        Token::default()
+    } else {
+        prim.ty
+    };
+    let Some(data) = prim.data else {
+        return Prim { ty, data: None };
+    };
+    let overlay = RetainedContainer::new([
+        (
+            usd_prim_info::USD_PRIM_INFO,
+            container([(usd_prim_info::NI_PROTOTYPE_PATH, block())]),
+        ),
+        (
+            geom_model::GEOM_MODEL,
+            container([(geom_model::APPLY_DRAW_MODE, value(false))]),
+        ),
+    ])
+    .into_handle();
+    Prim {
+        ty,
+        data: Some(Overlay::handle([overlay, data])),
     }
 }
 
@@ -321,9 +383,18 @@ impl PointInstancingSceneIndex {
             return model.clone();
         }
         let mut model = Model::default();
+        // The whole stage, parents first. An instancer under an instancer or
+        // an `over` has an empty type there, so it is propagated only
+        // through the copies holding it.
         let mut stack = vec![sdf::Path::abs_root()];
         while let Some(path) = stack.pop() {
-            if let Some(data) = self.input.prim(&path).data
+            let prim = self.input.prim(&path);
+            let under = model.unrenderable(&path);
+            if is_over_or_instancer(&prim) {
+                model.instancers_and_overs.insert(path.clone());
+            }
+            if !under
+                && let Some(data) = prim.data
                 && let Some(instancer) = instancer_at(&path, &data)
             {
                 self.add_instancer(&mut model, instancer);
@@ -344,18 +415,27 @@ impl PointInstancingSceneIndex {
                 let mut stack = vec![root];
                 while let Some(path) = stack.pop() {
                     if model.instancers.iter().any(|i| i.path == path) {
+                        model.instancers_and_overs.insert(path.clone());
                         continue;
                     }
-                    if let Some((input, maps)) = self.data_at(&model, &path)
-                        && let Some(data) = input.data
-                    {
-                        let data = maps.iter().fold(data, |d, (from, to)| {
-                            crate::filter::rerooting::rerooted(d, from, to)
-                        });
-                        if let Some(instancer) = instancer_at(&path, &data) {
-                            self.add_instancer(&mut model, instancer);
-                            continue;
+                    if let Some((input, maps)) = self.data_at(&model, &path) {
+                        if is_over_or_instancer(&input) {
+                            model.instancers_and_overs.insert(path.clone());
                         }
+                        if let Some(data) = input.data {
+                            let data = maps.iter().fold(data, |d, (from, to)| {
+                                crate::filter::rerooting::rerooted(d, from, to)
+                            });
+                            if let Some(instancer) = instancer_at(&path, &data) {
+                                self.add_instancer(&mut model, instancer);
+                                continue;
+                            }
+                        }
+                    }
+                    if model.instancers_and_overs.contains(&path) {
+                        // Nothing under an `over` is drawn, instancers
+                        // included.
+                        continue;
                     }
                     stack.extend(self.natural_children(&model, &path));
                 }
@@ -461,12 +541,15 @@ impl SceneIndex for PointInstancingSceneIndex {
             Some(instancer) => Self::with_copies(instancer, local),
             None => local,
         };
-        let ty = if model.hidden(path) {
-            // Drawn only through the instancer.
-            Token::default()
-        } else {
-            input.ty
-        };
+        if model.unrenderable(path) {
+            // Drawn only through an instancer, or not at all under an
+            // `over`.
+            return make_unrenderable(Prim {
+                ty: input.ty,
+                data: Some(local),
+            });
+        }
+        let ty = input.ty;
         let Some(step) = model.innermost(path) else {
             return Prim {
                 ty,
@@ -510,7 +593,20 @@ impl SceneIndex for PointInstancingSceneIndex {
 impl Observer for PointInstancingSceneIndex {
     fn added(&self, _: &dyn SceneIndex, entries: &[Added]) {
         let old = self.model.borrow_mut().take();
-        self.observers.send_added(self, entries);
+        let model = self.model();
+        // A prim under an instancer or an `over` is added unrenderable.
+        let entries: Vec<Added> = entries
+            .iter()
+            .map(|e| Added {
+                path: e.path.clone(),
+                ty: if is_renderable(&e.ty) && model.unrenderable(&e.path) {
+                    Token::default()
+                } else {
+                    e.ty.clone()
+                },
+            })
+            .collect();
+        self.observers.send_added(self, &entries);
         self.resync(old);
     }
 
