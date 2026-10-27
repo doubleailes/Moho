@@ -246,3 +246,9 @@ prim factory.
   since `hydra-parity-instancing`) and, on removing a nested point
   instancer, from re-additions the propagation's own input handling makes;
   neither is merging's.
+- **Adding a linked light also dirties its link id.** The spec's "Adding a
+  light linked to a few prims" said only the prims whose categories change
+  are dirtied. `HdsiLightLinkingSceneIndex` also dirties the added light at
+  `light/lightLink` (`_InvalidateLights` for the collection it just
+  processed), after the added entry; Moho does the same, and the test pins
+  it.
