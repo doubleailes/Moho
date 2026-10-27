@@ -1,7 +1,7 @@
 #![allow(clippy::unwrap_used)]
 
 //! Path values inside propagated prototypes name the propagated prototype
-//! (M11), as Hydra's rerooting data source makes them: a material bound
+//! as Hydra's rerooting data source makes them: a material bound
 //! inside a native instance's prototype, or inside a point instancer's
 //! prototype, resolves to the material in the same propagated prototype.
 

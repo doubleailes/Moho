@@ -14,18 +14,18 @@ def Xform "world"
 {
     def Mesh "geo"
     {
-        int crust:rayMask = 6
-        int crust:other = 1
+        int myRenderer:rayMask = 6
+        int myRenderer:other = 1
     }
     def Camera "cam"
     {
-        int crust:rayMask = 2
+        int myRenderer:rayMask = 2
     }
     def Mesh "off" (
         active = false
     )
     {
-        int crust:rayMask = 2
+        int myRenderer:rayMask = 2
     }
 }
 "#;
@@ -62,14 +62,14 @@ fn attrs(names: &[&str]) -> LocatorSet {
 #[test]
 fn nothing_until_applied() {
     let (_dir, index, recorder) = setup();
-    set_int(&index, "/world/geo.crust:rayMask", 7);
+    set_int(&index, "/world/geo.myRenderer:rayMask", 7);
     assert!(recorder.take().is_empty());
     index.apply_pending_updates();
     assert_eq!(
         recorder.take(),
         [Notice::Dirtied(Dirtied {
             path: p("/world/geo"),
-            locators: attrs(&["crust:rayMask"])
+            locators: attrs(&["myRenderer:rayMask"])
         })]
     );
     index.apply_pending_updates();
@@ -131,9 +131,9 @@ fn a_retyped_prim_is_resynced() {
 #[test]
 fn several_edits_one_application() {
     let (_dir, index, recorder) = setup();
-    set_int(&index, "/world/geo.crust:rayMask", 7);
-    set_int(&index, "/world/geo.crust:other", 2);
-    set_int(&index, "/world/cam.crust:rayMask", 3);
+    set_int(&index, "/world/geo.myRenderer:rayMask", 7);
+    set_int(&index, "/world/geo.myRenderer:other", 2);
+    set_int(&index, "/world/cam.myRenderer:rayMask", 3);
     index.apply_pending_updates();
     let mut notices = recorder.take();
     notices.sort_by_key(|n| format!("{n:?}"));
@@ -142,11 +142,11 @@ fn several_edits_one_application() {
         [
             Notice::Dirtied(Dirtied {
                 path: p("/world/cam"),
-                locators: attrs(&["crust:rayMask"])
+                locators: attrs(&["myRenderer:rayMask"])
             }),
             Notice::Dirtied(Dirtied {
                 path: p("/world/geo"),
-                locators: attrs(&["crust:other", "crust:rayMask"])
+                locators: attrs(&["myRenderer:other", "myRenderer:rayMask"])
             }),
         ]
     );
@@ -155,7 +155,7 @@ fn several_edits_one_application() {
 #[test]
 fn edits_to_unexposed_prims_are_silent() {
     let (_dir, index, recorder) = setup();
-    set_int(&index, "/world/off.crust:rayMask", 9);
+    set_int(&index, "/world/off.myRenderer:rayMask", 9);
     index.apply_pending_updates();
     assert!(recorder.take().is_empty());
 }

@@ -21,7 +21,7 @@ def Xform "world"
         point3f[] points = [(0, 0, 0), (1, 0, 0), (1, 1, 0)]
         int[] faceVertexCounts = [3]
         int[] faceVertexIndices = [0, 1, 2]
-        int crust:rayMask = 6
+        int myRenderer:rayMask = 6
         color3f[] primvars:displayColor = [(1, 0, 0)] (
             interpolation = "constant"
             colorSpace = "lin_rec709"
@@ -72,15 +72,15 @@ fn index() -> (common::TempDir, std::rc::Rc<StageSceneIndex>) {
 fn a_renderer_attribute_reads_back() {
     let (_dir, index) = index();
     assert_eq!(
-        attr(&index, "/world/geo", "crust:rayMask", "value"),
+        attr(&index, "/world/geo", "myRenderer:rayMask", "value"),
         Some(Value::Int(6))
     );
     assert_eq!(
-        attr(&index, "/world/geo", "crust:rayMask", "authored"),
+        attr(&index, "/world/geo", "myRenderer:rayMask", "authored"),
         Some(Value::Bool(true))
     );
     assert_eq!(
-        attr(&index, "/world/geo", "crust:rayMask", "typeName"),
+        attr(&index, "/world/geo", "myRenderer:rayMask", "typeName"),
         Some(Value::Token(Token::from("int")))
     );
 }
