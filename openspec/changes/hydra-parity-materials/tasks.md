@@ -1,21 +1,21 @@
 ## 0. Preconditions
 
-- [ ] 0.1 `hydra-parity-instancing` is implemented (instance proxy path translation, flattening inside native propagation)
+- [x] 0.1 `hydra-parity-instancing` is implemented (instance proxy path translation, flattening inside native propagation)
 - [ ] 0.2 Read at the pinned rev the openusd(-schemas) APIs for `info:implementationSource`, `info:*` attributes, `sdrMetadata`, `config:*` properties, interface input consumers, and a light's `light:shaderId`; record them in `docs/openusd-notes.md`
 
 ## 1. Material binding resolution
 
-- [ ] 1.1 Rewrite `filter/material_binding.rs` resolution with the four per-level steps (design D1), over the flattened binding vector
-- [ ] 1.2 Judge collection bindings with the collection evaluator over the input scene index (`collections/<name>/membershipExpression` of the collection prim), cached per collection and dropped on `collections` dirties and removals; drop the `CollectionMembership` argument
-- [ ] 1.3 Give `materialBindings` only to prims that have `usdMaterialBindings`
-- [ ] 1.4 Dirty locators: replace `usdMaterialBindings` with `materialBindings`; delete the collection-dependent re-dirtying
+- [x] 1.1 Rewrite `filter/material_binding.rs` resolution with the four per-level steps (design D1), over the flattened binding vector
+- [x] 1.2 Judge collection bindings with the collection evaluator over the input scene index (`collections/<name>/membershipExpression` of the collection prim), cached per collection and dropped on `collections` dirties and removals; drop the `CollectionMembership` argument
+- [x] 1.3 Give `materialBindings` only to prims that have `usdMaterialBindings`
+- [x] 1.4 Dirty locators: replace `usdMaterialBindings` with `materialBindings`; delete the collection-dependent re-dirtying
 
 ## 2. Material networks
 
-- [ ] 2.1 Add the `__all` context (every `Shader` under the material, terminals under full names) to `stage/material.rs`
-- [ ] 2.2 Add `config` and `interface` (`parameters` with `displayName`, `displayGroup`, `mappings`; `parameterOrder`) to every context
-- [ ] 2.3 Add `nodeTypeInfo` for shaders not in `id` mode; `nodeIdentifier` empty when no identifier resolves
-- [ ] 2.4 Delete `__materialNodes`, `__materialNodeGraph` and off-stage connections (`stage/material.rs`, `tokens.rs`); a connection to a prim the stage does not hold is dropped
+- [x] 2.1 Add the `__all` context (every `Shader` under the material, terminals under full names) to `stage/material.rs`
+- [x] 2.2 Add `config` and `interface` (`parameters` with `displayName`, `displayGroup`, `mappings`; `parameterOrder`) to every context
+- [x] 2.3 Add `nodeTypeInfo` for shaders not in `id` mode; `nodeIdentifier` empty when no identifier resolves
+- [x] 2.4 Delete `__materialNodes`, `__materialNodeGraph` and off-stage connections (`stage/material.rs`, `tokens.rs`); a connection to a prim the stage does not hold is dropped
 - [ ] 2.5 Add the material invalidation for `config:*` and interface inputs as UsdImaging's material adapter does
 
 ## 3. Lights

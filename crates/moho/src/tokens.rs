@@ -211,19 +211,29 @@ pub mod material_bindings {
 }
 
 /// `HdMaterialSchema`, `HdMaterialNetworkSchema`, `HdMaterialNodeSchema`,
-/// `HdMaterialNodeParameterSchema` and `HdMaterialConnectionSchema`.
+/// `HdMaterialNodeParameterSchema`, `HdMaterialConnectionSchema` and
+/// `HdMaterialInterfaceSchema`.
 pub mod material {
     pub const MATERIAL: &str = "material";
+    /// The context holding every shader under a material
+    /// (`HdMaterialSchemaTokens->all`).
+    pub const ALL: &str = "__all";
     pub const NODES: &str = "nodes";
-    /// A `Shader` prim's node and upstream subgraph, by absolute path (Moho).
-    pub const MATERIAL_NODES: &str = "__materialNodes";
-    /// A `NodeGraph` prim's outputs, each the connection it reads (Moho).
-    pub const MATERIAL_NODE_GRAPH: &str = "__materialNodeGraph";
-    pub const OUTPUTS: &str = "outputs";
     pub const TERMINALS: &str = "terminals";
-    pub const NODE_IDENTIFIER: &str = "nodeIdentifier";
+    pub const INTERFACE: &str = "interface";
+    pub const CONFIG: &str = "config";
     pub const PARAMETERS: &str = "parameters";
+    pub const PARAMETER_ORDER: &str = "parameterOrder";
+    pub const DISPLAY_NAME: &str = "displayName";
+    pub const DISPLAY_GROUP: &str = "displayGroup";
+    pub const MAPPINGS: &str = "mappings";
+    pub const NODE_PATH: &str = "nodePath";
+    pub const INPUT_NAME: &str = "inputName";
     pub const INPUT_CONNECTIONS: &str = "inputConnections";
+    pub const NODE_IDENTIFIER: &str = "nodeIdentifier";
+    pub const RENDER_CONTEXT_NODE_IDENTIFIERS: &str = "renderContextNodeIdentifiers";
+    pub const NODE_TYPE_INFO: &str = "nodeTypeInfo";
+    pub const SDR_METADATA: &str = "sdrMetadata";
     pub const VALUE: &str = "value";
     pub const TYPE_NAME: &str = "typeName";
     pub const COLOR_SPACE: &str = "colorSpace";
@@ -233,6 +243,8 @@ pub mod material {
     pub const SURFACE: &str = "surface";
     pub const DISPLACEMENT: &str = "displacement";
     pub const VOLUME: &str = "volume";
+    /// A light's fixed terminal (`HdMaterialTerminalTokens->light`).
+    pub const LIGHT: &str = "light";
     /// The universal render context.
     pub const UNIVERSAL: &str = "";
 }
@@ -241,6 +253,12 @@ pub mod material {
 pub mod light {
     pub const LIGHT: &str = "light";
     pub const FILTERS: &str = "filters";
+    pub const IS_LIGHT: &str = "isLight";
+    pub const MATERIAL_SYNC_MODE: &str = "materialSyncMode";
+    /// A dome light's portals.
+    pub const PORTALS: &str = "portals";
+    /// A `DomeLight_1`'s pole axis alignment.
+    pub const DOME_OFFSET: &str = "domeOffset";
     /// The light-link and shadow-link category ids the light linking filter
     /// writes into `light`.
     pub const LIGHT_LINK: &str = "lightLink";

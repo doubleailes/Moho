@@ -2,11 +2,12 @@
 
 mod common;
 
-use common::{p, stage};
+use common::{open_masked, p, stage};
 use moho::data_source::{ContainerHandle, locate};
 use moho::locator::Locator;
 use moho::openusd::sdf::Value;
 use moho::openusd::tf::Token;
+use moho::openusd_schemas::shade::{Connectable, ProducerFilter, Shader};
 use moho::scene_index::SceneIndex;
 use moho::scene_index::testing::{Notice, RecordingObserver};
 use moho::stage::StageSceneIndex;
@@ -134,10 +135,10 @@ fn preview_surface_with_a_texture() {
         value(&net, &["nodes", "reader", "parameters", "varname", "value"]),
         Some(Value::String("st".into()))
     );
-    // Raw, as openusd stores the metadata.
+    // The attribute's colour space, as a token.
     assert_eq!(
         value(&net, &["nodes", "tex", "parameters", "file", "colorSpace"]),
-        Some(Value::String("sRGB".into()))
+        token("sRGB")
     );
     let connection = locate(
         &net,
@@ -165,15 +166,17 @@ fn a_materialx_network() {
         .as_container()
         .unwrap()
         .names();
-    assert_eq!(contexts, [Token::from("mtlx")]);
+    assert_eq!(contexts, [Token::from("mtlx"), Token::from("__all")]);
     let net = network(&index, "/mtlx", "mtlx");
     assert_eq!(
         value(&net, &["terminals", "surface", "upstreamNodePath"]),
         token("graph/ss")
     );
+    // UsdImaging's quirk: the terminal names the output its material output
+    // connects to (the node graph's), not the shader's it resolved to.
     assert_eq!(
         value(&net, &["terminals", "surface", "upstreamNodeOutputName"]),
-        token("out")
+        token("surface")
     );
     assert_eq!(
         value(&net, &["nodes", "graph/ss", "nodeIdentifier"]),
@@ -193,6 +196,19 @@ fn a_materialx_network() {
     );
 }
 
+/// The locators `path` was dirtied for, as text.
+fn dirtied(notices: &[Notice], path: &str) -> Vec<String> {
+    notices
+        .iter()
+        .filter_map(|n| match n {
+            Notice::Dirtied(d) if d.path == p(path) => Some(d.locators.iter().map(|l| l.to_string())),
+            _ => None,
+        })
+        .flatten()
+        .filter(|l| !l.starts_with("__usd"))
+        .collect()
+}
+
 #[test]
 fn a_shader_edit_dirties_its_material() {
     let (_dir, index) = setup();
@@ -207,7 +223,7 @@ fn a_shader_edit_dirties_its_material() {
     index.apply_pending_updates();
     let notices = recorder.take();
     assert!(
-        notices.iter().any(|n| matches!(n, Notice::Dirtied(d) if d.path == p("/preview") && d.locators.contains(&Locator::parse("material")))),
+        dirtied(&notices, "/preview").contains(&"material".to_owned()),
         "{notices:?}"
     );
     let net = network(&index, "/preview", "");
@@ -225,11 +241,11 @@ fn removing_a_shader_dirties_its_material() {
     index.apply_pending_updates();
     let notices = recorder.take();
     assert!(
-        notices.iter().any(|n| matches!(n, Notice::Dirtied(d) if d.path == p("/preview") && d.locators.contains(&Locator::parse("material")))),
+        dirtied(&notices, "/preview").contains(&"material".to_owned()),
         "{notices:?}"
     );
     let net = network(&index, "/preview", "");
-    assert!(value(&net, &["nodes", "tex", "type"]).is_none());
+    assert!(locate(&net, &Locator::parse("nodes/tex")).is_none());
 }
 
 #[test]
@@ -274,4 +290,182 @@ def Material "m"
     assert_eq!(upstream(0), token("a"));
     assert_eq!(upstream(1), token("b"));
     assert!(value(&net, &["nodes", "b", "nodeIdentifier"]).is_some());
+    // As UsdShade's walk gives them.
+    let shader = Shader::get(&index.stage().unwrap(), p("/m/sum"))
+        .unwrap()
+        .unwrap();
+    let walk: Vec<String> = shader
+        .input("in")
+        .value_producing_attributes(ProducerFilter::ShaderOutputsOnly)
+        .unwrap()
+        .iter()
+        .map(|a| a.attribute().prim().path().name().unwrap().to_owned())
+        .collect();
+    assert_eq!(walk, ["a", "b"]);
+}
+
+const NETWORKS: &str = r#"#usda 1.0
+def Material "m" (
+    prepend apiSchemas = ["MaterialBindingAPI"]
+)
+{
+    token outputs:surface.connect = </m/surface.outputs:surface>
+    token outputs:mtlx:surface.connect = </m/surface.outputs:surface>
+    color3f inputs:tint = (1, 0, 0) (
+        displayName = "Tint"
+        displayGroup = "Look"
+    )
+    float inputs:gain = 2
+    string config:mtlx:version = "1.38"
+
+    def Shader "surface"
+    {
+        uniform token info:id = "UsdPreviewSurface"
+        color3f inputs:diffuseColor.connect = </m.inputs:tint>
+        float inputs:roughness = 0.4
+        token outputs:surface
+    }
+    def Shader "loose"
+    {
+        uniform token info:implementationSource = "sourceAsset"
+        asset info:glslfx:sourceAsset = @loose.glslfx@
+        float inputs:x = 1
+        token outputs:out
+    }
+}
+"#;
+
+fn networks() -> (common::TempDir, std::rc::Rc<StageSceneIndex>) {
+    let (dir, stage) = stage(NETWORKS);
+    let index = StageSceneIndex::new();
+    index.set_stage(stage);
+    (dir, index)
+}
+
+fn names(container: &ContainerHandle, locator: &str) -> Vec<String> {
+    locate(container, &Locator::parse(locator))
+        .unwrap()
+        .as_container()
+        .unwrap()
+        .names()
+        .iter()
+        .map(ToString::to_string)
+        .collect()
+}
+
+#[test]
+fn the_all_context() {
+    let (_dir, index) = networks();
+    let data = index.prim(&p("/m")).data.unwrap();
+    assert_eq!(names(&data, "material"), ["mtlx", "", "__all"]);
+    let all = network(&index, "/m", "__all");
+    // Every shader, the disconnected one too; terminals keep their names.
+    assert_eq!(names(&all, "nodes"), ["surface", "loose"]);
+    assert_eq!(names(&all, "terminals"), ["mtlx:surface", "surface"]);
+    let universal = network(&index, "/m", "");
+    assert_eq!(names(&universal, "nodes"), ["surface"]);
+    assert_eq!(names(&universal, "terminals"), ["surface"]);
+}
+
+#[test]
+fn interface_and_config() {
+    let (_dir, index) = networks();
+    for context in ["", "mtlx", "__all"] {
+        let net = network(&index, "/m", context);
+        assert_eq!(
+            value(&net, &["config", "mtlx:version"]),
+            Some(Value::String("1.38".into()))
+        );
+        let tint = ["interface", "parameters", "tint"];
+        assert_eq!(
+            value(&net, &[&tint[..], &["displayName"]].concat()),
+            token("Tint")
+        );
+        assert_eq!(
+            value(&net, &[&tint[..], &["displayGroup"]].concat()),
+            token("Look")
+        );
+        let mappings = locate(&net, &Locator::parse("interface/parameters/tint/mappings")).unwrap();
+        let mappings = mappings.as_vector().unwrap();
+        assert_eq!(mappings.len(), 1);
+        let mapping = mappings.get(0).unwrap();
+        let mapping = mapping.as_container().unwrap();
+        assert_eq!(value(mapping, &["nodePath"]), token("surface"));
+        assert_eq!(value(mapping, &["inputName"]), token("diffuseColor"));
+        // An input nothing consumes is a parameter, with no mapping.
+        let gain = locate(&net, &Locator::parse("interface/parameters/gain/mappings")).unwrap();
+        assert_eq!(gain.as_vector().unwrap().len(), 0);
+        assert_eq!(
+            value(&net, &["interface", "parameterOrder"]),
+            Some(Value::TokenVec(Vec::new()))
+        );
+        // The interface gives the connected input its value.
+        assert_eq!(
+            value(&net, &["nodes", "surface", "parameters", "diffuseColor", "value"]),
+            Some(Value::Vec3f(moho::openusd::gf::Vec3f {
+                x: 1.0,
+                y: 0.0,
+                z: 0.0
+            }))
+        );
+    }
+}
+
+#[test]
+fn node_type_info_for_a_source_asset_shader() {
+    let (_dir, index) = networks();
+    let all = network(&index, "/m", "__all");
+    assert_eq!(value(&all, &["nodes", "loose", "nodeIdentifier"]), token(""));
+    assert_eq!(
+        names(&all, "nodes/loose/nodeTypeInfo"),
+        ["sdrMetadata", "glslfx:sourceAsset", "implementationSource"]
+    );
+    assert_eq!(
+        value(&all, &["nodes", "loose", "nodeTypeInfo", "implementationSource"]),
+        token("sourceAsset")
+    );
+    // A shader identified by `info:id` has none.
+    assert!(locate(&all, &Locator::parse("nodes/surface/nodeTypeInfo")).is_none());
+    assert!(
+        locate(
+            &all,
+            &Locator::parse("nodes/surface/renderContextNodeIdentifiers")
+        )
+        .is_none()
+    );
+}
+
+#[test]
+fn a_connection_off_the_stage_is_dropped() {
+    let dir = common::TempDir::new().unwrap();
+    let root = dir.write(
+        "root.usda",
+        r#"#usda 1.0
+def Material "m"
+{
+    token outputs:surface.connect = </m/surface.outputs:surface>
+    def Shader "surface"
+    {
+        uniform token info:id = "UsdPreviewSurface"
+        color3f inputs:diffuseColor.connect = </lib/tex.outputs:rgb>
+        float inputs:roughness = 0.4
+        token outputs:surface
+    }
+}
+def Scope "lib"
+{
+    def Shader "tex"
+    {
+        uniform token info:id = "UsdUVTexture"
+        float3 outputs:rgb
+    }
+}
+"#,
+    );
+    let index = StageSceneIndex::new();
+    index.set_stage(open_masked(&root, &["/m"]));
+    let net = network(&index, "/m", "");
+    assert_eq!(names(&net, "nodes"), ["surface"]);
+    assert!(names(&net, "nodes/surface/inputConnections").is_empty());
+    assert!(locate(&net, &Locator::parse("nodes/surface/parameters/diffuseColor")).is_none());
 }
