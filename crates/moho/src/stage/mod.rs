@@ -332,19 +332,20 @@ impl StageSceneIndex {
                     .insert(Locator::new([crate::tokens::material::MATERIAL]));
             }
         }
-        let properties = pending
-            .resynced_properties
-            .into_iter()
-            .chain(pending.updated_properties);
-        let mut by_prim: std::collections::BTreeMap<sdf::Path, BTreeSet<String>> = Default::default();
-        for (prim, names) in properties {
-            by_prim.entry(prim).or_default().extend(names);
+        // Per prim, the properties whose spec came or went (UsdImaging's
+        // `Resync` invalidation) and those whose value changed (`Update`).
+        let mut by_prim: BTreeMap<sdf::Path, (BTreeSet<String>, BTreeSet<String>)> = BTreeMap::new();
+        for (prim, names) in pending.resynced_properties {
+            by_prim.entry(prim).or_default().0.extend(names);
         }
-        for (prim, names) in by_prim {
+        for (prim, names) in pending.updated_properties {
+            by_prim.entry(prim).or_default().1.extend(names);
+        }
+        for (prim, (resynced, updated)) in by_prim {
             if roots.iter().any(|r| prim.has_prefix(r)) || !self.populated.borrow().contains(&prim) {
                 continue;
             }
-            let locators = self.invalidate(&prim, &names);
+            let locators = self.invalidate(&prim, &resynced, &updated);
             if !locators.is_empty() {
                 dirty.entry(prim.clone()).or_default().insert_set(&locators);
             }
@@ -417,9 +418,14 @@ impl StageSceneIndex {
         self.observers.send_dirtied(self, &dirtied);
     }
 
-    /// The locators a change to `names` on `path` dirties, from the prim's
-    /// adapters.
-    fn invalidate(&self, path: &sdf::Path, names: &BTreeSet<String>) -> LocatorSet {
+    /// The locators the properties `resynced` (come or gone) and `updated`
+    /// (changed) on `path` dirty, from the prim's adapters.
+    fn invalidate(
+        &self,
+        path: &sdf::Path,
+        resynced: &BTreeSet<String>,
+        updated: &BTreeSet<String>,
+    ) -> LocatorSet {
         let mut locators = LocatorSet::new();
         let Some(stage) = self.stage() else {
             return locators;
@@ -431,7 +437,10 @@ impl StageSceneIndex {
         let usd_type = prim.type_name().ok().flatten().unwrap_or_default();
         let apis = prim.api_schemas().unwrap_or_default();
         for adapter in self.adapters.for_prim(usd_type.as_str(), &apis) {
-            for name in names {
+            for name in resynced {
+                locators.insert_set(&adapter.invalidate_resynced(&ctx, name));
+            }
+            for name in updated {
                 locators.insert_set(&adapter.invalidate(&ctx, name));
             }
         }
