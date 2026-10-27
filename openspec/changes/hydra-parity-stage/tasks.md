@@ -47,5 +47,5 @@
 ## 6. Docs
 
 - [x] 6.1 `docs/architecture.md`: the root data (`sceneGlobals`, `__usdUpAxis`), the generic data section without `__usdStageMetadata`, render prim tokens, the chain as it stands after this change
-- [ ] 6.2 `docs/openusd-notes.md`: APIs from 0.2; gaps: `Value::Path`, changed fields, resolver context, resolved asset path resyncs
-- [ ] 6.3 `ROADMAP.md`: upstream candidates `Value::Path`, changed fields (reworded), asset path resyncs; drop the merged light-linking predicate item and the `CollectionEvaluator::build` item's streaming rationale
+- [x] 6.2 `docs/openusd-notes.md`: APIs from 0.2; gaps: `Value::Path`, changed fields, resolver context, resolved asset path resyncs
+- [x] 6.3 `ROADMAP.md`: upstream candidates `Value::Path`, changed fields (reworded), asset path resyncs; drop the merged light-linking predicate item and the `CollectionEvaluator::build` item's streaming rationale

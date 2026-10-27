@@ -40,9 +40,6 @@ the steps that land in this repository or depend on it.
 - Profile the standard chain's per-prim cost. Strategy (D), which reads every
   data source, took 6.6× (B)'s time on Moana (`docs/streaming-spike.md`),
   about 2 ms per prim on its two largest chunks.
-- Light-link predicates across merged inputs: after a merge, linking judges
-  complete membership expressions, so a collection whose membership needs a
-  predicate is not judged (the expression fallback's limit).
 - Offering Moho upstream as an `openusd-imaging` crate.
 
 ## Upstream candidates (openusd)
@@ -70,10 +67,14 @@ the steps that land in this repository or depend on it.
   rebuilds the key from the public prim-index graph meanwhile
   (`crates/moho/src/stage/instancing.rs`).
 - A public `CollectionEvaluator::build(stage, expression)` (today
-  `pub(super)`). With it, light linking after a merge could judge a light's
-  complete expression, predicates included, against the receiver's own input
-  stage; today it judges path patterns only
-  (`crates/moho/src/chain.rs`, `merged`).
+  `pub(super)`), to judge a USD collection's expression against a stage
+  without going through its `MembershipQuery`.
+- Resolved-asset-path resyncs in `StageSink::after_commit` (C++
+  `UsdNotice::ObjectsChanged::GetResolvedAssetPathsResyncedPaths`), so an
+  index can re-read asset-path-dependent data when resolution changes, as
+  UsdImaging does.
+- A stage's resolver context (C++ `UsdStage::GetPathResolverContext`), for
+  the absolute root's `system/assetResolution` (`crates/moho/src/stage/globals.rs`).
 - The changed fields of an info-only path in `StageSink::after_commit` (C++
   `UsdNotice::ObjectsChanged::GetChangedFields`). UsdImaging resyncs a prim
   whose changed metadata includes a plugin field (such as the stage's
