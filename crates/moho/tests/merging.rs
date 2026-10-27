@@ -168,20 +168,11 @@ fn ancestors_of_a_root_exist() {
     merged.add_input_scene(deep.clone(), p("/a/b/c"));
     assert_eq!(
         recorder.take(),
-        [
-            Notice::Added(Added {
-                path: p("/a"),
-                ty: Token::default()
-            }),
-            Notice::Added(Added {
-                path: p("/a/b"),
-                ty: Token::default()
-            }),
-            Notice::Added(Added {
-                path: p("/a/b/c"),
-                ty: Token::from("mesh")
-            }),
-        ]
+        [Notice::Added(Added {
+            path: p("/a/b/c"),
+            ty: Token::from("mesh")
+        })],
+        "the ancestors are not notified, as HdMergingSceneIndex's are not"
     );
     assert!(merged.prim(&p("/a")).is_defined());
     assert_eq!(merged.children(&p("/a")), [p("/a/b")]);
@@ -384,13 +375,13 @@ fn an_input_at_the_root_notifies_the_root() {
 }
 
 #[test]
-fn an_input_does_not_re_add_ancestors_that_have_prims() {
+fn an_input_does_not_re_add_its_ancestors() {
     let (scene, chunk) = scene_and_chunk();
     let merged = MergingSceneIndex::new();
     merged.add_input_scene(scene.clone(), sdf_root());
     let recorder = RecordingObserver::on(merged.as_ref());
-    // `/world` and `/world/elem` already have prims: only the new input's
-    // own prims are added, as HdMergingSceneIndex does.
+    // Only the new input's own prims are added, as HdMergingSceneIndex
+    // does.
     merged.add_input_scene(chunk.clone(), p("/world/elem"));
     let added: Vec<String> = recorder
         .take()
