@@ -201,3 +201,26 @@ new prototype paths.
   table once it has five or more, as Hydra does. Its other notice
   differences (filtering by root, defined prims only, the root not always
   added) stay for `hydra-parity-chain`.
+- **Instance indices are read fresh.** UsdImaging serves an instance's
+  `instance` through an `HdLazyContainerDataSource`, which keeps the first
+  result: an index read before a sibling instance came or went stays stale,
+  although the aggregation dirties `instance` on it. Moho computes it on
+  every read; the notices are UsdImaging's (instances dirtied only once some
+  index of their instancer was read).
+- **The instancing propagations' notices** come through Moho's
+  `MergingSceneIndex`, whose remaining differences from Hydra's (see
+  above) are `hydra-parity-chain`'s.
+- **An instance prim inside a native prototype has no `instancedBy`.**
+  `UsdImaging_NiPrototypeSceneIndex::GetPrim` returns an instance before it
+  underlays `instancedBy`, so the spec's "every prim of the prototype SHALL
+  carry `instancedBy`" holds for every prim but nested instances, as in
+  UsdImaging.
+- **Nested point instancer copies are made at their prototype's input
+  path.** The spec said the inner copies are made "inside the enclosing
+  copy". UsdImaging's `_InstancerObserver` makes them at
+  `<prototype>/ForInstancer<hash>` with the prototype's input path (the hash
+  takes the enclosing copy root, which keeps the copies of each enclosing
+  copy apart), so Moho does too, and the spec is corrected.
+- **Skinning relocation is not reproduced.** With deferred skinning,
+  UsdImaging relocates `skelBinding/animationSource` to a primvar before
+  aggregating top-level instances; Moho has no skeleton data.
