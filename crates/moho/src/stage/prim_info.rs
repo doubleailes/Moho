@@ -14,7 +14,6 @@ use crate::data_source::retained::{container, value};
 use crate::data_source::{Container, DataSource};
 use crate::stage::PrimContext;
 use crate::stage::adapter::Adapter;
-use crate::stage::instancing::prototype_identity;
 use crate::tokens::usd_prim_info as t;
 
 /// Contributes `__usdPrimInfo` to every prim.
@@ -82,16 +81,6 @@ impl PrimInfo {
             }
             t::IS_NI_PROTOTYPE => {
                 (prim.is_prototype().unwrap_or(false) && self.ctx.path.is_root_prim()).then(|| value(true))
-            }
-            // Not a field of the schema, and not named: the native-instancing
-            // filter's grouping key, until `hydra-parity-instancing` groups
-            // by Hydra's own key.
-            t::NI_PROTOTYPE_IDENTITY => {
-                if !prim.is_instance().unwrap_or(false) {
-                    return None;
-                }
-                let identity = prototype_identity(&self.ctx.stage, &self.ctx.path)?;
-                Some(value(Value::Token(Token::from(format!("{identity:016x}")))))
             }
             _ => None,
         }
