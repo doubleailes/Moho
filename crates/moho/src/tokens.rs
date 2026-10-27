@@ -281,6 +281,9 @@ pub mod usd_prim_info {
     pub const CLASS: &str = "class";
     pub const NI_PROTOTYPE_PATH: &str = "niPrototypePath";
     pub const IS_NI_PROTOTYPE: &str = "isNiPrototype";
+    /// A point instancer prototype's copies, by instancer hash (written by
+    /// point instancer propagation).
+    pub const PI_PROPAGATED_PROTOTYPES: &str = "piPropagatedPrototypes";
     /// The stable identity of the prototype an instance shares: not a
     /// field of the schema, and not named by `__usdPrimInfo`, but answered
     /// for the native-instancing filter's grouping until

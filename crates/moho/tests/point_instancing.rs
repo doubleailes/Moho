@@ -123,6 +123,16 @@ fn prototypes_are_rerooted() {
         Some(Value::Bool(true))
     );
     assert_eq!(
+        read(index.as_ref(), round, "visibility/visibility"),
+        Some(Value::Bool(true)),
+        "the copy root is visible unless it says otherwise"
+    );
+    assert_eq!(
+        round.as_str(),
+        "/world/scatter/protos/round/ForInstancerad10eba5b2d19a4d",
+        "named as UsdImaging (OpenUSD 26.08) names it"
+    );
+    assert_eq!(
         read(index.as_ref(), round, "xform/matrix"),
         Some(Value::Matrix4d(gf::Mat4d::translation([0.0, 0.5, 0.0]))),
         "the prototype's own transform is kept"
@@ -282,185 +292,42 @@ fn a_nested_instancer_is_reinstanced_in_every_copy() {
     let stage_index = StageSceneIndex::new();
     stage_index.set_stage(usd);
     let index = PointInstancingSceneIndex::new(stage_index);
-    let Some(Value::PathVec(outer)) =
-        read(index.as_ref(), &p("/world/outer"), "instancerTopology/prototypes")
-    else {
-        panic!()
-    };
-    let tree = &outer[0];
+    // Names from `TfHash::Combine` of the instancer and the enclosing copy
+    // root, as UsdImaging (OpenUSD 26.08) names them.
+    let tree = p("/world/outer/protos/tree/ForInstancer5dde482a8a2c82ad");
+    assert_eq!(
+        read(index.as_ref(), &p("/world/outer"), "instancerTopology/prototypes"),
+        Some(Value::PathVec(vec![tree.clone()]))
+    );
     let leaves = tree.append_path("leaves").unwrap();
     assert_eq!(index.prim(&leaves).ty, "instancer", "the copied inner instancer");
-    let Some(Value::PathVec(inner)) = read(index.as_ref(), &leaves, "instancerTopology/prototypes") else {
-        panic!()
-    };
-    assert_eq!(inner.len(), 1);
-    let leaf = &inner[0];
-    assert!(
-        leaf.has_prefix(&leaves) && leaf.as_str().contains("ForInstancer"),
-        "the inner copy lives inside the outer copy, under its own instancer: {leaf}"
-    );
-    assert_eq!(index.prim(leaf).ty, "mesh");
-    assert!(index.children(&leaf.parent().unwrap()).contains(leaf));
+    // The inner copies are made at the inner prototype's input path, named
+    // for the enclosing copy, as UsdImaging makes them.
+    let leaf = p("/world/outer/protos/tree/leaves/protos/leaf/ForInstancer1993e33b7f58b080");
     assert_eq!(
-        read(index.as_ref(), leaf, "instancedBy/paths"),
+        read(index.as_ref(), &leaves, "instancerTopology/prototypes"),
+        Some(Value::PathVec(vec![leaf.clone()]))
+    );
+    assert_eq!(index.prim(&leaf).ty, "mesh");
+    assert!(index.children(&leaf.parent().unwrap()).contains(&leaf));
+    assert_eq!(
+        read(index.as_ref(), &leaf, "instancedBy/paths"),
         Some(Value::PathVec(vec![leaves.clone()]))
     );
-    // The inner original inside the outer copy is drawn only through it.
-    let original = leaf.parent().unwrap();
-    assert_eq!(index.prim(&original).ty, "", "{original}");
     assert_eq!(
-        read(index.as_ref(), leaf, "primOrigin/scenePath"),
+        read(index.as_ref(), &leaf, "instancedBy/prototypeRoots"),
+        Some(Value::PathVec(vec![leaf.clone()]))
+    );
+    // The inner original inside the outer copy, and the original inner
+    // instancer, are drawn only through their copies.
+    assert_eq!(index.prim(&leaves.append_path("protos/leaf").unwrap()).ty, "");
+    assert_eq!(index.prim(&p("/world/outer/protos/tree/leaves")).ty, "");
+    assert_eq!(
+        read(index.as_ref(), &leaf, "primOrigin/scenePath"),
         Some(Value::PathVec(vec![p(
             "/world/outer/protos/tree/leaves/protos/leaf"
         )]))
     );
-}
-
-/// A point instancer whose prototype targets a prim inside a native instance
-/// (an instance proxy), as Moana's coral does (M12).
-const PROXY_PROTOTYPES: &str = r#"#usda 1.0
-def Xform "staghorn"
-{
-    def Mesh "geo"
-    {
-        int[] faceVertexCounts = [3]
-        int[] faceVertexIndices = [0, 1, 2]
-        point3f[] points = [(0, 0, 0), (1, 0, 0), (0, 1, 0)]
-    }
-}
-def Xform "world"
-{
-    def PointInstancer "coral"
-    {
-        rel prototypes = [</world/coral/Prototypes/staghorn/geo>]
-        int[] protoIndices = [0, 0, 0]
-        point3f[] positions = [(0, 0, 0), (2, 0, 0), (4, 0, 0)]
-        def Scope "Prototypes"
-        {
-            def "staghorn" (
-                instanceable = true
-                prepend references = </staghorn>
-            )
-            {
-            }
-        }
-    }
-}
-"#;
-
-#[test]
-fn a_prototype_inside_a_native_instance_is_copied_from_its_propagated_prototype() {
-    let (_dir, usd) = stage(PROXY_PROTOTYPES);
-    let stage_index = StageSceneIndex::new();
-    stage_index.set_stage(usd);
-    let chain = moho::chain::standard(stage_index);
-    let coral = p("/world/coral");
-    let Some(Value::PathVec(copies)) = read(chain.as_ref(), &coral, "instancerTopology/prototypes") else {
-        panic!()
-    };
-    assert_eq!(copies.len(), 1);
-    let copy = &copies[0];
-    assert!(
-        copy.has_prefix(&coral) && copy.as_str().contains("ForInstancer"),
-        "under the instancer, not under the propagated prototype: {copy}"
-    );
-    assert_eq!(chain.prim(copy).ty, "mesh", "the proxied mesh, not an empty prim");
-    assert_eq!(
-        read(chain.as_ref(), copy, "primvars/points/primvarValue")
-            .map(|v| matches!(v, Value::Vec3fVec(ref p) if p.len() == 3)),
-        Some(true)
-    );
-    assert_eq!(
-        read(chain.as_ref(), copy, "instancedBy/paths"),
-        Some(Value::PathVec(vec![coral.clone()]))
-    );
-    // Reachable from the instancer, through its scope.
-    let scope = copy.parent().unwrap();
-    assert!(chain.children(&coral).contains(&scope));
-    assert!(chain.children(&scope).contains(copy));
-    assert_eq!(chain.prim(&scope).ty, "");
-}
-
-#[test]
-fn a_proxy_prototype_coming_and_going_notifies_its_scope() {
-    use moho::scene_index::testing::{Notice, RecordingObserver};
-
-    let (_dir, usd) = stage(PROXY_PROTOTYPES);
-    let stage_index = StageSceneIndex::new();
-    stage_index.set_stage(usd);
-    let chain = moho::chain::standard(stage_index.clone());
-    let coral = p("/world/coral");
-    let Some(Value::PathVec(copies)) = read(chain.as_ref(), &coral, "instancerTopology/prototypes") else {
-        panic!()
-    };
-    let scope = copies[0].parent().unwrap();
-    let recorder = RecordingObserver::on(chain.as_ref());
-
-    // Retarget the prototype outside the instance: the scope goes.
-    let usd = stage_index.stage().unwrap();
-    usd.define_typed_prim("/world/coral/Prototypes/plain", "Mesh")
-        .unwrap();
-    usd.relationship("/world/coral.prototypes")
-        .unwrap()
-        .set_targets([p("/world/coral/Prototypes/plain")])
-        .unwrap();
-    stage_index.apply_pending_updates();
-    let notices = recorder.take();
-    assert!(
-        notices
-            .iter()
-            .any(|n| matches!(n, Notice::Removed(r) if scope.has_prefix(&r.path))),
-        "the scope is removed: {notices:?}"
-    );
-    assert!(!chain.children(&coral).contains(&scope));
-
-    // Back inside the instance: the scope comes back, added.
-    usd.relationship("/world/coral.prototypes")
-        .unwrap()
-        .set_targets([p("/world/coral/Prototypes/staghorn/geo")])
-        .unwrap();
-    stage_index.apply_pending_updates();
-    let notices = recorder.take();
-    assert!(
-        notices
-            .iter()
-            .any(|n| matches!(n, Notice::Added(a) if a.path == scope)),
-        "the scope is added: {notices:?}"
-    );
-    assert!(chain.children(&coral).contains(&scope));
-}
-
-#[test]
-fn an_authored_child_named_like_the_scope_keeps_its_prim() {
-    use std::hash::{DefaultHasher, Hash, Hasher};
-
-    // The scope the filter would name: ForInstancer<hash of the instancer>.
-    let mut h = DefaultHasher::new();
-    "/world/coral".hash(&mut h);
-    let name = format!("ForInstancer{:016x}", h.finish());
-    let text = PROXY_PROTOTYPES.replace(
-        "        def Scope \"Prototypes\"",
-        &format!("        def Mesh \"{name}\"\n        {{\n        }}\n        def Scope \"Prototypes\""),
-    );
-    let (_dir, usd) = stage(&text);
-    let stage_index = StageSceneIndex::new();
-    stage_index.set_stage(usd);
-    let chain = moho::chain::standard(stage_index);
-    let coral = p("/world/coral");
-    let authored = coral.append_path(name.as_str()).unwrap();
-    let Some(Value::PathVec(copies)) = read(chain.as_ref(), &coral, "instancerTopology/prototypes") else {
-        panic!()
-    };
-    let scope = copies[0].parent().unwrap();
-    assert_ne!(scope, authored, "the scope takes another name");
-    assert!(
-        chain.prim(&authored).is_defined(),
-        "the authored prim is still there"
-    );
-    let children = chain.children(&coral);
-    assert_eq!(children.iter().filter(|c| **c == authored).count(), 1);
-    assert!(children.contains(&scope));
-    assert_eq!(chain.prim(&copies[0]).ty, "mesh");
 }
 
 const INACTIVE: &str = r#"#usda 1.0
@@ -537,5 +404,171 @@ fn a_fully_inactive_prototype_is_pruned() {
     assert_eq!(
         read(stage_index.as_ref(), &b, "instancerTopology/mask"),
         Some(Value::BoolVec(vec![true, false, true, false]))
+    );
+}
+
+const PROXIES_AND_SCOPES: &str = r#"#usda 1.0
+def Xform "staghorn"
+{
+    def Mesh "geo"
+    {
+        int[] faceVertexCounts = [3]
+        int[] faceVertexIndices = [0, 1, 2]
+        point3f[] points = [(0, 0, 0), (1, 0, 0), (0, 1, 0)]
+    }
+}
+def Xform "world"
+{
+    def PointInstancer "coral"
+    {
+        rel prototypes = [</world/coral/Prototypes/staghorn/geo>]
+        int[] protoIndices = [0, 0, 0]
+        point3f[] positions = [(0, 0, 0), (2, 0, 0), (4, 0, 0)]
+        def Scope "Prototypes"
+        {
+            def "staghorn" (
+                instanceable = true
+                prepend references = </staghorn>
+            )
+            {
+            }
+        }
+    }
+    def PointInstancer "rocks"
+    {
+        rel prototypes = [</world/rocks/Prototypes/rock>, </world/rocks/Prototypes/hidden>]
+        int[] protoIndices = [0, 1]
+        point3f[] positions = [(0, 0, 0), (2, 0, 0)]
+        def Scope "Prototypes"
+        {
+            token visibility = "invisible"
+            def Mesh "rock"
+            {
+            }
+            def Mesh "hidden"
+            {
+                token visibility = "invisible"
+            }
+        }
+    }
+}
+"#;
+
+#[test]
+fn a_proxy_target_copies_as_an_empty_prim() {
+    let (_dir, usd) = stage(PROXIES_AND_SCOPES);
+    let stage_index = StageSceneIndex::new();
+    stage_index.set_stage(usd);
+    let index = PointInstancingSceneIndex::new(stage_index);
+    let copy = p("/world/coral/Prototypes/staghorn/geo/ForInstancer9b6a0f1ced50293a");
+    assert_eq!(
+        read(index.as_ref(), &p("/world/coral"), "instancerTopology/prototypes"),
+        Some(Value::PathVec(vec![copy.clone()])),
+        "the instancer still names the copy"
+    );
+    let prim = index.prim(&copy);
+    assert!(prim.is_defined());
+    assert_eq!(
+        prim.ty, "",
+        "an instance proxy copies as an empty prim, as in UsdImaging 2.0"
+    );
+    assert!(prim.data.unwrap().names().is_empty());
+    assert!(index.children(&copy).is_empty());
+    assert!(index.children(&copy.parent().unwrap()).contains(&copy));
+}
+
+#[test]
+fn a_copy_under_an_invisible_scope_is_visible() {
+    let (_dir, usd) = stage(PROXIES_AND_SCOPES);
+    let stage_index = StageSceneIndex::new();
+    stage_index.set_stage(usd);
+    let flat = moho::filter::FlatteningSceneIndex::new(PointInstancingSceneIndex::new(stage_index));
+    let visible = |path: &str| read(flat.as_ref(), &p(path), "visibility/visibility");
+    let copy = "/world/rocks/Prototypes/rock/ForInstancera911279021ff5cc5";
+    assert_eq!(visible(copy), Some(Value::Bool(true)), "the copy root is visible");
+    assert_eq!(
+        visible("/world/rocks/Prototypes/rock"),
+        Some(Value::Bool(false)),
+        "the original stays invisible"
+    );
+    assert_eq!(
+        visible("/world/rocks/Prototypes/hidden/ForInstancera911279021ff5cc5"),
+        Some(Value::Bool(false)),
+        "a prototype's own visibility is kept"
+    );
+    assert_eq!(
+        read(flat.as_ref(), &p(copy), "xform/resetXformStack"),
+        Some(Value::Bool(true))
+    );
+}
+
+#[test]
+fn a_prototype_records_its_copies() {
+    let (_dir, usd) = stage(PEBBLES);
+    let stage_index = StageSceneIndex::new();
+    stage_index.set_stage(usd);
+    let index = PointInstancingSceneIndex::new(stage_index.clone());
+    let hash = "ForInstancerad10eba5b2d19a4d";
+    let round = p("/world/scatter/protos/round");
+    assert_eq!(
+        read(
+            index.as_ref(),
+            &round,
+            &format!("__usdPrimInfo/piPropagatedPrototypes/{hash}")
+        ),
+        Some(Value::PathVec(vec![round.append_path(hash).unwrap()]))
+    );
+    assert_eq!(
+        read(index.as_ref(), &round, "__usdPrimInfo/specifier"),
+        Some(Value::Token(Token::from("def"))),
+        "the stage's prim info is still there"
+    );
+    assert!(
+        read(
+            index.as_ref(),
+            &p("/world/scatter/protos/unused"),
+            "__usdPrimInfo/piPropagatedPrototypes"
+        )
+        .is_none()
+    );
+
+    // A prototype the instancer stops targeting loses its copy and its
+    // record.
+    use moho::scene_index::testing::{Notice, RecordingObserver};
+    let recorder = RecordingObserver::on(index.as_ref());
+    stage_index
+        .stage()
+        .unwrap()
+        .relationship("/world/scatter.prototypes")
+        .unwrap()
+        .set_targets([p("/world/scatter/protos/flat")])
+        .unwrap();
+    stage_index.apply_pending_updates();
+    let notices = recorder.take();
+    let copy = round.append_path(hash).unwrap();
+    assert!(
+        notices
+            .iter()
+            .any(|n| matches!(n, Notice::Removed(r) if copy.has_prefix(&r.path))),
+        "{notices:?}"
+    );
+    assert!(!index.prim(&copy).is_defined());
+    assert!(
+        read(
+            index.as_ref(),
+            &round,
+            &format!("__usdPrimInfo/piPropagatedPrototypes/{hash}")
+        )
+        .is_none()
+    );
+    assert_eq!(
+        read(
+            index.as_ref(),
+            &p("/world/scatter"),
+            "instancerTopology/prototypes"
+        ),
+        Some(Value::PathVec(vec![p(&format!(
+            "/world/scatter/protos/flat/{hash}"
+        ))]))
     );
 }
