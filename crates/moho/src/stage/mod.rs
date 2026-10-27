@@ -417,10 +417,18 @@ impl StageSceneIndex {
 
     /// The USD prototypes the index has populated.
     fn populated_prototypes(&self) -> BTreeSet<sdf::Path> {
+        const PREFIX: &str = "/__Prototype_";
+        let Ok(first) = sdf::path(PREFIX.trim_end_matches('_')) else {
+            return BTreeSet::new();
+        };
+        // Paths are ordered by their text: the prototypes and their
+        // descendants follow `/__Prototype` together, without a walk of
+        // every populated prim on each update.
         self.populated
             .borrow()
-            .iter()
-            .filter(|p| p.is_root_prim() && p.name().is_some_and(|n| n.starts_with("__Prototype_")))
+            .range(first..)
+            .take_while(|p| p.as_str().starts_with("/__Prototype"))
+            .filter(|p| p.is_root_prim() && p.as_str().starts_with(PREFIX))
             .cloned()
             .collect()
     }
