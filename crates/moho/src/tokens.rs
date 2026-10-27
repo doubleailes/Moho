@@ -135,6 +135,7 @@ pub mod primvars {
 
     pub const CONSTANT: &str = "constant";
     pub const VERTEX: &str = "vertex";
+    pub const INSTANCE: &str = "instance";
 }
 
 /// `HdVisibilitySchema`, `HdPurposeSchema` and `HdExtentSchema`.
@@ -342,10 +343,13 @@ pub mod instancing {
     pub const INSTANCE_ROTATIONS: &str = "hydra:instanceRotations";
     pub const INSTANCE_SCALES: &str = "hydra:instanceScales";
 
-    /// Where native prototypes are re-rooted.
-    pub const PROPAGATED_ROOT: &str = "MohoNiPropagatedPrototypes";
-    /// The re-rooted prototype, beside its instancer.
-    pub const PROTOTYPE: &str = "prototype";
+    /// The scope native instancers are made under, in each enclosing
+    /// prototype root (`UsdImagingTokens->niPropagatedPrototypesScope`).
+    pub const NI_PROPAGATED_PROTOTYPES: &str = "UsdNiPropagatedPrototypes";
+    /// A native instancer, under its binding scope and USD prototype name.
+    pub const NI_INSTANCER: &str = "UsdNiInstancer";
+    /// A native instancer's prototype, its child.
+    pub const NI_PROTOTYPE: &str = "UsdNiPrototype";
 }
 
 /// `HdVolumeFieldBindingSchema` and `HdVolumeFieldSchema`.

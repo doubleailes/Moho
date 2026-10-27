@@ -19,16 +19,16 @@
 
 ## 3. Native instancer propagation
 
-- [ ] 3.1 Rewrite `filter/native_instancing.rs` as Hydra's propagation (design D1): pruning of `/__Prototype_N` at the top level, re-rooting `/__Prototype_N → /UsdNiInstancer/UsdNiPrototype` inside, an `NiPrototype` pass, a flattening, an optional per-prototype append callback, the instance aggregation, and nested propagations re-rooted under each instancer
-- [ ] 3.2 Instance aggregation: enclosing prototype root from `instancedBy/prototypeRoots` (or the native prototype root, or `/`); key and `<bindingHash>` name per design D2 and D4; `<bindingHash>` prim with the static, re-rooted copy of the instance data; instances in path order
-- [ ] 3.3 Instancer data per design D3: `instancerTopology` with `mask`, `primvars` with instance-rate constant primvars, `instancedBy` when nested; dirty locators as `niInstanceAggregationSceneIndex.cpp`
-- [ ] 3.4 `NiPrototype` pass: instance prims' renderable types blanked; prototype root overlay (identity `xform` resetting the stack, `instancedBy`); `instancedBy` underlay on the other prototype prims
+- [x] 3.1 Rewrite `filter/native_instancing.rs` as Hydra's propagation (design D1): pruning of `/__Prototype_N` at the top level, re-rooting `/__Prototype_N → /UsdNiInstancer/UsdNiPrototype` inside, an `NiPrototype` pass, a flattening, an optional per-prototype append callback, the instance aggregation, and nested propagations re-rooted under each instancer
+- [x] 3.2 Instance aggregation: enclosing prototype root from `instancedBy/prototypeRoots` (or the native prototype root, or `/`); key and `<bindingHash>` name per design D2 and D4; `<bindingHash>` prim with the static, re-rooted copy of the instance data; instances in path order
+- [x] 3.3 Instancer data per design D3: `instancerTopology` with `mask`, `primvars` with instance-rate constant primvars, `instancedBy` when nested; dirty locators as `niInstanceAggregationSceneIndex.cpp`
+- [x] 3.4 `NiPrototype` pass: instance prims' renderable types blanked; prototype root overlay (identity `xform` resetting the stack, `instancedBy`); `instancedBy` underlay on the other prototype prims
 - [ ] 3.5 Delete `stage/instancing.rs`, the private identity accessor and `niPrototypeIdentity` from `tokens.rs`; rename `PROPAGATED_ROOT` and the prototype tokens to `UsdNiPropagatedPrototypes`, `UsdNiInstancer`, `UsdNiPrototype`
 
 ## 4. Flattening
 
 - [x] 4.1 Add flattening of `__usdUpAxis` and `model` (overlay) and `geomModel` (UsdImaging's provider) to `filter/flattening.rs`, with dirty propagation
-- [ ] 4.2 Remove the top-level flattening from `chain::standard`; flattening runs inside native propagation only
+- [x] 4.2 Remove the top-level flattening from `chain::standard`; flattening runs inside native propagation only
 
 ## 5. Instance proxy path translation
 
