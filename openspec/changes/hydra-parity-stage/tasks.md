@@ -14,7 +14,7 @@
 
 - [x] 2.1 Switch the traversal predicate to active, not abstract, and loaded unless unloaded prims are included (`stage/mod.rs` `predicate`, `exposes`); overs and their descendants are exposed
 - [x] 2.2 Add the whole-stage pass to the point instancing filter: prims strictly under an `over` or an instancer get an empty type unless `material`, a blocked `__usdPrimInfo/niPrototypePath` and `geomModel/applyDrawMode = false`; native instancing ignores prims whose `niPrototypePath` is blocked
-- [ ] 2.3 Resync notices: keep the populated path set, send `Added` for a resynced subtree and explicit `Removed` only for populated paths not re-added (`stage/mod.rs`, `pending.rs`)
+- [x] 2.3 Resync notices: keep the populated path set, send `Added` for a resynced subtree and explicit `Removed` only for populated paths not re-added (`stage/mod.rs`, `pending.rs`)
 - [ ] 2.4 Ignore every prim-level and root info-only change; delete the `kind` dirtying workaround and comment the gap (no changed fields in openusd); move the ROADMAP upstream candidate for changed fields to say Hydra resyncs on plugin fields
 - [x] 2.5 `__usdPrimInfo`: add `variantSelections` (absent when empty), drop `apiSchemas` when empty as UsdImaging does, remove `niPrototypeIdentity` from the container (native instancing reads the key through a crate-private accessor until `hydra-parity-instancing` deletes it)
 - [ ] 2.6 Add `extentsHint`, `model` and `geomModel` to the prims UsdImaging gives them to, with their invalidation (`stage/imageable.rs` or a new adapter)

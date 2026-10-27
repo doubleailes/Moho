@@ -155,3 +155,77 @@ fn activating_a_prim_adds_it() {
     );
     assert!(index.prim(&p("/world/off")).is_defined());
 }
+
+#[test]
+fn a_resync_re_adds_without_removing() {
+    let (_dir, usd) = stage(
+        r#"#usda 1.0
+def Xform "src"
+{
+    def Mesh "extra"
+    {
+    }
+}
+def Xform "world"
+{
+    def Xform "asset"
+    {
+        def Mesh "geo"
+        {
+        }
+    }
+}
+"#,
+    );
+    let index = StageSceneIndex::new();
+    index.set_stage(usd);
+    let recorder = RecordingObserver::on(index.as_ref());
+    let stage = index.stage().unwrap();
+    stage
+        .prim("/world/asset")
+        .unwrap()
+        .references()
+        .add(moho::openusd::sdf::Reference {
+            prim_path: p("/src"),
+            ..Default::default()
+        })
+        .unwrap();
+    index.apply_pending_updates();
+    let notices = recorder.take();
+    assert!(
+        !notices.iter().any(|n| matches!(n, Notice::Removed(_))),
+        "{notices:?}"
+    );
+    for (path, ty) in [
+        ("/world/asset", ""),
+        ("/world/asset/geo", "mesh"),
+        ("/world/asset/extra", "mesh"),
+    ] {
+        assert!(
+            notices.contains(&Notice::Added(Added {
+                path: p(path),
+                ty: Token::from(ty)
+            })),
+            "{path}: {notices:?}"
+        );
+    }
+}
+
+#[test]
+fn a_resync_removes_only_what_goes() {
+    let (_dir, index, recorder) = setup();
+    let stage = index.stage().unwrap();
+    // Deactivating the parent resyncs it: each held prim under it goes.
+    stage.prim("/world").unwrap().set_active(false).unwrap();
+    index.apply_pending_updates();
+    let mut removed: Vec<_> = recorder
+        .take()
+        .into_iter()
+        .filter_map(|n| match n {
+            Notice::Removed(r) => Some(r.path),
+            _ => None,
+        })
+        .collect();
+    removed.sort();
+    assert_eq!(removed, [p("/world"), p("/world/cam"), p("/world/geo")]);
+}
