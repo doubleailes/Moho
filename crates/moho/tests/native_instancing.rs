@@ -150,17 +150,19 @@ fn three_instances_of_one_asset() {
         Some(Value::Int(1))
     );
 
+    // `/UsdNiPropagatedPrototypes/<bindingHash>/__Prototype_N/UsdNiInstancer`,
+    // the up axis being flattened onto every prim.
+    let elements: Vec<&str> = instancer.as_str().split('/').collect();
+    assert_eq!(elements.len(), 5, "{instancer}");
+    assert_eq!(elements[1], "UsdNiPropagatedPrototypes");
+    assert!(elements[2].starts_with("NoPrimvars___usdUpAxis"), "{instancer}");
+    assert!(elements[3].starts_with("__Prototype_"), "{instancer}");
+    assert_eq!(elements[4], "UsdNiInstancer");
     let Some(Value::PathVec(prototypes)) = read(index, &instancer, "instancerTopology/prototypes") else {
         panic!()
     };
-    assert_eq!(prototypes.len(), 1);
+    assert_eq!(prototypes, [instancer.append_path("UsdNiPrototype").unwrap()]);
     let prototype = &prototypes[0];
-    assert!(
-        prototype
-            .as_str()
-            .starts_with("/MohoNiPropagatedPrototypes/NoBindings/P"),
-        "{prototype}"
-    );
     let geo = prototype.append_path("geo").unwrap();
     assert_eq!(
         index.prim(&geo).ty,
@@ -190,11 +192,30 @@ fn three_instances_of_one_asset() {
         panic!()
     };
     assert_eq!(locations, [p("/world/a"), p("/world/b"), p("/world/c")]);
+    assert_eq!(
+        read(index, &instancer, "instancerTopology/mask"),
+        Some(Value::BoolVec(vec![true, true, true]))
+    );
+    assert_eq!(
+        read(index, &geo, "instancedBy/paths"),
+        Some(Value::PathVec(vec![instancer.clone()])),
+        "the prototype's prims are instanced by the instancer"
+    );
+    assert_eq!(
+        read(index, &geo, "instancedBy/prototypeRoots"),
+        Some(Value::PathVec(vec![prototype.clone()]))
+    );
+    assert!(
+        read(index, &instancer, "instancedBy").is_none(),
+        "a top-level instancer"
+    );
 
-    // The numbered prototypes are hidden, and the asset appears once.
+    // The USD prototypes are pruned, and the asset appears once per group.
     let all = walk(index, &sdf::Path::abs_root());
     assert!(
-        !all.iter().any(|path| path.as_str().contains("__Prototype_")),
+        !all.iter().any(|path| path
+            .root_prim_name()
+            .is_some_and(|n| n.starts_with("__Prototype_"))),
         "{all:?}"
     );
     let geos = all.iter().filter(|path| path.name() == Some("geo")).count();
@@ -211,7 +232,30 @@ fn differing_bindings_split_groups() {
     let plain = instancer_of(index, "/world/a");
     let red = instancer_of(index, "/world/red");
     assert_ne!(plain, red);
-    assert!(red.as_str().contains("/Bindings"), "{red}");
+    let scope = red.parent().unwrap().parent().unwrap();
+    assert!(
+        scope
+            .name()
+            .unwrap()
+            .starts_with("NoPrimvars_usdMaterialBindings"),
+        "{red}"
+    );
+    // The scope carries the group's binding, re-rooted onto the prototype.
+    let prototype = red.append_path("UsdNiPrototype").unwrap();
+    assert!(
+        read(index, &scope, "usdMaterialBindings").is_none(),
+        "a container, not a value"
+    );
+    assert!(
+        index
+            .prim(&scope)
+            .data
+            .unwrap()
+            .get(&"usdMaterialBindings".into())
+            .is_some()
+    );
+    assert_eq!(index.prim(&scope).ty, "");
+    assert!(index.prim(&prototype).is_defined());
 }
 
 #[test]
@@ -227,9 +271,19 @@ fn nested_instances() {
     let w0 = building.append_path("w0").unwrap();
     let windows = instancer_of(index, w0.as_str());
     assert!(
-        windows.has_prefix(&building),
+        windows.has_prefix(&building.append_path("UsdNiPropagatedPrototypes").unwrap()),
         "the windows' instancer lies inside the building's prototype: {windows}"
     );
+    assert_eq!(
+        read(index, &windows, "instancedBy/paths"),
+        Some(Value::PathVec(vec![house.clone()])),
+        "instanced by the building's instancer"
+    );
+    assert_eq!(
+        read(index, &windows, "instancedBy/prototypeRoots"),
+        Some(Value::PathVec(vec![building.clone()]))
+    );
+    assert_eq!(index.prim(&w0).ty, "", "an instance prim is not drawn itself");
     let Some(Value::Matrix4dVec(transforms)) =
         read(index, &windows, "primvars/hydra:instanceTransforms/primvarValue")
     else {
@@ -248,7 +302,7 @@ fn nested_instances() {
     assert_eq!(index.prim(&window.append_path("pane").unwrap()).ty, "mesh");
 }
 
-/// Instance data a test can switch off, then dirty.
+/// Instance data a test can switch off, then re-add.
 struct Switchable {
     on: std::cell::Cell<bool>,
 }
@@ -267,22 +321,16 @@ impl moho::data_source::Container for Switchable {
         if !self.on.get() || name != "__usdPrimInfo" {
             return None;
         }
-        Some(container([
-            (
-                "niPrototypePath",
-                value(Value::PathVec(vec![p("/__Prototype_1")])),
-            ),
-            (
-                "niPrototypeIdentity",
-                value(Value::Token(moho::openusd::tf::Token::from("1"))),
-            ),
-        ]))
+        Some(container([(
+            "niPrototypePath",
+            value(Value::PathVec(vec![p("/__Prototype_1")])),
+        )]))
     }
 }
 
 #[test]
-fn a_prim_that_stops_being_an_instance_is_dirtied() {
-    use moho::data_source::retained::RetainedContainer;
+fn a_prim_that_stops_being_an_instance_is_resynced() {
+    use moho::data_source::retained::{RetainedContainer, container, value};
     use moho::scene_index::testing::{Notice, RecordingObserver};
     use moho::scene_index::{Prim, RetainedSceneIndex};
 
@@ -293,7 +341,10 @@ fn a_prim_that_stops_being_an_instance_is_dirtied() {
     let b = Rc::new(Switchable {
         on: std::cell::Cell::new(true),
     });
+    let prototype_root =
+        RetainedContainer::new([("__usdPrimInfo", container([("isNiPrototype", value(true))]))]);
     input.add_prims([
+        (p("/__Prototype_1"), Prim::new("", prototype_root.into_handle())),
         (
             p("/__Prototype_1/geo"),
             Prim::new("mesh", RetainedContainer::default().into_handle()),
@@ -302,17 +353,44 @@ fn a_prim_that_stops_being_an_instance_is_dirtied() {
         (p("/b"), Prim::new("", b)),
     ]);
     let index = NativeInstancingSceneIndex::new(input.clone());
-    assert!(read(index.as_ref(), &p("/a"), "instance/instancer").is_some());
+    let instancer = instancer_of(index.as_ref(), "/a");
+    assert_eq!(
+        instancer,
+        p("/UsdNiPropagatedPrototypes/NoPrimvars/__Prototype_1/UsdNiInstancer")
+    );
+    // Reading an index makes the instances dirtied when indices may change.
+    assert_eq!(
+        read(index.as_ref(), &p("/b"), "instance/instanceIndex"),
+        Some(Value::Int(1))
+    );
     let recorder = RecordingObserver::on(index.as_ref());
 
+    // As a stage index does, the prim is resynced (added again) when it
+    // stops being an instance: a `niPrototypePath` dirty alone regroups
+    // nothing, as in UsdImaging.
     a.on.set(false);
-    input.dirty_prims([(p("/a"), Locator::parse("__usdPrimInfo").into())]);
+    input.add_prims([(p("/a"), Prim::new("", a.clone()))]);
     let notices = recorder.take();
+    assert!(read(index.as_ref(), &p("/a"), "instance/instancer").is_none());
     assert!(
-        notices.iter().any(|n| matches!(n, Notice::Dirtied(d) if d.path == p("/a") && d.locators.contains(&Locator::parse("instance")))),
+        notices
+            .iter()
+            .any(|n| matches!(n, Notice::Dirtied(d) if d.path == instancer
+            && d.locators.contains(&Locator::parse("instancerTopology/instanceIndices"))
+            && d.locators.contains(&Locator::parse("primvars")))),
         "{notices:?}"
     );
-    assert!(read(index.as_ref(), &p("/a"), "instance/instancer").is_none());
+    assert!(
+        notices
+            .iter()
+            .any(|n| matches!(n, Notice::Dirtied(d) if d.path == p("/b")
+            && d.locators.contains(&Locator::parse("instance")))),
+        "the remaining instance's index may have changed: {notices:?}"
+    );
+    assert_eq!(
+        read(index.as_ref(), &p("/b"), "instance/instanceIndex"),
+        Some(Value::Int(0))
+    );
 }
 
 #[test]
@@ -336,4 +414,303 @@ fn prototype_prims_keep_their_origin() {
         Some(Value::PathVec(vec![sdf::Path::new(".").unwrap()])),
         "the prototype root itself"
     );
+}
+
+/// Scenes read through the standard chain, where point instancer
+/// propagation runs first and flattening runs inside native propagation.
+mod through_the_chain {
+    use super::*;
+    use common::stage;
+    use moho::scene_index::SceneIndexHandle;
+
+    fn chain(text: &str) -> (TempDir, SceneIndexHandle) {
+        let (dir, usd) = stage(text);
+        let stage_index = StageSceneIndex::new();
+        stage_index.set_stage(usd);
+        (dir, moho::chain::standard(stage_index))
+    }
+
+    fn prototype_of(index: &dyn SceneIndex, instance: &str) -> sdf::Path {
+        let instancer = instancer_of(index, instance);
+        match read(index, &instancer, "instancerTopology/prototypes") {
+            Some(Value::PathVec(mut v)) => v.pop().unwrap(),
+            other => panic!("{other:?}"),
+        }
+    }
+
+    fn resolved(index: &dyn SceneIndex, path: &sdf::Path) -> Option<sdf::Path> {
+        match locate(
+            &index.prim(path).data?,
+            &Locator::new(["materialBindings", "", "path"]),
+        )?
+        .value()?
+        {
+            Value::PathVec(mut v) => v.pop(),
+            _ => None,
+        }
+    }
+
+    const ASSETS: &str = r#"#usda 1.0
+def Xform "asset" (
+    kind = "component"
+    assetInfo = {
+        string name = "asset"
+    }
+)
+{
+    def Mesh "geo"
+    {
+    }
+}
+def Scope "Looks"
+{
+    def Material "red"
+    {
+    }
+}
+"#;
+
+    #[test]
+    fn a_binding_only_on_the_instance_reaches_the_prototype() {
+        let text = format!(
+            "{ASSETS}{}",
+            r#"def Xform "world"
+{
+    def Xform "a" (
+        instanceable = true
+        references = </asset>
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        rel material:binding = </Looks/red>
+    }
+}
+"#
+        );
+        let (_dir, chain) = chain(&text);
+        let geo = prototype_of(chain.as_ref(), "/world/a")
+            .append_path("geo")
+            .unwrap();
+        assert_eq!(chain.prim(&geo).ty, "mesh");
+        assert_eq!(
+            resolved(chain.as_ref(), &geo),
+            Some(p("/Looks/red")),
+            "the instance's binding flattens onto the prototype's mesh"
+        );
+    }
+
+    #[test]
+    fn an_invisible_instance_is_masked() {
+        let text = format!(
+            "{ASSETS}{}",
+            r#"def Xform "world"
+{
+    def Xform "a" (
+        instanceable = true
+        references = </asset>
+    )
+    {
+    }
+    def Xform "b" (
+        instanceable = true
+        references = </asset>
+    )
+    {
+        token visibility = "invisible"
+    }
+    def Xform "c" (
+        instanceable = true
+        references = </asset>
+    )
+    {
+    }
+}
+"#
+        );
+        let (_dir, chain) = chain(&text);
+        let instancer = instancer_of(chain.as_ref(), "/world/a");
+        assert_eq!(
+            instancer_of(chain.as_ref(), "/world/b"),
+            instancer,
+            "one instancer still"
+        );
+        assert_eq!(instancer_of(chain.as_ref(), "/world/c"), instancer);
+        assert_eq!(
+            read(chain.as_ref(), &instancer, "instancerTopology/mask"),
+            Some(Value::BoolVec(vec![true, false, true]))
+        );
+    }
+
+    #[test]
+    fn a_native_instance_in_a_point_instancer_prototype_is_scattered() {
+        let text = format!(
+            "{ASSETS}{}",
+            r#"def Xform "world"
+{
+    def PointInstancer "scatter"
+    {
+        rel prototypes = [</world/scatter/protos/rock>]
+        int[] protoIndices = [0, 0, 0]
+        point3f[] positions = [(0, 0, 0), (1, 0, 0), (2, 0, 0)]
+        def Scope "protos"
+        {
+            def Xform "rock"
+            {
+                def Xform "inst" (
+                    instanceable = true
+                    references = </asset>
+                )
+                {
+                }
+            }
+        }
+    }
+}
+"#
+        );
+        let (_dir, chain) = chain(&text);
+        let scatter = p("/world/scatter");
+        let copy = match read(chain.as_ref(), &scatter, "instancerTopology/prototypes") {
+            Some(Value::PathVec(mut v)) => v.pop().unwrap(),
+            other => panic!("{other:?}"),
+        };
+        let instance = copy.append_path("inst").unwrap();
+        let instancer = instancer_of(chain.as_ref(), instance.as_str());
+        assert!(
+            instancer.has_prefix(&copy.append_path("UsdNiPropagatedPrototypes").unwrap()),
+            "aggregated under the copy: {instancer}"
+        );
+        assert_eq!(
+            read(chain.as_ref(), &instancer, "instancedBy/paths"),
+            Some(Value::PathVec(vec![scatter.clone()])),
+            "drawn once per point instance"
+        );
+        assert_eq!(
+            read(chain.as_ref(), &instancer, "instancedBy/prototypeRoots"),
+            Some(Value::PathVec(vec![copy.clone()]))
+        );
+        assert!(
+            read(
+                chain.as_ref(),
+                &p("/world/scatter/protos/rock/inst"),
+                "instance/instancer"
+            )
+            .is_none(),
+            "the original is not drawn at its place"
+        );
+    }
+
+    #[test]
+    fn per_instance_colours_become_instance_primvars() {
+        let text = format!(
+            "{ASSETS}{}",
+            r#"def Xform "world"
+{
+    def Xform "a" (
+        instanceable = true
+        references = </asset>
+    )
+    {
+        color3f[] primvars:displayColor = [(1, 0, 0)]
+    }
+    def Xform "b" (
+        instanceable = true
+        references = </asset>
+    )
+    {
+        color3f[] primvars:displayColor = [(0, 1, 0)]
+    }
+}
+"#
+        );
+        let (_dir, chain) = chain(&text);
+        let instancer = instancer_of(chain.as_ref(), "/world/a");
+        assert_eq!(instancer_of(chain.as_ref(), "/world/b"), instancer);
+        let scope = instancer.parent().unwrap().parent().unwrap();
+        assert!(
+            scope.name().unwrap().starts_with("Primvarsbd3bed53a0c8bde1"),
+            "named by TfHash of {{displayColor: color}}, as UsdImaging (OpenUSD 26.08) names it: {scope}"
+        );
+        assert_eq!(
+            read(chain.as_ref(), &instancer, "primvars/displayColor/interpolation"),
+            Some(Value::Token("instance".into()))
+        );
+        assert_eq!(
+            read(chain.as_ref(), &instancer, "primvars/displayColor/role"),
+            Some(Value::Token("color".into()))
+        );
+        let Some(Value::Vec3fVec(colours)) =
+            read(chain.as_ref(), &instancer, "primvars/displayColor/primvarValue")
+        else {
+            panic!()
+        };
+        assert_eq!(colours.len(), 2);
+        assert_eq!((colours[0].x, colours[1].y), (1.0, 1.0), "in instance order");
+    }
+
+    #[test]
+    fn component_instances_group() {
+        let text = format!(
+            "{ASSETS}{}",
+            r#"def Xform "world"
+{
+    def Xform "a" (
+        instanceable = true
+        references = </asset>
+    )
+    {
+    }
+    def Xform "b" (
+        instanceable = true
+        references = </asset>
+    )
+    {
+    }
+}
+"#
+        );
+        let (_dir, chain) = chain(&text);
+        assert!(read(chain.as_ref(), &p("/world/a"), "model/modelPath").is_some());
+        let instancer = instancer_of(chain.as_ref(), "/world/a");
+        assert_eq!(
+            instancer_of(chain.as_ref(), "/world/b"),
+            instancer,
+            "their model data is equal once re-rooted to the prototype"
+        );
+        // The binding scope carries the model data, re-rooted onto the
+        // propagated prototype.
+        let scope = instancer.parent().unwrap().parent().unwrap();
+        assert!(scope.name().unwrap().contains("_model"), "{scope}");
+        assert_eq!(
+            read(chain.as_ref(), &scope, "model/modelPath"),
+            Some(Value::PathVec(vec![
+                instancer.append_path("UsdNiPrototype").unwrap()
+            ]))
+        );
+    }
+
+    #[test]
+    fn instances_under_an_over_are_not_aggregated() {
+        let text = format!(
+            "{ASSETS}{}",
+            r#"over "parked"
+{
+    def Xform "x" (
+        instanceable = true
+        references = </asset>
+    )
+    {
+    }
+}
+"#
+        );
+        let (_dir, chain) = chain(&text);
+        assert!(read(chain.as_ref(), &p("/parked/x"), "instance").is_none());
+        assert!(
+            chain
+                .children(&sdf::Path::abs_root())
+                .iter()
+                .all(|c| c.name() != Some("UsdNiPropagatedPrototypes"))
+        );
+    }
 }
