@@ -32,8 +32,8 @@
 
 ## 5. Instance proxy path translation
 
-- [ ] 5.1 Add `filter/instance_proxy_path_translation.rs` (design D8), configured with `usdMaterialBindings`
-- [ ] 5.2 `chain::standard`: extent resolving, point instancer propagation, native instancer propagation, instance proxy path translation, material binding resolving, render settings flattening, light linking (until `hydra-parity-chain`)
+- [x] 5.1 Add `filter/instance_proxy_path_translation.rs` (design D8), configured with `usdMaterialBindings`
+- [x] 5.2 `chain::standard`: extent resolving, point instancer propagation, native instancer propagation, instance proxy path translation, material binding resolving, render settings flattening, light linking (until `hydra-parity-chain`)
 
 ## 6. Tests
 
