@@ -28,6 +28,15 @@ impl AttributeValue {
             globals: ctx.globals.clone(),
         }))
     }
+
+    /// The value of `attribute`, never flagged time-varying (UsdImaging's
+    /// attribute data source built without a locator).
+    pub fn unflagged(attribute: Attribute, ctx: &PrimContext) -> DataSource {
+        DataSource::Sampled(Rc::new(Self {
+            attribute,
+            globals: ctx.globals.clone(),
+        }))
+    }
 }
 
 impl AttributeValue {
