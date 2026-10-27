@@ -302,7 +302,19 @@ impl StageSceneIndex {
             return;
         };
         let mut roots = pending.resync_roots();
-        let known_prototypes = self.populated_prototypes();
+        // The prototypes populated before this batch, needed only when it
+        // resyncs one (rare): not computed on every update.
+        let touches_prototype = {
+            let populated = self.populated.borrow();
+            roots
+                .iter()
+                .any(|r| r.is_root_prim() && r.as_str().starts_with("/__Prototype_") && populated.contains(r))
+        };
+        let known_prototypes = if touches_prototype {
+            self.populated_prototypes()
+        } else {
+            BTreeSet::new()
+        };
         let mut removed = Vec::new();
         let mut added = Vec::new();
         // A shader or node graph resynced under a material or light filter
@@ -345,7 +357,7 @@ impl StageSceneIndex {
         // neither it nor the instances re-pointed to it. USD keeps the
         // prototype, or resyncs both. Resync them here, so that native
         // instancing, which follows notices as UsdImaging's does, sees them.
-        if roots.iter().any(|r| known_prototypes.contains(r)) {
+        if touches_prototype {
             let (prototypes, instances) = self.repointed_prototypes(&known_prototypes);
             for path in prototypes.into_iter().chain(instances) {
                 self.cache.borrow_mut().retain(|p, _| !p.has_prefix(&path));
