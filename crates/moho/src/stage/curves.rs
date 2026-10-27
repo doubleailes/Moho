@@ -6,13 +6,15 @@ use crate::stage::table::{Member, TableAdapter};
 use crate::tokens::curves as t;
 use crate::tokens::prim_type;
 
-const BASIS: &[Member] = &[Member::Nested(
+/// As UsdImaging's basis curves data source: only `curveVertexCounts` is
+/// flagged time-varying, and each topology member is dirtied on its own.
+const BASIS: &[Member] = &[Member::LeafNested(
     t::TOPOLOGY,
     &[
         Member::Attr(t::CURVE_VERTEX_COUNTS, "curveVertexCounts"),
-        Member::Attr(t::TYPE, "type"),
-        Member::Attr(t::BASIS, "basis"),
-        Member::Attr(t::WRAP, "wrap"),
+        Member::Unflagged(t::TYPE, "type"),
+        Member::Unflagged(t::BASIS, "basis"),
+        Member::Unflagged(t::WRAP, "wrap"),
     ],
 )];
 
