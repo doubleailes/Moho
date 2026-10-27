@@ -14,6 +14,7 @@ pub mod camera;
 pub mod collection;
 pub mod curves;
 pub mod generic;
+pub mod geom_subset;
 pub mod globals;
 pub mod imageable;
 pub mod implicit;
