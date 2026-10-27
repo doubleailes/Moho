@@ -11,12 +11,92 @@
 //!    arnold-usd add light linking at phase 4, arnold-usd dependency
 //!    forwarding at phase 1000;
 //! 3. the render delegate receives the terminal scene index, batches its
-//!    notices by prim type and observes the batches with a prim factory, as
-//!    hdPrman's `renderDelegate.cpp` does.
+//!    notices by prim type
+//!    ([`PrimTypeNoticeBatchingSceneIndex`](crate::filter::PrimTypeNoticeBatchingSceneIndex))
+//!    and observes the batches with a prim factory
+//!    ([`PrimManagingObserver`](crate::prim_managing::PrimManagingObserver)),
+//!    flushing in its `Update`, as hdPrman's `renderDelegate.cpp` does.
 //!
 //! A renderer that needs a fix over Hydra's behaviour ships it as a renderer
 //! filter of its own; the standard chain keeps UsdImaging's, quirks
 //! included.
+//!
+//! # Example
+//!
+//! ```
+//! use std::cell::RefCell;
+//! use std::rc::Rc;
+//!
+//! use moho::chain::{self, RendererFilter};
+//! use moho::filter::{PrimTypeNoticeBatchingSceneIndex, PrimTypePriority};
+//! use moho::openusd::sdf;
+//! use moho::openusd::tf::Token;
+//! use moho::prim_managing::{ManagedPrim, PrimFactory, PrimManagingObserver};
+//! use moho::scene_index::{Added, Dirtied};
+//! use moho::stage::{StageSceneIndex, stage_builder};
+//!
+//! /// The renderer's priorities: materials before what binds them.
+//! struct Priorities;
+//!
+//! impl PrimTypePriority for Priorities {
+//!     fn priority(&self, prim_type: &Token) -> usize {
+//!         usize::from(prim_type != "material")
+//!     }
+//!     fn num_priorities(&self) -> usize {
+//!         2
+//!     }
+//! }
+//!
+//! /// The renderer's object for a mesh, which logs its updates.
+//! struct Mesh(Rc<RefCell<Vec<String>>>);
+//!
+//! impl ManagedPrim for Mesh {
+//!     fn dirty(&self, entry: &Dirtied, _: &PrimManagingObserver) {
+//!         for locator in entry.locators.iter() {
+//!             self.0.borrow_mut().push(format!("{} {locator}", entry.path));
+//!         }
+//!     }
+//! }
+//!
+//! struct Factory(Rc<RefCell<Vec<String>>>);
+//!
+//! impl PrimFactory for Factory {
+//!     fn create_prim(&self, entry: &Added, _: &PrimManagingObserver) -> Option<Rc<dyn ManagedPrim>> {
+//!         (entry.ty == "mesh").then(|| Rc::new(Mesh(self.0.clone())) as Rc<dyn ManagedPrim>)
+//!     }
+//! }
+//!
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! let stage = stage_builder().in_memory("scene.usda")?;
+//! stage.define_typed_prim("/world/geo", "Mesh")?;
+//!
+//! // 1. UsdImaging's chain.
+//! let stage_index = StageSceneIndex::new();
+//! stage_index.set_stage(stage.clone());
+//! let chain = chain::standard(stage_index.clone());
+//! // 2. The renderer's scene index plugins.
+//! let terminal = chain::renderer_filters(
+//!     chain,
+//!     &[RendererFilter::light_linking(), RendererFilter::dependency_forwarding()],
+//! );
+//! // 3. The delegate: batched by prim type, observed with a prim factory.
+//! let batching = PrimTypeNoticeBatchingSceneIndex::new(terminal, Some(Rc::new(Priorities)));
+//! let log = Rc::new(RefCell::new(Vec::new()));
+//! let observer = PrimManagingObserver::new(batching.clone(), Some(Rc::new(Factory(log.clone()))));
+//!
+//! // The delegate's `Update`.
+//! batching.flush();
+//! let geo = sdf::path("/world/geo")?;
+//! assert!(observer.prim(&geo).is_some());
+//!
+//! // An edit reaches the mesh at the next update, at Hydra's locators.
+//! stage.attribute("/world/geo.doubleSided")?.set(true)?;
+//! stage_index.apply_pending_updates();
+//! batching.flush();
+//! assert!(log.borrow().iter().any(|l| l == "/world/geo mesh/doubleSided"));
+//! # Ok(())
+//! # }
+//! ```
 
 use std::rc::Rc;
 
