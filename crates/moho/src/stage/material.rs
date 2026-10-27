@@ -16,7 +16,9 @@
 //!
 //! A light's network has the fixed terminal `light` and one node, the light
 //! prim itself, named by its absolute path; its contexts are `""`, `__all`
-//! and each one a `<context>:light:shaderId` attribute names.
+//! and each one a `<context>:light:shaderId` attribute names. A light
+//! filter's is the same with the terminal `lightFilter` and
+//! `<context>:lightFilter:shaderId`.
 //!
 //! UsdImaging's quirks are kept: a terminal names the output of the source
 //! its material output connects to, even when the walk resolved through a
@@ -32,7 +34,7 @@ use openusd::sdf::{self, Role, Value};
 use openusd::tf::Token;
 use openusd::usd::{self, PrimPredicate};
 use openusd::usd::{Object as _, Property as _};
-use openusd_schemas::lux::LightAPI;
+use openusd_schemas::lux::{LightAPI, LightFilter, LightFilterExt};
 use openusd_schemas::shade::{
     Connectable, ConnectableAPI, ImplementationSource, Input, InterfaceInputConsumersMap, Material,
     NodeDefAPI, NodeGraphInterface, ProducerFilter, ShadingAttribute,
@@ -52,6 +54,18 @@ const INPUTS: &str = "inputs:";
 const OUTPUTS: &str = "outputs:";
 const CONFIG: &str = "config:";
 const LIGHT_SHADER_ID: &str = "light:shaderId";
+const LIGHT_FILTER_SHADER_ID: &str = "lightFilter:shaderId";
+
+/// Whether `prim` is a `LightFilter` or of a type derived from it (C++
+/// `UsdLuxLightFilter(prim)`).
+pub(crate) fn is_light_filter(prim: &usd::Prim) -> bool {
+    prim.is_a("LightFilter").unwrap_or(false)
+}
+
+/// Whether `prim` applies `LightAPI` (C++ `UsdLuxLightAPI(prim)`).
+fn is_light(prim: &usd::Prim) -> bool {
+    prim.has_api_schema("LightAPI").unwrap_or(false)
+}
 
 /// The adapter of `Material` prims.
 pub struct MaterialAdapter;
@@ -176,15 +190,20 @@ pub(crate) fn render_context(output: &str) -> &str {
         .unwrap_or("")
 }
 
-/// A light's render contexts (`_CollectRenderContextsFromNodeIdentifiers`):
-/// `""`, `__all`, then each `<context>` of a `<context>:light:shaderId`
-/// property.
+/// A light's or light filter's render contexts
+/// (`_CollectRenderContextsFromNodeIdentifiers`): `""`, `__all`, then each
+/// `<context>` of a `<context>:light:shaderId` property (a light's) or
+/// `<context>:lightFilter:shaderId` property (a light filter's).
 fn contexts_from_node_identifiers(prim: &usd::Prim) -> Vec<Token> {
     let mut contexts = vec![Token::from(t::UNIVERSAL), Token::from(t::ALL)];
-    if !prim.has_api_schema("LightAPI").unwrap_or(false) {
+    let shader_id = if is_light(prim) {
+        LIGHT_SHADER_ID
+    } else if is_light_filter(prim) {
+        LIGHT_FILTER_SHADER_ID
+    } else {
         return contexts;
-    }
-    for context in shader_id_contexts(prim) {
+    };
+    for context in shader_id_contexts(prim, shader_id) {
         if !contexts.contains(&context) {
             contexts.push(context);
         }
@@ -192,9 +211,9 @@ fn contexts_from_node_identifiers(prim: &usd::Prim) -> Vec<Token> {
     contexts
 }
 
-/// The `<context>` of each `<context>:light:shaderId` property of `prim`.
-fn shader_id_contexts(prim: &usd::Prim) -> Vec<Token> {
-    let suffix = format!(":{LIGHT_SHADER_ID}");
+/// The `<context>` of each `<context>:<shader_id>` property of `prim`.
+fn shader_id_contexts(prim: &usd::Prim, shader_id: &str) -> Vec<Token> {
+    let suffix = format!(":{shader_id}");
     prim.property_names()
         .unwrap_or_default()
         .iter()
@@ -493,10 +512,6 @@ struct ShadingNode {
 }
 
 impl ShadingNode {
-    fn is_light(&self) -> bool {
-        self.prim.has_api_schema("LightAPI").unwrap_or(false)
-    }
-
     fn node_identifier(&self) -> Token {
         let context = self.walk.render_context.as_str();
         if self.prim.has_api_schema("NodeDefAPI").unwrap_or(false) {
@@ -508,7 +523,14 @@ impl ShadingNode {
                 .flatten()
                 .unwrap_or_default();
         }
-        if self.is_light() {
+        if is_light_filter(&self.prim) {
+            return LightFilter::from_prim_unchecked(self.prim.clone())
+                .shader_id_for(&[context])
+                .ok()
+                .flatten()
+                .unwrap_or_default();
+        }
+        if is_light(&self.prim) {
             return LightAPI::from_prim_unchecked(self.prim.clone())
                 .shader_id_for(&[context])
                 .ok()
@@ -536,9 +558,19 @@ impl Container for ShadingNode {
     fn get(&self, name: &Token) -> Option<DataSource> {
         match name.as_str() {
             t::NODE_IDENTIFIER => Some(value(Value::Token(self.node_identifier()))),
-            t::RENDER_CONTEXT_NODE_IDENTIFIERS => self
-                .is_light()
-                .then(|| DataSource::Container(Rc::new(RenderContextIdentifiers(self.prim.clone())))),
+            t::RENDER_CONTEXT_NODE_IDENTIFIERS => {
+                let shader_id = if is_light(&self.prim) {
+                    LIGHT_SHADER_ID
+                } else if is_light_filter(&self.prim) {
+                    LIGHT_FILTER_SHADER_ID
+                } else {
+                    return None;
+                };
+                Some(DataSource::Container(Rc::new(RenderContextIdentifiers {
+                    prim: self.prim.clone(),
+                    shader_id,
+                })))
+            }
             t::NODE_TYPE_INFO => {
                 let source = NodeDefAPI::from_prim_unchecked(self.prim.clone())
                     .implementation()
@@ -623,9 +655,9 @@ impl Container for Parameters {
             entries.push((t::TYPE_NAME, value(Value::Token(ty.unwrap_or_default()))));
             return Some(container(entries));
         }
-        // A light's input with no value of its own still answers, with its
-        // fallback.
-        (self.node.has_api_schema("LightAPI").unwrap_or(false)).then(|| {
+        // A light's or light filter's input with no value of its own still
+        // answers, with its fallback.
+        (is_light(&self.node) || is_light_filter(&self.node)).then(|| {
             container([(
                 t::VALUE,
                 AttributeValue::data_source(input.attribute().clone(), &self.ctx, locator),
@@ -690,20 +722,27 @@ impl Container for InputConnections {
     }
 }
 
-/// A light's shader identifier per render context
+/// A light's or light filter's shader identifier per render context
 /// (`_UsdImagingDataSourceRenderContextIdentifiers`).
-struct RenderContextIdentifiers(usd::Prim);
+struct RenderContextIdentifiers {
+    prim: usd::Prim,
+    /// `light:shaderId` or `lightFilter:shaderId`.
+    shader_id: &'static str,
+}
 
 impl Container for RenderContextIdentifiers {
     fn names(&self) -> Vec<Token> {
-        shader_id_contexts(&self.0)
+        shader_id_contexts(&self.prim, self.shader_id)
     }
 
     fn get(&self, name: &Token) -> Option<DataSource> {
-        let attribute = LightAPI::from_prim_unchecked(self.0.clone())
-            .shader_id_attr_for(name.as_str())
-            .ok()
-            .flatten()?;
+        let attribute = if self.shader_id == LIGHT_SHADER_ID {
+            LightAPI::from_prim_unchecked(self.prim.clone()).shader_id_attr_for(name.as_str())
+        } else {
+            LightFilter::from_prim_unchecked(self.prim.clone()).shader_id_attr_for(name.as_str())
+        }
+        .ok()
+        .flatten()?;
         match attribute.get::<Value>().ok().flatten()? {
             Value::Token(id) => Some(value(Value::Token(id))),
             _ => None,

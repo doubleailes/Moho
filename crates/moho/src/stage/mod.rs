@@ -298,14 +298,14 @@ impl StageSceneIndex {
         let known_prototypes = self.populated_prototypes();
         let mut removed = Vec::new();
         let mut added = Vec::new();
-        // A shader or node graph resynced under a material is not
-        // repopulated but invalidates its material (below), as
-        // `UsdImagingStageSceneIndex::_ApplyPendingResyncs` does for a
-        // `RepresentedByAncestor` prim. Any other prim under a material is
+        // A shader or node graph resynced under a material or light filter
+        // is not repopulated but invalidates its representing ancestor
+        // (below), as `UsdImagingStageSceneIndex::_ApplyPendingResyncs` does
+        // for a `RepresentedByAncestor` prim. Any other prim under one is
         // repopulated, its subtree added though population never reached it.
         let represented: Vec<Option<(usd::Prim, usd::Prim)>> = roots
             .iter()
-            .map(|root| self.representing_material(root))
+            .map(|root| self.representing_ancestor(root))
             .collect();
         for (root, represented) in roots.iter().zip(&represented) {
             self.cache.borrow_mut().retain(|p, _| !p.has_prefix(root));
@@ -350,15 +350,15 @@ impl StageSceneIndex {
             }
         }
         let mut dirty: BTreeMap<sdf::Path, LocatorSet> = BTreeMap::new();
-        // A shader or node graph resynced under a material is a property
-        // resync of it (UsdImaging's `RepresentedByAncestor` prims); a prim
-        // gone from the stage has no adapter, and is removed only if it was
-        // added.
-        for (material, prim) in represented.into_iter().flatten() {
+        // A shader or node graph resynced under a material or light filter
+        // is a property resync of it (UsdImaging's `RepresentedByAncestor`
+        // prims); a prim gone from the stage has no adapter, and is removed
+        // only if it was added.
+        for (ancestor, prim) in represented.into_iter().flatten() {
             let all: BTreeSet<String> = [String::new()].into();
-            let locators = material::invalidate_from_descendant(&material, &prim, &all);
+            let locators = invalidate_from_descendant(&ancestor, &prim, &all);
             dirty
-                .entry(material.path().clone())
+                .entry(ancestor.path().clone())
                 .or_default()
                 .insert_set(&locators);
         }
@@ -375,16 +375,17 @@ impl StageSceneIndex {
             if roots.iter().any(|r| prim.has_prefix(r)) {
                 continue;
             }
-            // A shader or node graph is represented by its material, which
-            // invalidates for it (each kind of change apart, as UsdImaging).
-            if let Some((material, descendant)) = self.representing_material(&prim) {
+            // A shader or node graph is represented by its material or light
+            // filter, which invalidates for it (each kind of change apart, as
+            // UsdImaging).
+            if let Some((ancestor, descendant)) = self.representing_ancestor(&prim) {
                 for properties in [&resynced, &updated] {
                     if properties.is_empty() {
                         continue;
                     }
-                    let locators = material::invalidate_from_descendant(&material, &descendant, properties);
+                    let locators = invalidate_from_descendant(&ancestor, &descendant, properties);
                     dirty
-                        .entry(material.path().clone())
+                        .entry(ancestor.path().clone())
                         .or_default()
                         .insert_set(&locators);
                 }
@@ -449,9 +450,10 @@ impl StageSceneIndex {
         (fresh.into_iter().collect(), instances)
     }
 
-    /// The nearest `Material` ancestor of a `Shader` or `NodeGraph` prim,
-    /// which represents it (`_FindResponsibleAncestor`), and the prim.
-    fn representing_material(&self, path: &sdf::Path) -> Option<(usd::Prim, usd::Prim)> {
+    /// The nearest ancestor of a `Shader` or `NodeGraph` prim that
+    /// represents its descendants (a material or a light filter), which
+    /// represents it (`_FindResponsibleAncestor`), and the prim.
+    fn representing_ancestor(&self, path: &sdf::Path) -> Option<(usd::Prim, usd::Prim)> {
         let stage = self.stage()?;
         let prim = stage.prim(path).ok()?;
         if !prim.is_valid().unwrap_or(false) {
@@ -461,11 +463,11 @@ impl StageSceneIndex {
         if ty != "Shader" && ty != "NodeGraph" {
             return None;
         }
-        let material = path
+        let ancestor = path
             .strict_ancestors_below_root()
             .filter_map(|a| stage.prim(&a).ok())
-            .find(is_material)?;
-        Some((material, prim))
+            .find(represents_descendants)?;
+        Some((ancestor, prim))
     }
 
     /// The index's current time, `None` for the default time.
@@ -510,7 +512,7 @@ impl StageSceneIndex {
         let Some(prim) = ctx.prim() else {
             return locators;
         };
-        let usd_type = prim.type_name().ok().flatten().unwrap_or_default();
+        let usd_type = self.adapter_type(&prim);
         let apis = prim.api_schemas().unwrap_or_default();
         for adapter in self.adapters.for_prim(usd_type.as_str(), &apis) {
             for name in resynced {
@@ -521,6 +523,17 @@ impl StageSceneIndex {
             }
         }
         locators
+    }
+
+    /// The USD type whose adapter serves `prim`: its own, or `LightFilter`
+    /// for a type derived from it that has no adapter of its own
+    /// (UsdImaging looks adapters up along the type's bases).
+    fn adapter_type(&self, prim: &usd::Prim) -> Token {
+        let usd_type = prim.type_name().ok().flatten().unwrap_or_default();
+        if self.adapters.for_type(usd_type.as_str()).is_none() && material::is_light_filter(prim) {
+            return Token::from("LightFilter");
+        }
+        usd_type
     }
 
     fn context(&self, stage: &Stage, path: &sdf::Path) -> PrimContext {
@@ -560,7 +573,7 @@ impl StageSceneIndex {
         let Some(usd_prim) = ctx.prim() else {
             return Prim::undefined();
         };
-        let usd_type = usd_prim.type_name().ok().flatten().unwrap_or_default();
+        let usd_type = self.adapter_type(&usd_prim);
         let apis = usd_prim.api_schemas().unwrap_or_default();
         let mut ty = self
             .adapters
@@ -576,13 +589,34 @@ impl StageSceneIndex {
     }
 }
 
-/// Whether `prim` is a `Material`, which represents its descendants.
+/// Whether `prim` is a `Material`.
 fn is_material(prim: &usd::Prim) -> bool {
     prim.type_name().ok().flatten().is_some_and(|t| t == "Material")
 }
 
-/// `paths`, parents first, without the strict descendants of materials
-/// (UsdImaging prunes them from its population).
+/// Whether `prim`'s adapter represents its descendants
+/// (`RepresentsSelfAndDescendents`): a material or a light filter.
+fn represents_descendants(prim: &usd::Prim) -> bool {
+    is_material(prim) || material::is_light_filter(prim)
+}
+
+/// What a change to `properties` of `descendant` dirties on `ancestor`,
+/// which represents it (`InvalidateImagingSubprimFromDescendent`): a
+/// material's terminals and nodes, or a light filter's whole `material`.
+fn invalidate_from_descendant(
+    ancestor: &usd::Prim,
+    descendant: &usd::Prim,
+    properties: &BTreeSet<String>,
+) -> LocatorSet {
+    if is_material(ancestor) {
+        material::invalidate_from_descendant(ancestor, descendant, properties)
+    } else {
+        Locator::new([crate::tokens::material::MATERIAL]).into()
+    }
+}
+
+/// `paths`, parents first, without the strict descendants of the prims that
+/// represent them (UsdImaging prunes them from its population).
 fn prune_material_descendants(stage: &Stage, paths: Vec<sdf::Path>) -> Vec<sdf::Path> {
     let mut material: Option<sdf::Path> = None;
     let mut kept = Vec::with_capacity(paths.len());
@@ -593,7 +627,11 @@ fn prune_material_descendants(stage: &Stage, paths: Vec<sdf::Path>) -> Vec<sdf::
         {
             continue;
         }
-        material = stage.prim(&path).ok().filter(is_material).map(|_| path.clone());
+        material = stage
+            .prim(&path)
+            .ok()
+            .filter(represents_descendants)
+            .map(|_| path.clone());
         kept.push(path);
     }
     kept
@@ -638,8 +676,9 @@ impl SceneIndex for StageSceneIndex {
         if !path.is_abs_root() && !self.prim(path).is_defined() {
             return Vec::new();
         }
-        // A material's descendants are not prims of the index.
-        if stage.prim(path).ok().is_some_and(|p| is_material(&p)) {
+        // A material's or light filter's descendants are not prims of the
+        // index.
+        if stage.prim(path).ok().is_some_and(|p| represents_descendants(&p)) {
             return Vec::new();
         }
         let mut children: Vec<sdf::Path> = stage

@@ -21,6 +21,7 @@ pub mod prim_type {
     pub const CYLINDER_LIGHT: &str = "cylinderLight";
     pub const DISTANT_LIGHT: &str = "distantLight";
     pub const DOME_LIGHT: &str = "domeLight";
+    pub const LIGHT_FILTER: &str = "lightFilter";
     pub const INSTANCER: &str = "instancer";
     pub const VOLUME: &str = "volume";
     pub const OPENVDB_ASSET: &str = "openvdbAsset";
@@ -245,6 +246,8 @@ pub mod material {
     pub const VOLUME: &str = "volume";
     /// A light's fixed terminal (`HdMaterialTerminalTokens->light`).
     pub const LIGHT: &str = "light";
+    /// A light filter's fixed terminal (`HdMaterialTerminalTokens->lightFilter`).
+    pub const LIGHT_FILTER: &str = "lightFilter";
     /// The universal render context.
     pub const UNIVERSAL: &str = "";
 }
