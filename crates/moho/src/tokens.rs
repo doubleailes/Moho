@@ -265,6 +265,15 @@ pub mod light {
     pub const SHADOW_LINK: &str = "shadowLink";
 }
 
+/// `HdDependenciesSchema` and `HdDependencySchema`: a prim's declared
+/// dependencies on data of its own or of other prims.
+pub mod dependencies {
+    pub const DEPENDENCIES: &str = "__dependencies";
+    pub const DEPENDED_ON_PRIM_PATH: &str = "dependedOnPrimPath";
+    pub const DEPENDED_ON_DATA_SOURCE_LOCATOR: &str = "dependedOnDataSourceLocator";
+    pub const AFFECTED_DATA_SOURCE_LOCATOR: &str = "affectedDataSourceLocator";
+}
+
 /// `HdCollectionsSchema`, `HdCollectionSchema` and `HdCategoriesSchema`.
 pub mod collections {
     pub const COLLECTIONS: &str = "collections";

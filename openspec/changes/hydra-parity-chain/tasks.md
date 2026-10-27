@@ -1,10 +1,10 @@
 ## 0. Preconditions
 
-- [ ] 0.1 `hydra-parity-materials` is implemented (no filter but light linking uses `CollectionMembership`)
+- [x] 0.1 `hydra-parity-materials` is implemented (no filter but light linking uses `CollectionMembership`)
 
 ## 1. Dependencies
 
-- [ ] 1.1 Add `HdDependenciesSchema`'s layout to `tokens.rs` and `schema.rs`
+- [x] 1.1 Add `HdDependenciesSchema`'s layout to `tokens.rs` and `schema.rs`
 - [ ] 1.2 Add `filter/dependency_forwarding.rs`, a port of `HdDependencyForwardingSceneIndex` (reverse map from `__dependencies`, transitive dirtying, cycle protection, dependents of added and removed prims)
 - [ ] 1.3 Render settings flattening: declare Hydra's `__dependencies` entries; delete its internal dependents table and self-dirtying
 
