@@ -25,3 +25,31 @@ removed path. A managed prim SHALL be retrievable by path.
 #### Scenario: Added, dirtied, removed
 - **WHEN** an observer with a factory recording calls watches an index that adds `/world/geo`, dirties it for `primvars/points`, then removes `/world`
 - **THEN** the factory was asked for `/world/geo` once, its managed prim received one dirty with `primvars/points`, and after the removal the observer holds no prim at or under `/world`
+
+### Requirement: Update scope of a camera edit and a light addition
+An edit SHALL dirty no more than Hydra dirties for it, through
+`chain::standard` followed by the light linking and dependency forwarding
+renderer filters. Editing a camera attribute SHALL dirty only that camera
+prim, at the locators `UsdImagingDataSourceCameraPrim::Invalidate` gives
+(for example `camera/focalLength` for `focalLength`, `xform` for a
+transform op). Adding a light SHALL add that light prim. If its light link
+and shadow link collections are trivial (they include everything), as
+`HdsiLightLinkingSceneIndex` treats them, nothing else SHALL be added or
+dirtied. Otherwise, only the prims whose membership changes SHALL be
+dirtied, and only at `categories` (or `instanceCategories`).
+
+#### Scenario: A camera's focal length
+- **WHEN** a stage holding a camera and 1,000 meshes is edited to change the camera's `focalLength`, and pending updates are applied
+- **THEN** the observer receives one dirtied entry, for the camera, at `camera/focalLength`, and no added or removed entries
+
+#### Scenario: A camera move
+- **WHEN** the camera's transform op is edited
+- **THEN** the observer receives one dirtied entry, for the camera, at `xform`
+
+#### Scenario: Adding a light that lights everything
+- **WHEN** a sphere light with default collections is added under `/lights` on a stage holding 1,000 meshes
+- **THEN** the observer receives an added entry for the light and no dirtied entry for any mesh
+
+#### Scenario: Adding a light linked to a few prims
+- **WHEN** a light whose `collection:lightLink` includes only `/world/a` is added
+- **THEN** besides the light's added entry, only the prims whose categories change are dirtied, and only at `categories`

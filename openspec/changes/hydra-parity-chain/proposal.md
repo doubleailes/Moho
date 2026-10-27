@@ -19,6 +19,11 @@ it depends on the other three.
 
 ## What Changes
 
+- Update latency is measured first. Two edits stand for it: a camera edit
+  dirties only the camera, at Hydra's locators, and adding a light dirties
+  no geometry when its collections are trivial. Both are pinned by tests
+  and timed by an update benchmark in `moho-spike`, on a fixture and on
+  Moana. The timings are reported, not gated (design D8).
 - **BREAKING** `chain::standard` is exactly `UsdImagingCreateSceneIndices`'
   chain with `addDrawModeSceneIndex = false`,
   `displayUnloadedPrimsWithBounds = false`, no overrides callback and no
