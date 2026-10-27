@@ -51,16 +51,16 @@ schemas:    typed accessors over containers (MeshSchema, XformSchema, ...)
 `moho::chain::standard(stage_index)` builds the standard chain:
 
 ```
-StageSceneIndex --> ExtentResolving --> NativeInstancing --> PointInstancing
-  --> Flattening --> MaterialBindingResolving --> RenderSettingsFlattening
-  --> LightLinking
+StageSceneIndex --> ExtentResolving --> PointInstancing (propagation)
+  --> NativeInstancing (propagation, flattening inside)
+  --> InstanceProxyPathTranslation (usdMaterialBindings)
+  --> MaterialBindingResolving --> RenderSettingsFlattening --> LightLinking
 ```
 
-It is not yet `UsdImagingCreateSceneIndices`' order. The OpenSpec changes
-`hydra-parity-instancing` and `hydra-parity-chain` put point instancing
-before native instancing, run flattening inside native instancing, and move
-light linking out of the chain (a Hydra renderer appends it as a scene
-index plugin).
+Up to material binding resolving this is `UsdImagingCreateSceneIndices`'
+order with `addDrawModeSceneIndex = false` and no overrides callback or
+plugins. `hydra-parity-chain` moves light linking out of the chain (a Hydra
+renderer appends it as a scene index plugin).
 
 - **`StageSceneIndex`** has `UsdImagingStageSceneIndex`'s shape: built
   empty (`new`), then `set_stage`, `set_time` and `apply_pending_updates`.
@@ -83,17 +83,67 @@ index plugin).
     openusd-schemas' registry, so schema fallbacks and typed views work.
 - **`ExtentResolving`** gives a prim with no `extent` of its own one from
   its `extentsHint` (purposes `geometry`, `render`, `proxy`).
-- **`NativeInstancing`** turns native instances into instancers over
-  prototypes re-rooted under `MohoNiPropagatedPrototypes` (Hydra's layout
-  comes with `hydra-parity-instancing`).
-- **`PointInstancing`** re-roots a point instancer's prototypes under
-  `<prototype>/ForInstancer<hash>`, and, as UsdImaging's whole-stage
-  prototype pass, makes every prim strictly under an instancer or an `over`
-  unrenderable: an empty type unless it is a material,
-  `__usdPrimInfo/niPrototypePath` blocked and `geomModel/applyDrawMode`
-  false.
-- **`Flattening`** resolves inherited data: the world transform,
-  visibility, purpose, constant primvars, and binding opinions.
+- **`PointInstancing`** is `UsdImagingPiPrototypePropagatingSceneIndex`.
+  - A whole-stage pass makes every prim strictly under an instancer or an
+    `over` unrenderable: an empty type unless it is a material,
+    `__usdPrimInfo/niPrototypePath` blocked and `geomModel/applyDrawMode`
+    false.
+  - Each prototype `P` an instancer targets is copied to
+    `P/ForInstancer<hash>`, `<hash>` being `TfHash::Combine` of the
+    instancer's path in the prototype's input namespace and the enclosing
+    copy root (`/` at the top level), printed `%zx` (a port of `TfHash`
+    gives Hydra's digits). The instancer's `instancerTopology/prototypes`
+    names the copies, and the original prototype records them in
+    `__usdPrimInfo/piPropagatedPrototypes/ForInstancer<hash>`.
+  - A copy's root resets the transform stack (an overlay) and is visible
+    unless it says otherwise (an underlay); every prim of the copy is
+    `instancedBy` the instancer and the copy root (an underlay); its path
+    values are re-rooted to the copy.
+  - Each copy searches for instancers of its own, so a nested instancer is
+    re-instanced in every copy, its own copies made at its prototype's
+    input path and named from the enclosing copy root.
+  - A target inside a native instance (an instance proxy) copies as an
+    empty prim, as in UsdImaging 2.0.
+- **`NativeInstancing`** is `UsdImagingNiPrototypePropagatingSceneIndex`, run
+  after point instancing.
+  - The stage without its USD prototypes, instances' renderable types
+    blanked, is flattened (`HdFlatteningSceneIndex` with UsdImaging's
+    providers); the instance aggregation reads the flattened data.
+  - Instances sharing their enclosing prototype root (a point instancer
+    copy, a native prototype, or `/`), USD prototype, constant primvar names
+    and roles, and flattened `usdMaterialBindings`, `purpose`, `geomModel`,
+    `model` and `__usdUpAxis` (re-rooted to `/<prototype name>`) share an
+    instancer at
+    `<root>/UsdNiPropagatedPrototypes/<bindingHash>/__Prototype_N/UsdNiInstancer`.
+    `<bindingHash>` is `NoPrimvars` or `Primvars<TfHash>`, then
+    `_<name><hash>` per instance data source (those digits are Moho's
+    own); its prim carries a static copy of the group's instance data.
+  - The instancer has `instancerTopology` (`prototypes`, `instanceIndices`,
+    `instanceLocations` in path order, `mask` from each instance's
+    flattened visibility), `primvars` (`hydra:instanceTransforms` and every
+    constant primvar of the instances, instance-rate) and `instancedBy`
+    when nested; each instance has `instance`.
+  - The USD prototype is propagated under the instancer at
+    `.../UsdNiInstancer/UsdNiPrototype`, its root given the group's
+    instance data, an identity transform resetting the stack and
+    `instancedBy`, its other prims `instancedBy` as an underlay, then
+    flattened and aggregated in turn, so nested instances work at any
+    depth. An optional append callback runs on each flattened prototype
+    (UsdImaging adds its draw mode scene index there).
+- **`InstanceProxyPathTranslation`** translates a path in
+  `usdMaterialBindings` that names a prim inside a native instance to the
+  same prim in the instance's propagated prototype.
+- **Draw mode is deferred.** `UsdImagingDrawModeSceneIndex` replaces
+  geometry with standins (bounds, cards, origin) for viewport level of
+  detail. It is optional in Hydra's own API, a render delegate under usdview
+  or Solaris receives it already applied, and its card generation is a
+  sizeable port of its own. The stage index and the flattening carry
+  `geomModel` and native propagation takes the append callback, so adding
+  it later changes no layout.
+- **`Flattening`** (`FlatteningSceneIndex`) resolves inherited data: the
+  world transform, visibility, purpose, constant primvars, binding
+  opinions, `model`, `geomModel` and `__usdUpAxis`. It runs inside native
+  instancing, and stays a public filter.
 - **The resolving filters** turn binding opinions, light-link collections
   and the stage's `__usdRender*` data into `materialBindings`, categories
   and `renderSettings`. Collection membership comes from the stage index,
@@ -106,7 +156,7 @@ index plugin).
   Hydra's gives no order.
 - **Every prim carries `primOrigin/scenePath`**, Hydra's prim origin: the
   USD prim's path, relative to its prototype root inside a USD prototype.
-  The instancing filters keep it on the prims they re-root.
+  The instancing propagations keep it on the prims they re-root.
 - **Blocks.** `DataSource::Block` is Hydra's `HdBlockDataSource`: in an
   `Overlay` (`HdOverlayContainerDataSource`) it hides what weaker containers
   give at its name.
@@ -162,7 +212,7 @@ merged chain and no resolution of material nodes across inputs. Those
 (`streaming`, `chain::input`, `chain::merged`,
 `MaterialNodeResolvingSceneIndex`) were removed for Hydra parity: Hydra has
 no counterpart for population-masked chunk stages merged after the fact,
-and native instancing's prototype names cannot agree between chunk stages.
+and native instancing names prototypes by their name on one stage.
 Chunking a scene, and finding and loading what a chunk depends on, is the
 consumer's business; `MergingSceneIndex` stays as a general filter.
 

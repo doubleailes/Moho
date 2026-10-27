@@ -25,14 +25,16 @@ The instancer SHALL expose:
 - `instancedBy`, when the instancer lies inside a point instancer copy (that copy root's `instancedBy`) or inside a native prototype (its own instancer and prototype root).
 
 The prototype root SHALL have an identity transform that resets the
-transform stack, and every prim of the prototype SHALL carry `instancedBy`
-naming the instancer (`paths`) and the prototype root (`prototypeRoots`).
+transform stack, and every prim of the prototype but a nested instance
+prim SHALL carry `instancedBy` naming the instancer (`paths`) and the
+prototype root (`prototypeRoots`), as UsdImaging's prototype scene index
+gives it.
 Each instance prim SHALL expose `instance` (`instancer`, `prototypeIndex`,
 `instanceIndex`), and its type SHALL be empty unless it is `material`.
 
 #### Scenario: Three instances of one asset
 - **WHEN** three instanceable prims `/a`, `/b`, `/c` reference the same asset with no bindings or constant primvars
-- **THEN** one instancer `/UsdNiPropagatedPrototypes/<bindingHash>/__Prototype_1/UsdNiInstancer`, its `<bindingHash>` starting with `NoPrimvars` (then `___usdUpAxis<hex>`, the up axis being flattened onto every prim), lists the prototype `.../UsdNiInstancer/UsdNiPrototype`, instance locations `/a`, `/b`, `/c`, three instance transforms and the mask [true, true, true], and the asset's prims appear once under the prototype root, each instanced by that instancer
+- **THEN** one instancer `/UsdNiPropagatedPrototypes/<bindingHash>/__Prototype_N/UsdNiInstancer` (`__Prototype_N` the USD prototype's name on the stage), its `<bindingHash>` starting with `NoPrimvars` (then `___usdUpAxis<hex>`, the up axis being flattened onto every prim), lists the prototype `.../UsdNiInstancer/UsdNiPrototype`, instance locations `/a`, `/b`, `/c`, three instance transforms and the mask [true, true, true], and the asset's prims appear once under the prototype root, each instanced by that instancer
 
 #### Scenario: Differing bindings
 - **WHEN** two instances of the same asset bind different materials
@@ -116,15 +118,15 @@ copied as it is: an empty prim.
 ### Requirement: Nested point instancers
 A point instancer inside another point instancer's prototype SHALL be
 re-instanced in every copy of that prototype, as Hydra's propagation does:
-the copied inner instancer SHALL name copies of its own prototypes, made
-inside the enclosing copy and named from its path in that prototype's
+the copied inner instancer SHALL name copies of its own prototypes, made at
+each inner prototype's input path (`<inner prototype>/ForInstancer<hash>`)
+and named from the inner instancer's path in the enclosing prototype's
 namespace and the enclosing copy root, whose prims it instances; the inner
-originals inside the copy SHALL be unrenderable, and a nested copy's path
-values SHALL be re-rooted level by level.
+originals inside the copy SHALL be unrenderable.
 
 #### Scenario: Leaves on a scattered tree
 - **WHEN** a point instancer scatters a tree whose prototype holds a point instancer of leaves
-- **THEN** each copy of the tree holds a leaves instancer whose prototypes are leaf copies inside that tree copy, instanced by it, and the leaf copy's `primOrigin` names the original leaf
+- **THEN** each copy of the tree holds a leaves instancer whose prototypes are leaf copies made at the leaf prototype's path, one per tree copy, instanced by that copy's leaves instancer, and the leaf copy's `primOrigin` names the original leaf
 
 ## ADDED Requirements
 
