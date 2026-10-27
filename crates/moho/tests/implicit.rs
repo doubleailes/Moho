@@ -59,20 +59,20 @@ def Plane "plane"
 const SHAPES: &[(&str, &str, &[&str])] = &[
     ("/sphere", "sphere", &["radius"]),
     ("/cube", "cube", &["size"]),
-    ("/cone", "cone", &["height", "radius", "axis"]),
-    ("/cylinder", "cylinder", &["height", "radius", "axis"]),
+    ("/cone", "cone", &["axis", "height", "radius"]),
+    ("/cylinder", "cylinder", &["axis", "height", "radius"]),
     (
         "/tapered",
         "cylinder",
-        &["height", "radiusTop", "radiusBottom", "axis"],
+        &["axis", "height", "radiusBottom", "radiusTop"],
     ),
-    ("/capsule", "capsule", &["height", "radius", "axis"]),
+    ("/capsule", "capsule", &["axis", "height", "radius"]),
     (
         "/capsule1",
         "capsule",
-        &["height", "radiusTop", "radiusBottom", "axis"],
+        &["axis", "height", "radiusBottom", "radiusTop"],
     ),
-    ("/plane", "plane", &["doubleSided", "axis", "length", "width"]),
+    ("/plane", "plane", &["axis", "doubleSided", "length", "width"]),
 ];
 
 #[test]
