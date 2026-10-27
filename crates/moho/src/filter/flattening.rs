@@ -42,9 +42,7 @@ use crate::locator::{Locator, LocatorSet};
 use crate::scene_index::{
     Added, Dirtied, Observer, Observers, Prim, Removed, Renamed, SceneIndex, SceneIndexHandle,
 };
-use crate::schema::{
-    PrimvarsSchema, PurposeSchema, VisibilitySchema, XformSchema, as_bool, member_container,
-};
+use crate::schema::{PurposeSchema, VisibilitySchema, XformSchema, as_bool, member_container};
 use crate::tokens::{geom_model, imageable, material_bindings, model, primvars, usd_up_axis, xform};
 
 const FLATTENED: &[&str] = &[
@@ -307,14 +305,12 @@ impl Flattened {
         ]))
     }
 
+    /// Always a container, empty for a prim that has and inherits no
+    /// primvar, as `HdFlattenedPrimvarsDataSourceProvider` gives it.
     fn primvars(&self) -> Option<DataSource> {
-        let local = PrimvarsSchema::get(&self.local);
         let parent = self
             .parent()
             .and_then(|p| member_container(&p, primvars::PRIMVARS));
-        if local.is_none() && parent.is_none() {
-            return None;
-        }
         Some(DataSource::Container(Rc::new(FlattenedPrimvars {
             local: member_container(&self.local, primvars::PRIMVARS),
             parent,
@@ -380,10 +376,12 @@ impl Flattened {
 }
 
 impl Container for Flattened {
+    /// The prim's names, then every flattened name it lacks, whether or not
+    /// it answers one, as `HdFlatteningSceneIndex` lists them.
     fn names(&self) -> Vec<Token> {
         let mut names = self.local.names();
         for name in FLATTENED {
-            if !names.iter().any(|n| n == *name) && self.get(&Token::from(*name)).is_some() {
+            if !names.iter().any(|n| n == *name) {
                 names.push(Token::from(*name));
             }
         }
