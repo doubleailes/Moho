@@ -1,5 +1,6 @@
 //! Implicit shapes: each USD shape's attributes, one to one, under a schema
-//! named after its Hydra prim type. Shapes are not converted to meshes.
+//! named after its Hydra prim type, in the sorted order of UsdImaging's
+//! mapped data source. Shapes are not converted to meshes.
 
 use crate::stage::table::{Member, TableAdapter};
 use crate::tokens::implicit as t;
@@ -18,50 +19,50 @@ pub const CUBE: TableAdapter = shape(p::CUBE, &[Member::Attr(t::SIZE, "size")]);
 pub const CONE: TableAdapter = shape(
     p::CONE,
     &[
+        Member::Attr(t::AXIS, "axis"),
         Member::Attr(t::HEIGHT, "height"),
         Member::Attr(t::RADIUS, "radius"),
-        Member::Attr(t::AXIS, "axis"),
     ],
 );
 pub const CYLINDER: TableAdapter = shape(
     p::CYLINDER,
     &[
+        Member::Attr(t::AXIS, "axis"),
         Member::Attr(t::HEIGHT, "height"),
         Member::Attr(t::RADIUS, "radius"),
-        Member::Attr(t::AXIS, "axis"),
     ],
 );
 pub const CYLINDER_1: TableAdapter = shape(
     p::CYLINDER,
     &[
-        Member::Attr(t::HEIGHT, "height"),
-        Member::Attr(t::RADIUS_TOP, "radiusTop"),
-        Member::Attr(t::RADIUS_BOTTOM, "radiusBottom"),
         Member::Attr(t::AXIS, "axis"),
+        Member::Attr(t::HEIGHT, "height"),
+        Member::Attr(t::RADIUS_BOTTOM, "radiusBottom"),
+        Member::Attr(t::RADIUS_TOP, "radiusTop"),
     ],
 );
 pub const CAPSULE: TableAdapter = shape(
     p::CAPSULE,
     &[
+        Member::Attr(t::AXIS, "axis"),
         Member::Attr(t::HEIGHT, "height"),
         Member::Attr(t::RADIUS, "radius"),
-        Member::Attr(t::AXIS, "axis"),
     ],
 );
 pub const CAPSULE_1: TableAdapter = shape(
     p::CAPSULE,
     &[
-        Member::Attr(t::HEIGHT, "height"),
-        Member::Attr(t::RADIUS_TOP, "radiusTop"),
-        Member::Attr(t::RADIUS_BOTTOM, "radiusBottom"),
         Member::Attr(t::AXIS, "axis"),
+        Member::Attr(t::HEIGHT, "height"),
+        Member::Attr(t::RADIUS_BOTTOM, "radiusBottom"),
+        Member::Attr(t::RADIUS_TOP, "radiusTop"),
     ],
 );
 pub const PLANE: TableAdapter = shape(
     p::PLANE,
     &[
-        Member::Attr(t::DOUBLE_SIDED, "doubleSided"),
         Member::Attr(t::AXIS, "axis"),
+        Member::Attr(t::DOUBLE_SIDED, "doubleSided"),
         Member::Attr(t::LENGTH, "length"),
         Member::Attr(t::WIDTH, "width"),
     ],
