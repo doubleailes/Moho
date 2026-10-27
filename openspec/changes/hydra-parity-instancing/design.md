@@ -188,3 +188,16 @@ still needs it.
 Lands after `hydra-parity-stage`, on its own Moho rev. Consumers update
 their instancing import: `instancedBy`, `mask`, instance-rate primvars,
 new prototype paths.
+
+## Deviations recorded while implementing
+
+- **Merging, brought forward from `hydra-parity-chain`.** Both
+  propagations insert inputs into a `MergingSceneIndex` on edits (a new
+  prototype target, a new native instancer). Moho's merging notified every
+  strict ancestor of a new root added, resyncing `/world` and the like on
+  each insertion. It now adds only the prefixes from the first one that has
+  no prim, as `HdMergingSceneIndex::_AddStrictPrefixesOfSceneRoots`, skips
+  notice computation while unobserved, and finds inputs through a path
+  table once it has five or more, as Hydra does. Its other notice
+  differences (filtering by root, defined prims only, the root not always
+  added) stay for `hydra-parity-chain`.
