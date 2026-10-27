@@ -10,12 +10,12 @@
 
 ## 2. Point instancer propagation
 
-- [ ] 2.1 Rewrite `filter/point_instancing.rs` as Hydra's propagation (design D1): the whole-stage pass, then per instancer and target a re-rooting `P → P`, a `PiPrototype` pass, a re-rooting to `P/ForInstancer<hash>` and a nested propagation, merged
-- [ ] 2.2 `PiPrototype` pass: copy root overlay `xform/resetXformStack = true`, underlay `visibility/visibility = true`; `instancedBy` underlay on every copy prim; prims under nested instancers and overs unrenderable (empty type unless `material`, `niPrototypePath` blocked, `applyDrawMode` false)
-- [ ] 2.3 `ForInstancer<hash>` from `TfHash::Combine(instancer path in the prototype's input namespace, enclosing copy root)`, printed `%zx`; the instancer's `instancerTopology/prototypes` overridden to the copies
-- [ ] 2.4 `__usdPrimInfo/piPropagatedPrototypes/ForInstancer<hash>` on each original prototype, dirtied as copies come and go
+- [x] 2.1 Rewrite `filter/point_instancing.rs` as Hydra's propagation (design D1): the whole-stage pass, then per instancer and target a re-rooting `P → P`, a `PiPrototype` pass, a re-rooting to `P/ForInstancer<hash>` and a nested propagation, merged
+- [x] 2.2 `PiPrototype` pass: copy root overlay `xform/resetXformStack = true`, underlay `visibility/visibility = true`; `instancedBy` underlay on every copy prim; prims under nested instancers and overs unrenderable (empty type unless `material`, `niPrototypePath` blocked, `applyDrawMode` false)
+- [x] 2.3 `ForInstancer<hash>` from `TfHash::Combine(instancer path in the prototype's input namespace, enclosing copy root)`, printed `%zx`; the instancer's `instancerTopology/prototypes` overridden to the copies
+- [x] 2.4 `__usdPrimInfo/piPropagatedPrototypes/ForInstancer<hash>` on each original prototype, dirtied as copies come and go
 - [x] 2.5 Point instancer topology (`stage/point_instancer.rs`): prune fully inactive prototypes and their `instanceIndices` entries; keep inactive instances in `instanceIndices`; mask false for inactive and invisible ids
-- [ ] 2.6 Delete M12: `through_instance`, `extra_children`, the scope handling and their notices
+- [x] 2.6 Delete M12: `through_instance`, `extra_children`, the scope handling and their notices
 
 ## 3. Native instancer propagation
 
