@@ -232,3 +232,20 @@ the same step. No rollback beyond reverting the rev.
 - `HdDependencyForwardingSceneIndex` is renderer-side (an `hdSt` plugin, not
   the render index), so `__dependencies` dirty nothing unless a consumer
   appends it (`hydra-parity-chain`).
+
+## Deviations recorded while implementing
+
+- **D4, native instancing under an `over`.** Native instancing still runs
+  before point instancing in this change (`chain::standard`), so it cannot
+  see the block the point instancing pass puts on `niPrototypePath`. It
+  stops its walk at an `over` itself, which aggregates exactly what the
+  block would leave (nothing strictly under an `over`). Instances under a
+  point instancer keep today's handling until `hydra-parity-instancing`
+  puts point instancing first. A blocked `niPrototypePath` reads as absent,
+  so an instance whose path an upstream filter blocks is not aggregated
+  either.
+- **D4, instancers found by the whole-stage pass.** As UsdImaging's
+  `_InstancerObserver::_Populate`, which finds instancers by type on the
+  pass's output and skips their descendants, the point instancing filter
+  propagates an instancer strictly under another instancer or an `over`
+  only through the copies holding it, not at its own path.
