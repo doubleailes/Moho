@@ -6,10 +6,12 @@
 //! the member is absent.
 
 use openusd::gf;
-use openusd::sdf::Value;
+use openusd::sdf::{self, Value};
 use openusd::tf::Token;
 
+use crate::data_source::retained::{container, value};
 use crate::data_source::{ContainerHandle, DataSource, SampledHandle};
+use crate::locator::Locator;
 use crate::tokens;
 
 /// The data source named `name` in `container`.
@@ -359,5 +361,134 @@ impl ExtentSchema {
             Value::Vec3d(v) => Some(v),
             _ => None,
         }
+    }
+}
+
+/// A locator as a value: its elements, outermost first, as a
+/// `Value::TokenVec`.
+///
+/// Hydra types a locator-valued field (`HdDependencySchema`'s) as
+/// `HdTypedSampledDataSource<HdDataSourceLocator>`. openusd's `sdf::Value`
+/// has no locator variant, so Moho carries a locator as its elements, as it
+/// carries a single path as a one-element `PathVec`.
+pub fn locator_value(locator: &Locator) -> Value {
+    Value::TokenVec(locator.elements().to_vec())
+}
+
+/// The locator a value holds (see [`locator_value`]).
+pub fn as_locator(value: Value) -> Option<Locator> {
+    match value {
+        Value::TokenVec(elements) => Some(Locator::new(elements)),
+        _ => None,
+    }
+}
+
+/// `HdDependencySchema`: one declared dependency. When the depended-on prim
+/// is dirtied at a locator intersecting the depended-on locator, the
+/// declaring prim is dirty at the affected locator.
+pub struct DependencySchema(ContainerHandle);
+
+impl DependencySchema {
+    /// A dependency as a data source (`HdDependencySchema::Builder`). The
+    /// depended-on prim is the declaring prim itself when `None` (Hydra's
+    /// empty path).
+    pub fn build(
+        depended_on_prim_path: Option<&sdf::Path>,
+        depended_on: &Locator,
+        affected: &Locator,
+    ) -> DataSource {
+        let mut entries: Vec<(&str, DataSource)> = Vec::with_capacity(3);
+        if let Some(path) = depended_on_prim_path {
+            entries.push((
+                tokens::dependencies::DEPENDED_ON_PRIM_PATH,
+                value(Value::PathVec(vec![path.clone()])),
+            ));
+        }
+        entries.push((
+            tokens::dependencies::DEPENDED_ON_DATA_SOURCE_LOCATOR,
+            value(locator_value(depended_on)),
+        ));
+        entries.push((
+            tokens::dependencies::AFFECTED_DATA_SOURCE_LOCATOR,
+            value(locator_value(affected)),
+        ));
+        container(entries)
+    }
+
+    /// The depended-on prim, `None` for the declaring prim itself.
+    pub fn depended_on_prim_path(&self) -> Option<sdf::Path> {
+        match member_value(&self.0, tokens::dependencies::DEPENDED_ON_PRIM_PATH)? {
+            Value::PathVec(paths) => paths.into_iter().next(),
+            _ => None,
+        }
+    }
+
+    /// The depended-on locator (the empty locator when absent, as Hydra
+    /// reads it).
+    pub fn depended_on_data_source_locator(&self) -> Option<Locator> {
+        member_value(&self.0, tokens::dependencies::DEPENDED_ON_DATA_SOURCE_LOCATOR).and_then(as_locator)
+    }
+
+    /// The affected locator on the declaring prim.
+    pub fn affected_data_source_locator(&self) -> Option<Locator> {
+        member_value(&self.0, tokens::dependencies::AFFECTED_DATA_SOURCE_LOCATOR).and_then(as_locator)
+    }
+}
+
+/// `HdDependenciesSchema` (`__dependencies`): a prim's dependencies by name.
+pub struct DependenciesSchema(ContainerHandle);
+
+impl DependenciesSchema {
+    /// The `__dependencies` of a prim's container.
+    pub fn get(prim: &ContainerHandle) -> Option<Self> {
+        member_container(prim, tokens::dependencies::DEPENDENCIES).map(Self)
+    }
+
+    /// Each named dependency that is a container, in name order of the
+    /// container (`GetEntries`).
+    pub fn entries(&self) -> Vec<(Token, DependencySchema)> {
+        self.0
+            .names()
+            .into_iter()
+            .filter_map(|name| {
+                let entry = member_container(&self.0, name.as_str())?;
+                Some((name, DependencySchema(entry)))
+            })
+            .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::data_source::retained::RetainedContainer;
+
+    #[test]
+    fn a_self_dependency_round_trips() {
+        let dependency = DependencySchema::build(
+            None,
+            &Locator::parse("__usdRenderSettings/camera"),
+            &Locator::parse("renderSettings/camera"),
+        );
+        let prim = RetainedContainer::new([(
+            tokens::dependencies::DEPENDENCIES,
+            container([("cam", dependency)]),
+        )])
+        .into_handle();
+        let entries = DependenciesSchema::get(&prim)
+            .map(|d| d.entries())
+            .unwrap_or_default();
+        assert_eq!(entries.len(), 1);
+        let (name, entry) = &entries[0];
+        assert_eq!(name, "cam");
+        assert_eq!(entry.depended_on_prim_path(), None);
+        assert_eq!(
+            entry.depended_on_data_source_locator(),
+            Some(Locator::parse("__usdRenderSettings/camera"))
+        );
+        assert_eq!(
+            entry.affected_data_source_locator(),
+            Some(Locator::parse("renderSettings/camera"))
+        );
     }
 }
