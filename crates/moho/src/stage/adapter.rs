@@ -103,6 +103,10 @@ impl AdapterRegistry {
         );
         registry.set_type("Mesh", Rc::new(crate::stage::mesh::MeshAdapter));
         registry.set_type("Camera", Rc::new(crate::stage::camera::CameraAdapter));
+        registry.set_type(
+            "GeomSubset",
+            Rc::new(crate::stage::geom_subset::GeomSubsetAdapter),
+        );
         registry.set_type("Volume", Rc::new(crate::stage::volume::VolumeAdapter));
         registry.set_type("RenderSettings", Rc::new(crate::stage::render::SETTINGS));
         registry.set_type("RenderProduct", Rc::new(crate::stage::render::PRODUCT));
@@ -194,6 +198,7 @@ const USD_TO_HYDRA_TYPES: &[(&str, &str)] = &[
     ("Capsule_1", prim_type::CAPSULE),
     ("Plane", prim_type::PLANE),
     ("Camera", prim_type::CAMERA),
+    ("GeomSubset", prim_type::GEOM_SUBSET),
     ("Material", prim_type::MATERIAL),
     ("SphereLight", prim_type::SPHERE_LIGHT),
     ("RectLight", prim_type::RECT_LIGHT),

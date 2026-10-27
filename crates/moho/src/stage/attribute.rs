@@ -115,6 +115,16 @@ impl MappedAttributeValue {
         if attribute.might_be_time_varying().unwrap_or(false) {
             ctx.globals.flag_time_varying(&ctx.path, locator);
         }
+        Self::unflagged(attribute, ctx, map)
+    }
+
+    /// The value of `attribute` mapped by `map`, never flagged time-varying
+    /// (UsdImaging's attribute data source built without a locator).
+    pub fn unflagged(
+        attribute: Attribute,
+        ctx: &PrimContext,
+        map: impl Fn(Value) -> Option<Value> + 'static,
+    ) -> DataSource {
         DataSource::Sampled(Rc::new(Self {
             inner: AttributeValue {
                 attribute,

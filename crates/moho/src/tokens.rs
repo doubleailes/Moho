@@ -11,6 +11,7 @@ pub mod prim_type {
     pub const CYLINDER: &str = "cylinder";
     pub const CAPSULE: &str = "capsule";
     pub const PLANE: &str = "plane";
+    pub const GEOM_SUBSET: &str = "geomSubset";
     pub const CAMERA: &str = "camera";
     pub const MATERIAL: &str = "material";
     pub const LIGHT: &str = "light";
@@ -164,6 +165,15 @@ pub mod curves {
     pub const ORDER: &str = "order";
     pub const KNOTS: &str = "knots";
     pub const RANGES: &str = "ranges";
+}
+
+/// `HdGeomSubsetSchema`.
+pub mod geom_subset {
+    pub const GEOM_SUBSET: &str = "geomSubset";
+    pub const TYPE: &str = "type";
+    pub const INDICES: &str = "indices";
+    pub const TYPE_FACE_SET: &str = "typeFaceSet";
+    pub const TYPE_POINT_SET: &str = "typePointSet";
 }
 
 /// The implicit shape schemas (`HdSphereSchema`, `HdCubeSchema`, ...): each
