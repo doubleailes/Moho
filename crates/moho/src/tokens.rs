@@ -250,8 +250,7 @@ pub mod prim_origin {
     pub const SCENE_PATH: &str = "scenePath";
 }
 
-/// `UsdImagingUsdPrimInfoSchema` (`__usdPrimInfo`), plus Moho's stable
-/// prototype identity.
+/// `UsdImagingUsdPrimInfoSchema` (`__usdPrimInfo`).
 pub mod usd_prim_info {
     pub const USD_PRIM_INFO: &str = "__usdPrimInfo";
     pub const SPECIFIER: &str = "specifier";
@@ -259,13 +258,17 @@ pub mod usd_prim_info {
     pub const IS_LOADED: &str = "isLoaded";
     pub const API_SCHEMAS: &str = "apiSchemas";
     pub const KIND: &str = "kind";
+    pub const VARIANT_SELECTIONS: &str = "variantSelections";
     pub const DEF: &str = "def";
     pub const OVER: &str = "over";
     pub const CLASS: &str = "class";
     pub const NI_PROTOTYPE_PATH: &str = "niPrototypePath";
     pub const IS_NI_PROTOTYPE: &str = "isNiPrototype";
-    /// The stable identity of the prototype an instance shares (Moho).
-    pub const NI_PROTOTYPE_IDENTITY: &str = "niPrototypeIdentity";
+    /// The stable identity of the prototype an instance shares: not a
+    /// field of the schema, and not named by `__usdPrimInfo`, but answered
+    /// for the native-instancing filter's grouping until
+    /// `hydra-parity-instancing` removes it.
+    pub(crate) const NI_PROTOTYPE_IDENTITY: &str = "niPrototypeIdentity";
 }
 
 /// `HdInstancerTopologySchema`, `HdInstanceSchema`, `HdInstancedBySchema` and

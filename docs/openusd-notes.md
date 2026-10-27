@@ -286,10 +286,11 @@ Read at `d7d2a29`.
   an empty one; the empty evaluator matches nothing. `match_path(&path,
   &|path| -> D) -> PredResult` calls the domain function only when a
   predicate needs it.
-- `Prim::variant_selections() -> Result<Vec<(String, String)>>`: the
-  composed authored selections, sorted by set name (C++
-  `PcpPrimIndex::ComposeAuthoredVariantSelections`, which
-  `UsdVariantSets::GetAllVariantSelections` returns).
+- `Prim::variant_sets().selections() -> Result<Vec<(String, String)>>`
+  (C++ `UsdVariantSets::GetAllVariantSelections`, which UsdImaging's prim
+  info reads): the selections composed onto the prim, sorted by set name,
+  read from the masked stage. (`Prim::prim_index().variant_selections()`
+  answers the same from the prim index.)
 - `openusd_schemas::geom::stage_up_axis(&Stage) -> Result<UpAxis>`: the
   authored `upAxis`, else the registry's fallback (`Y`); an authored token
   other than `Y` or `Z` is an error, where C++ returns the token.
