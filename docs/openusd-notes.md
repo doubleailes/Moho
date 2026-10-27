@@ -268,6 +268,40 @@ the root edit target (`crates/moho-spike/tests/probe.rs` asserts all of it):
 - `Attribute::might_be_time_varying() -> Result<bool>`, also exposed as
   `__usdAttributes/<name>/mightBeTimeVarying`.
 
+## Hydra parity (`hydra-parity-stage`)
+
+Read at `d7d2a29`.
+
+- `sdf::path_expr::PredicateLibrary::<D>::new().define(name, binder)`
+  (`predicate.rs`): `binder: Fn(&[FnArg]) -> Option<PredicateFn<D>>`, where
+  `PredicateFn<D> = Rc<dyn Fn(&D) -> PredResult>`. Returning `None` fails
+  the link ("invalid arguments"); an unknown name fails it too. There are no
+  typed parameters or defaults (C++ `Define` with `NamesAndDefaults`): each
+  binder reads `FnArg { name: Option<String>, value: PredicateArg }`
+  (`Bool`, `Int`, `Float`, `String`) and supplies its defaults itself.
+  `PredResult { value, constant }`, `PredResult::varying(bool)`,
+  `constant(bool)`.
+- `PathExpressionEval::<D>::build(&expr, &library) -> Result<_, EvalError>`
+  requires a complete expression (references resolved, paths absolute) or
+  an empty one; the empty evaluator matches nothing. `match_path(&path,
+  &|path| -> D) -> PredResult` calls the domain function only when a
+  predicate needs it.
+- `Prim::variant_selections() -> Result<Vec<(String, String)>>`: the
+  composed authored selections, sorted by set name (C++
+  `PcpPrimIndex::ComposeAuthoredVariantSelections`, which
+  `UsdVariantSets::GetAllVariantSelections` returns).
+- `openusd_schemas::geom::stage_up_axis(&Stage) -> Result<UpAxis>`: the
+  authored `upAxis`, else the registry's fallback (`Y`); an authored token
+  other than `Y` or `Z` is an error, where C++ returns the token.
+  `UpAxis::as_token()`.
+- `Prim::specifier() -> Result<Option<sdf::Specifier>>` (composed:
+  `Def`, `Over`, `Class`).
+- `PrimPredicate::new(required, rejected)` (`stage.rs`): status bits
+  `ACTIVE`, `LOADED`, `DEFINED`, `ABSTRACT`; the walk stops at instances
+  unless `with_instance_proxies(true)`. UsdImaging's predicate is
+  `new(ACTIVE | LOADED, ABSTRACT)`, or `new(ACTIVE, ABSTRACT)` with unloaded
+  prims included: `DEFINED` is not required, so `over`s are visited.
+
 ## Gaps
 
 - Splines (`Ts`): a `.spline` block only round-trips as a dictionary. There
@@ -300,6 +334,9 @@ the root edit target (`crates/moho-spike/tests/probe.rs` asserts all of it):
 - `CommittedChange::changed_info_only` names the paths, not the fields that
   changed on them (C++ `GetChangedFields`). A prim's info-only change is
   taken as a possible `kind` change (`stage/mod.rs`).
+- `sdf::Value` has no single-path variant (C++ `VtValue` of `SdfPath`):
+  Hydra's single `SdfPath` fields are one-element `Value::PathVec`s, absent
+  when Hydra's path would be empty (`data_source.rs`).
 - No `SdfPath::MakeRelativePath`: the prim origin's prototype-relative scene
   path (`stage/prim_origin.rs`) is built from the path's text, parsed back
   with `sdf::Path::new`, which accepts relative paths and `.`.

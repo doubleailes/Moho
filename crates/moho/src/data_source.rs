@@ -4,6 +4,17 @@
 //! Handles are `Rc`: a scene index and its data sources stay on the thread
 //! that owns the index. The values they hand out are openusd values, which
 //! can cross threads.
+//!
+//! # Path values
+//!
+//! openusd's `sdf::Value` has no single-path variant, only `PathVec`. A
+//! Hydra field typed as one `SdfPath` (`materialBindings/<purpose>/path`,
+//! `instance/instancer`, `__usdPrimInfo/niPrototypePath`,
+//! `sceneGlobals/activeRenderSettingsPrim`, ...) is therefore a
+//! one-element `Value::PathVec`, and the field is absent where Hydra's path
+//! would be empty. A field Hydra types as a path array is a `PathVec` of any
+//! length. Workaround, an upstream candidate in `ROADMAP.md`: a
+//! `Value::Path` in openusd would let the two be told apart.
 
 use std::rc::Rc;
 
