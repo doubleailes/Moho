@@ -266,10 +266,12 @@ fn each_family_edit_dirties_its_locators() {
             locators.iter().any(|l| l == *locator),
             "{path}.{attribute}: {locators:?}"
         );
+        // A light's input also dirties its `material` network.
+        let also = if *locator == "light" { "material" } else { *locator };
         assert!(
             locators
                 .iter()
-                .all(|l| l == *locator || l.starts_with("__usdAttributes")),
+                .all(|l| l == *locator || l == also || l.starts_with("__usdAttributes")),
             "{path}.{attribute} dirtied more than {locator}: {locators:?}"
         );
     }
