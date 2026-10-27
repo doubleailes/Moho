@@ -2,7 +2,9 @@
 //! apertures and focal length scaled from tenths of a scene unit to scene
 //! units (`GfCamera::APERTURE_UNIT`, `FOCAL_LENGTH_UNIT`), `shutter:*` and
 //! `exposure:*` renamed, clipping planes as doubles, and
-//! `linearExposureScale` computed as `UsdGeomCamera` does.
+//! `linearExposureScale` computed as `UsdGeomCamera` does. As UsdImaging's,
+//! `camera` lists the USD attribute names and answers both those and the
+//! Hydra names.
 
 use std::rc::Rc;
 
@@ -31,6 +33,7 @@ const MEMBERS: &[(&str, &str)] = &[
     ("clippingPlanes", "clippingPlanes"),
     ("fStop", "fStop"),
     ("focusDistance", "focusDistance"),
+    ("stereoRole", "stereoRole"),
     ("shutterOpen", "shutter:open"),
     ("shutterClose", "shutter:close"),
     ("exposure", "exposure"),
@@ -38,6 +41,30 @@ const MEMBERS: &[(&str, &str)] = &[
     ("exposureIso", "exposure:iso"),
     ("exposureFStop", "exposure:fStop"),
     ("exposureResponsivity", "exposure:responsivity"),
+];
+
+/// `UsdGeomCamera::GetSchemaAttributeNames(false)`: the names `camera`
+/// lists, USD's own (`shutter:open`, not `shutterOpen`), as UsdImaging's
+/// camera data source does.
+const USD_NAMES: &[&str] = &[
+    "projection",
+    "horizontalAperture",
+    "verticalAperture",
+    "horizontalApertureOffset",
+    "verticalApertureOffset",
+    "focalLength",
+    "clippingRange",
+    "clippingPlanes",
+    "fStop",
+    "focusDistance",
+    "stereoRole",
+    "shutter:open",
+    "shutter:close",
+    "exposure",
+    "exposure:iso",
+    "exposure:time",
+    "exposure:fStop",
+    "exposure:responsivity",
 ];
 
 /// The attributes `linearExposureScale` reads.
@@ -93,9 +120,14 @@ impl Adapter for CameraAdapter {
 
     fn invalidate(&self, _ctx: &PrimContext, name: &str) -> LocatorSet {
         let mut locators = LocatorSet::new();
-        if let Some((member, _)) = MEMBERS.iter().find(|(_, usd)| *usd == name) {
-            locators.insert(Locator::new([t::CAMERA, member]));
+        if !USD_NAMES.contains(&name) {
+            return locators;
         }
+        let member = MEMBERS
+            .iter()
+            .find(|(_, usd)| *usd == name)
+            .map_or(name, |(member, _)| member);
+        locators.insert(Locator::new([t::CAMERA, member]));
         if EXPOSURE.contains(&name) {
             locators.insert(Locator::new([t::CAMERA, t::LINEAR_EXPOSURE_SCALE]));
         }
@@ -106,10 +138,11 @@ impl Adapter for CameraAdapter {
 struct CameraData(PrimContext);
 
 impl Container for CameraData {
+    /// USD's attribute names, as UsdImaging lists them (its quirk: `get`
+    /// answers the Hydra names, `shutterOpen` and `linearExposureScale`
+    /// among them, and any attribute of the prim by its USD name).
     fn names(&self) -> Vec<Token> {
-        let mut names: Vec<Token> = MEMBERS.iter().map(|(m, _)| Token::from(*m)).collect();
-        names.push(Token::from(t::LINEAR_EXPOSURE_SCALE));
-        names
+        USD_NAMES.iter().map(|n| Token::from(*n)).collect()
     }
 
     fn get(&self, name: &Token) -> Option<DataSource> {
@@ -128,9 +161,17 @@ impl Container for CameraData {
                 globals: self.0.globals.clone(),
             })));
         }
-        let (member, usd) = MEMBERS.iter().find(|(m, _)| *m == name.as_str())?;
-        let attribute = prim.attribute(*usd);
-        let source = match *member {
+        // The Hydra names that differ from USD's map to the attribute; any
+        // other name is an attribute of the prim.
+        let usd = MEMBERS
+            .iter()
+            .find(|(m, _)| *m == name.as_str())
+            .map_or(name.as_str(), |(_, usd)| usd);
+        let attribute = prim.attribute(usd);
+        if !attribute.is_defined().unwrap_or(false) {
+            return None;
+        }
+        let source = match name.as_str() {
             "horizontalAperture"
             | "verticalAperture"
             | "horizontalApertureOffset"
