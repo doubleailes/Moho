@@ -93,7 +93,21 @@ fn a_direct_binding() {
         .as_container()
         .unwrap()
         .names();
-    assert_eq!(purposes, [Token::from(""), Token::from("preview")]);
+    // As UsdImaging: every material purpose is named, `full` with nothing
+    // bound; a level names both kinds of binding.
+    assert_eq!(
+        purposes,
+        [Token::from(""), Token::from("preview"), Token::from("full")]
+    );
+    assert!(read(&data, "usdMaterialBindings/full").is_none());
+    assert_eq!(
+        all.names(),
+        [
+            Token::from("directMaterialBinding"),
+            Token::from("collectionMaterialBindings")
+        ]
+    );
+    assert!(read(&all, "collectionMaterialBindings").is_none());
 }
 
 #[test]
