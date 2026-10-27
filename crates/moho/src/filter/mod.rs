@@ -26,3 +26,4 @@ pub mod render_settings;
 pub mod rerooting;
 
 pub use render_settings::RenderSettingsFlatteningSceneIndex;
+pub use rerooting::RerootingSceneIndex;
