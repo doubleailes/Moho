@@ -81,6 +81,101 @@ fn prim_info_names_the_usd_prim() {
         None,
         "kind only when authored"
     );
+    let names = |path: &str| {
+        index
+            .prim(&p(path))
+            .data
+            .unwrap()
+            .get(&Token::from("__usdPrimInfo"))
+            .unwrap()
+            .as_container()
+            .unwrap()
+            .names()
+    };
+    assert_eq!(
+        names("/world/still"),
+        ["specifier", "typeName", "isLoaded"].map(Token::from),
+        "no apiSchemas, kind or variantSelections when there are none"
+    );
+    assert!(names("/world").contains(&Token::from("kind")));
+}
+
+const VARIANTS: &str = r#"#usda 1.0
+def Xform "asset" (
+    variantSets = ["lod", "look"]
+    variants = {
+        string lod = "high"
+    }
+)
+{
+    variantSet "lod" = {
+        "high" {
+        }
+        "low" {
+        }
+    }
+}
+def Xform "instance" (
+    instanceable = true
+    references = </asset>
+)
+{
+}
+"#;
+
+#[test]
+fn variant_selections() {
+    let (_dir, usd) = stage(VARIANTS);
+    let index = StageSceneIndex::new();
+    index.set_stage(usd);
+    assert_eq!(
+        read(&index, "/asset", &["__usdPrimInfo", "variantSelections", "lod"]),
+        token("high")
+    );
+    assert_eq!(
+        read(&index, "/asset", &["__usdPrimInfo", "variantSelections", "look"]),
+        None,
+        "a set with no selection is not listed"
+    );
+}
+
+#[test]
+fn a_native_instance_names_its_prototype_only() {
+    let (_dir, usd) = stage(VARIANTS);
+    let index = StageSceneIndex::new();
+    index.set_stage(usd);
+    let Some(Value::PathVec(prototype)) = info(&index, "/instance", "niPrototypePath") else {
+        panic!()
+    };
+    assert_eq!(prototype.len(), 1);
+    assert!(
+        prototype[0].as_str().starts_with("/__Prototype_"),
+        "{prototype:?}"
+    );
+    let names = index
+        .prim(&p("/instance"))
+        .data
+        .unwrap()
+        .get(&Token::from("__usdPrimInfo"))
+        .unwrap()
+        .as_container()
+        .unwrap()
+        .names();
+    let schema = [
+        "specifier",
+        "typeName",
+        "isLoaded",
+        "apiSchemas",
+        "kind",
+        "variantSelections",
+        "niPrototypePath",
+        "isNiPrototype",
+    ];
+    assert!(names.iter().all(|n| schema.contains(&n.as_str())), "{names:?}");
+    assert_eq!(
+        info(&index, prototype[0].as_str(), "isNiPrototype"),
+        Some(Value::Bool(true))
+    );
 }
 
 #[test]
