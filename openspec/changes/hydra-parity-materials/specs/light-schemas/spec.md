@@ -6,7 +6,7 @@
 `rectLight`, `diskLight`, `cylinderLight`, `distantLight` and `domeLight`.
 A prim with `LightAPI` applied and no light type of its own SHALL have type
 `light`. Each SHALL expose, as UsdImaging's light API adapter does:
-- `light`, listing `filters` (the light's forwarded filter targets), `isLight` (true) and `materialSyncMode`, and answering any other name as `UsdImagingPrimAdapter::LookupLightParamAttribute` does: Hydra's light tokens (`intensity`, `exposure`, `color`, `normalize`, `diffuse`, `specular`, `enableColorTemperature`, `colorTemperature`, `radius`, `width`, `height`, `length`, `angle`, `texture:file`, `texture:format`, the `shaping:*` and `shadow:*` tokens) read their `inputs:` attribute, and any other name reads the attribute of that name;
+- `light`, listing `filters` (the light's forwarded filter targets), `isLight` (true) and `materialSyncMode` (a dome light also `portals`, its forwarded portal targets, and a `DomeLight_1` first `domeOffset`, the rotation aligning it with its `poleAxis`), and answering any other name as `UsdImagingPrimAdapter::LookupLightParamAttribute` does: Hydra's light tokens (`intensity`, `exposure`, `color`, `normalize`, `diffuse`, `specular`, `enableColorTemperature`, `colorTemperature`, `radius`, `width`, `height`, `length`, `angle`, `texture:file`, `texture:format`, the `shaping:*` and `shadow:*` tokens) read their `inputs:` attribute, and any other name reads the attribute of that name;
 - `material`, a network for the contexts `""`, `__all` and each context a `<context>:light:shaderId` attribute names: one node, keyed by the light prim's absolute path, with the light's shader identifier for that context as `nodeIdentifier`, its `renderContextNodeIdentifiers`, and its inputs as `parameters`; and the terminal `light` naming that node.
 
 #### Scenario: A sphere light
@@ -19,7 +19,9 @@ A prim with `LightAPI` applied and no light type of its own SHALL have type
 
 ### Requirement: Light parameters dirty the light
 A change to a light's `inputs:*` SHALL dirty that light's `light` and
-`material`; a change to its `light:*` attributes SHALL dirty `light`.
+`material`; a change to its `light:*` attributes SHALL dirty `light`; a
+change to a dome light's `portals`, or a `DomeLight_1`'s `poleAxis`, SHALL
+dirty `light`.
 
 #### Scenario: Intensity edit
 - **WHEN** a light's `inputs:intensity` changes and updates are applied

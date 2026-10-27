@@ -1,7 +1,7 @@
 ## 0. Preconditions
 
 - [x] 0.1 `hydra-parity-instancing` is implemented (instance proxy path translation, flattening inside native propagation)
-- [ ] 0.2 Read at the pinned rev the openusd(-schemas) APIs for `info:implementationSource`, `info:*` attributes, `sdrMetadata`, `config:*` properties, interface input consumers, and a light's `light:shaderId`; record them in `docs/openusd-notes.md`
+- [x] 0.2 Read at the pinned rev the openusd(-schemas) APIs for `info:implementationSource`, `info:*` attributes, `sdrMetadata`, `config:*` properties, interface input consumers, and a light's `light:shaderId`; record them in `docs/openusd-notes.md`
 
 ## 1. Material binding resolution
 
@@ -26,12 +26,12 @@
 
 ## 4. Tests
 
-- [ ] 4.1 Delete: `material_resolve.rs::a_collection_edit_reresolves` and `editing_a_collection_elsewhere_reresolves` (Hydra re-resolves on no collection edit) (2)
-- [ ] 4.2 Modify: `material_resolve.rs::inherited_strong_deep_and_collection`, `equals_openusd_bound_material` (no oracle; a USD-only predicate fixture, if any, moved to a "matches nothing" case) and its `chain` helper; `material.rs` (5: context names now include `__all`; `an_input_keeps_every_connection` checked against UsdShade's walk; `a_shader_edit_dirties_its_material`, `removing_a_shader_dirties_its_material` unchanged in intent); `light.rs` (`every_light_input_equals_openusd` reads through the lookup, `a_sphere_light`, `a_domes_texture_and_pole`, `an_intensity_edit_dirties_the_light` for `material`) (about 10)
-- [ ] 4.3 Add: the strong-direct-over-weak-collection edge case; a collection with `hdType`; dirty locators replaced; no re-dirty on a collection edit; the `__all` context with a disconnected shader; `config`; `interface` mappings and order; `nodeTypeInfo` for a `sourceAsset` shader; a connection off the stage dropped; a light's `material` network and its contexts (about 10)
-- [ ] 4.4 `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`
+- [x] 4.1 Delete: `material_resolve.rs::a_collection_edit_reresolves` and `editing_a_collection_elsewhere_reresolves` (Hydra re-resolves on no collection edit) (2)
+- [x] 4.2 Modify: `material_resolve.rs::inherited_strong_deep_and_collection`, `equals_openusd_bound_material` (no oracle; a USD-only predicate fixture, if any, moved to a "matches nothing" case) and its `chain` helper; `material.rs` (5: context names now include `__all`; `an_input_keeps_every_connection` checked against UsdShade's walk; `a_shader_edit_dirties_its_material`, `removing_a_shader_dirties_its_material` unchanged in intent); `light.rs` (`every_light_input_equals_openusd` reads through the lookup, `a_sphere_light`, `a_domes_texture_and_pole`, `an_intensity_edit_dirties_the_light` for `material`) (about 10)
+- [x] 4.3 Add: the strong-direct-over-weak-collection edge case; a collection with `hdType`; dirty locators replaced; no re-dirty on a collection edit; the `__all` context with a disconnected shader; `config`; `interface` mappings and order; `nodeTypeInfo` for a `sourceAsset` shader; a connection off the stage dropped; a light's `material` network and its contexts (about 10)
+- [x] 4.4 `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`
 
 ## 5. Docs
 
-- [ ] 5.1 `docs/architecture.md`: binding resolution over the scene index; network contexts; lights' `material`
-- [ ] 5.2 `docs/openusd-notes.md`: APIs from 0.2; gap: no shader registry (Sdr)
+- [x] 5.1 `docs/architecture.md`: binding resolution over the scene index; network contexts; lights' `material`
+- [x] 5.2 `docs/openusd-notes.md`: APIs from 0.2; gap: no shader registry (Sdr)
