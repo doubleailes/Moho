@@ -24,8 +24,10 @@ pub mod native_instancing;
 
 pub use native_instancing::NativeInstancingSceneIndex;
 pub mod point_instancing;
+pub mod prim_type_notice_batching;
 
 pub use point_instancing::PointInstancingSceneIndex;
+pub use prim_type_notice_batching::{PrimTypeNoticeBatchingSceneIndex, PrimTypePriority};
 pub mod render_settings;
 pub mod rerooting;
 
