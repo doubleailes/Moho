@@ -248,7 +248,7 @@ the root edit target (`crates/moho-spike/tests/probe.rs` asserts all of it):
 - `Stage::has_authored_stage_metadata(field) -> Result<bool>`: whether the
   session or root layer authors a pseudo-root metadata field (C++
   `UsdStage::HasAuthoredMetadata`); a block counts, a fallback does not.
-  Behind `__usdStageMetadata/<field>/authored`.
+  (It was behind `__usdStageMetadata`, removed by `hydra-parity-stage`.)
 - `Stage::stage_metadata(field) -> Result<Option<sdf::Value>>`: composed
   pseudo-root metadata, falling back to a registered field's default. Read
   for `renderSettingsPrimPath`.
@@ -297,6 +297,19 @@ Read at `d7d2a29`.
   `UpAxis::as_token()`.
 - `Prim::specifier() -> Result<Option<sdf::Specifier>>` (composed:
   `Def`, `Over`, `Class`).
+- Model data: `Prim::is_model() -> Result<bool>` (C++ `UsdPrim::IsModel`);
+  `ModelAPI::from_prim_unchecked(prim).is_kind("component",
+  KindValidation::ModelHierarchy)` (C++ `UsdModelAPI::IsKind`, the default
+  validation); `Object::has_authored_metadata("assetInfo")` (C++
+  `UsdPrim::HasAssetInfo`) and `Prim::metadata::<Value>("assetInfo")`, a
+  `Value::Dictionary` read with `Dictionary::get_at(key)` (`identifier`, an
+  asset path; `name` and `version`, strings), as `UsdModelAPI`'s asset info
+  getters.
+- `Stage::stage_metadata("upAxis")` gives the raw token when
+  `stage_up_axis` refuses it.
+- `Relationship::targets()` (authored targets, unforwarded) for UsdImaging's
+  `ri:*` namespaced settings, `forwarded_targets()` for render relationships
+  (C++ `GetForwardedTargets`).
 - `PrimPredicate::new(required, rejected)` (`stage.rs`): status bits
   `ACTIVE`, `LOADED`, `DEFINED`, `ABSTRACT`; the walk stops at instances
   unless `with_instance_proxies(true)`. UsdImaging's predicate is
@@ -327,11 +340,18 @@ Read at `d7d2a29`.
   identifiers (`stage/instancing.rs`).
 - `prim_stack()` of a prototype prim is empty (C++ `GetPrimStack` returns the
   prototype's specs).
-- `CollectionEvaluator::build` is `pub(super)`: an expression can only be
-  compiled against the stage of the collection that owns it
-  (`MembershipQuery`). Light linking after a merge, whose lights and
-  receivers sit on different input stages, therefore judges expressions
-  without predicates (`PathExpressionEval` with an empty library).
+- `CollectionEvaluator::build` is `pub(super)`: a USD collection
+  expression can only be compiled against the stage of the collection that
+  owns it (`MembershipQuery`). Hydra judges collections with its own
+  predicate library over the scene index (`moho::collection`), so Moho only
+  needs it where it reads USD membership.
+- No `ArResolverContext` on a stage (C++ `UsdStage::GetPathResolverContext`):
+  the absolute root has no `system/assetResolution/resolverContext`
+  (`stage/globals.rs`).
+- No resolved-asset-path resyncs in `CommittedChange` (C++
+  `UsdNotice::ObjectsChanged::GetResolvedAssetPathsResyncedPaths`):
+  UsdImaging re-reads the asset-path-dependent data under those paths; Moho
+  cannot learn of them.
 - `CommittedChange::changed_info_only` names the paths, not the fields that
   changed on them (C++ `GetChangedFields`). UsdImaging resyncs a prim for a
   plugin field and ignores built-in ones; Moho ignores every prim-level
