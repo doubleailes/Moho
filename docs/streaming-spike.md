@@ -11,6 +11,12 @@ decides how Moho streams under the design's rule (D6).
 `apply_pending_updates`) over one stage. Streaming is built from standard
 indices: one stage index per chunk, combined under a `MergingSceneIndex`.
 
+**Since `hydra-parity-stage`, Moho does not stream.** `chain::input`,
+`chain::merged` and `streaming.rs` are gone (design D11): chunking a scene
+is the consumer's business, and a consumer reads one stage through
+`chain::standard`. (B) remains the decision for a consumer that chunks;
+strategy (D) no longer streams (see below).
+
 ## How it was measured
 
 - Harness: `crates/moho-spike`, binary `streaming-spike`, driver
@@ -86,22 +92,33 @@ primvars, curves, materials) at an older openusd. The comparison between
 strategies is what this spike decides on, and it holds either way: (A) keeps
 78% of (C)'s peak, while (B) keeps 30%.
 
-### (D): (B) read through Moho (`scene-index-gaps`, M5)
+### (D): (C) read through Moho
 
-(D) streams as (B) does, but reads through Moho: a `LoadNone` scene input
-under a `MergingSceneIndex`, each chunk a `chain::input` over its masked
-`LoadAll` stage, added, read through `chain::merged` and removed in turn.
-It reads every data source of every prim down to its leaves, generic data
-included, so it is an upper bound on what a consumer reads, not (B)'s read
-set. Its digest hashes index data; `crates/moho-spike/tests/strategy.rs`
-checks that it equals an index read of the fully loaded stage. The two agree
-when no light links across chunks: (D) reads each chunk with only that
-chunk's lights mounted (beside the scene input's), as streaming gives a
-consumer.
+Since `hydra-parity-stage` (design D12), (D) is (C) read through Moho: one
+`chain::standard` over a single `LoadAll` stage, read whole from the root,
+unchunked (`crates/moho-spike/src/strategy.rs`, `run_d`). It reads every
+data source of every prim down to its leaves, generic data included, so it
+is an upper bound on what a consumer reads, not (C)'s read set. Its digest
+hashes index data; `crates/moho-spike/tests/strategy.rs` checks that it
+equals an index read of the fully loaded stage. It measures the standard
+chain's per-prim cost against direct reading, (C), the follow-up ROADMAP.md
+records. `scripts/streaming-spike.sh --with-d` runs it.
 
-One run of (D), (A) and (B) on Moana, same machine, openusd `68a867a`, Moho
-`5574673` (`scripts/streaming-spike.sh --skip-c --with-d`; raw output in
-`streaming-spike/moana-d/`):
+#### The streamed (D) recorded before (`scene-index-gaps`, M5)
+
+The numbers below were measured by the earlier, streamed (D), which no
+longer exists: a `LoadNone` scene input under a `MergingSceneIndex`, each
+chunk a `chain::input` over its masked `LoadAll` stage, added, read through
+`chain::merged` and removed in turn, with only that chunk's lights mounted.
+They are kept as the record of that run. They are **not comparable** with
+the current (D): its memory is (C)'s whole stage, not a chunk's, and its
+chain is `chain::standard` over the whole stage, not the merged chain over
+chunks. Its digest differs too wherever light links cross chunks. A new run
+of the current (D) has not been recorded here.
+
+One run of the streamed (D), (A) and (B) on Moana, same machine, openusd
+`68a867a`, Moho `5574673` (`scripts/streaming-spike.sh --skip-c --with-d`
+at that commit; raw output in `streaming-spike/moana-d/`):
 
 | strategy | total | peak | after last chunk | digest |
 |---|---|---|---|---|
