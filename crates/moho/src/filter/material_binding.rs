@@ -7,15 +7,12 @@
 //! `strongerThanDescendants` wins; otherwise the deepest wins. On one prim, a
 //! collection binding whose collection includes the prim beats its direct
 //! binding. Membership comes from a [`CollectionMembership`] oracle (the
-//! stage scene index) when one is given, else from the collection's complete
-//! membership expression, which then supports path patterns but not
-//! predicates.
+//! stage scene index); without one, no collection binding applies.
 
 use std::cell::RefCell;
 use std::collections::{BTreeSet, HashMap};
 use std::rc::{Rc, Weak};
 
-use openusd::sdf::path_expr::{PathExpressionEval, PredicateLibrary};
 use openusd::sdf::{self, Value};
 use openusd::tf::Token;
 
@@ -117,19 +114,17 @@ impl Resolved {
                 .or_default()
                 .insert(self.path.clone());
         }
-        if let (Some(index), Some(prim), Some(name)) = (self.index.upgrade(), &collection_prim, &name)
-            && let Some(membership) = &index.membership
-            && let Some(included) = membership.includes(prim, name.as_str(), &self.path)
-        {
-            return included;
-        }
-        // Without an oracle: the complete membership expression, for path
-        // patterns (predicates need a stage, and do not compile here).
-        let Some(Value::PathExpression(expression)) = member_value(binding, t::MEMBERSHIP_EXPRESSION) else {
+        // Membership comes from the stage's oracle, until
+        // `hydra-parity-materials` judges the collection's expression over
+        // the input scene index, as UsdImaging does.
+        let (Some(index), Some(prim), Some(name)) = (self.index.upgrade(), &collection_prim, &name) else {
             return false;
         };
-        PathExpressionEval::<()>::build(&expression, &PredicateLibrary::new())
-            .map(|eval| eval.match_path(&self.path, &|_| ()).value)
+        let Some(membership) = &index.membership else {
+            return false;
+        };
+        membership
+            .includes(prim, name.as_str(), &self.path)
             .unwrap_or(false)
     }
 

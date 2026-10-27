@@ -183,9 +183,6 @@ pub mod material_bindings {
     pub const BINDING_STRENGTH: &str = "bindingStrength";
     pub const COLLECTION_PRIM_PATH: &str = "collectionPrimPath";
     pub const COLLECTION_NAME: &str = "collectionName";
-    /// The collection's complete membership expression (Moho's addition, so
-    /// a resolving filter without a stage can judge membership).
-    pub const MEMBERSHIP_EXPRESSION: &str = "membershipExpression";
     /// The resolved binding's material (`HdMaterialBindingSchema`).
     pub const PATH: &str = "path";
 
