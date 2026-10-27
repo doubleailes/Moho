@@ -1,20 +1,30 @@
 # Architecture
 
 Moho is a renderer-agnostic scene index over openusd stages, in the model of
-Hydra 2.0. It sits between the stage and the renderers: Mantle (the DCC) feeds
-it, and Crust (the path tracer) and Obsidian (the GPU viewport) consume it.
+Hydra 2.0. It sits between a stage and its renderers: whatever authors the
+stage (a DCC mirroring its edits, or nothing at all for a file a batch
+renderer opens) feeds it, and renderers consume it as a Hydra 2.0 render
+delegate consumes Hydra's terminal scene index.
 
 ```
-  openusd (core) --> Moho (scene index) --> Crust (renderer)
-        ^                ^             \--> Obsidian (viewport)
-        |                |
-       Mantle (DCC: graph, cook, session; its IPR owns a Moho index)
+  stage (openusd) --> StageSceneIndex --> chain::standard --> renderer filters
+                                                                     |
+            render delegate <-- managing observer <-- prim type batching
 ```
 
-The program that introduces Moho is planned in Mantle's OpenSpec change
-`scene-index` (`doubleailes/mantle`, archived in
-`openspec/changes/archive/2026-10-25-scene-index/`). This page records the
-decisions that bind Moho itself.
+This page records the decisions that bind Moho itself; provenance lives in
+the archived OpenSpec changes.
+
+## Principle: Hydra parity
+
+Moho is UsdImaging's and Hydra's behaviour at the reference revision, quirks
+included: the chain order, prim paths, schema and token names, data layout
+under each locator, and dirty locators. Behaviour Hydra lacks is dropped.
+The one addition is the generic attribute data (below). A renderer that
+needs a fix over Hydra ships it as a renderer filter of its own (as
+arnold-usd ships `fixInvalidationSIP` and the like); Moho does not fold it
+in. When the reference revision moves and Hydra fixes a quirk, Moho follows
+in a change of its own.
 
 ## Model (Hydra 2.0)
 
@@ -35,32 +45,71 @@ schemas:    typed accessors over containers (MeshSchema, XformSchema, ...)
 - **The index owns the time.** A sampled data source is read relative to it.
   `value(0.0)` is the value at the index's time, and a shutter offset reads
   around it for motion blur. Changing the time dirties exactly the locators
-  whose data might vary over time.
+  whose data might vary over time. As `UsdImagingStageSceneIndex`'s, a new
+  index is at time code 0 (not the stage's default time), and replacing a
+  held stage resets it to `EarliestTime`.
 - **Paths are path arrays.** openusd's `sdf::Value` has no single-path
   variant, so a Hydra field typed as one `SdfPath` (a resolved binding's
   `path`, `instance/instancer`, `__usdPrimInfo/niPrototypePath`,
-  `sceneGlobals/activeRenderSettingsPrim`) is a one-element
-  `Value::PathVec`, absent where Hydra's path would be empty. A field Hydra
-  types as a path array is a `PathVec` of any length.
+  `sceneGlobals/activeRenderSettingsPrim`, a dependency's
+  `dependedOnPrimPath`) is a one-element `Value::PathVec`, absent where
+  Hydra's path would be empty. A field Hydra types as a path array is a
+  `PathVec` of any length.
+- **Locators are token arrays.** A field Hydra types as a data source
+  locator (`__dependencies`' locators) is a `Value::TokenVec` of its
+  elements (`schema::locator_value`).
 - **The renderer decides.** Dirty locators say what changed. Whether to
   update in place is the consumer's call, and it refuses what it cannot
   prove.
 
 ## Chain
 
-`moho::chain::standard(stage_index)` builds the standard chain:
+A Hydra 2.0 renderer consumes Hydra in three steps; Moho offers each.
 
-```
-StageSceneIndex --> ExtentResolving --> PointInstancing (propagation)
-  --> NativeInstancing (propagation, flattening inside)
-  --> InstanceProxyPathTranslation (usdMaterialBindings)
-  --> MaterialBindingResolving --> RenderSettingsFlattening --> LightLinking
-```
+1. **The standard chain.** `moho::chain::standard(stage_index)` builds
+   exactly the filters `UsdImagingCreateSceneIndices` builds with
+   `addDrawModeSceneIndex = false`, `displayUnloadedPrimsWithBounds = false`,
+   no overrides callback and no UsdImaging scene index plugins, in its order:
 
-Up to material binding resolving this is `UsdImagingCreateSceneIndices`'
-order with `addDrawModeSceneIndex = false` and no overrides callback or
-plugins. `hydra-parity-chain` moves light linking out of the chain (a Hydra
-renderer appends it as a scene index plugin).
+   ```
+   StageSceneIndex --> ExtentResolving --> PointInstancing (propagation)
+     --> NativeInstancing (propagation, flattening inside)
+     --> InstanceProxyPathTranslation (usdMaterialBindings)
+     --> MaterialBindingResolving --> RenderSettingsFlattening
+   ```
+
+   It leaves out what changes nothing it exposes or notifies: the locator
+   caching scene index on `material` (a cache), the notice batching scene
+   index (a pass-through until a client enables batching) and the selection
+   scene index (nothing until something is selected). Several chains may be
+   merged (`MergingSceneIndex`), as a render index merges its inputs.
+2. **Renderer filters.** `moho::chain::renderer_filters(index, &filters)`
+   applies a consumer's `RendererFilter { phase, order, build }` list in
+   `HdSceneIndexPluginRegistry`'s order: phase, then `AtStart` before
+   `AtEnd`, then list position (Hydra's plugin id). There is no global
+   registry: the consumer knows its renderer's filters. Moho ships two, not
+   applied by default: light linking (`RendererFilter::light_linking`, phase
+   4 `AtStart`, as hdPrman and arnold-usd register it) and dependency
+   forwarding (`RendererFilter::dependency_forwarding`, phase 1000 `AtEnd`,
+   as arnold-usd does). Without light linking no prim has `categories`;
+   without dependency forwarding nothing is dirtied through `__dependencies`
+   (render settings, instance categories).
+3. **The delegate.** As hdPrman's `renderDelegate.cpp`, the delegate wraps
+   the terminal index in `PrimTypeNoticeBatchingSceneIndex`
+   (`HdsiPrimTypeNoticeBatchingSceneIndex`: notices held until `flush`,
+   consolidated, removals first, then added and dirtied entries by the
+   priority a `PrimTypePriority` gives their prim types) and observes it
+   with `moho::prim_managing::PrimManagingObserver`
+   (`HdsiPrimManagingSceneIndexObserver`: a `PrimFactory` makes a managed
+   prim per added prim, dirtied entries reach it with their locators,
+   removals release it). Its `Update` is `flush`. The chain module's docs
+   run the three steps.
+
+Update latency ranks above first-load time: an edit dirties exactly what
+Hydra dirties (a camera edit its camera at `camera/<field>` or `xform`, a
+light with trivial collections nothing but its own addition), and
+`crates/moho-spike`'s `update` benchmark times edits up to the managing
+observer (`docs/update-latency.md`).
 
 - **`StageSceneIndex`** has `UsdImagingStageSceneIndex`'s shape: built
   empty (`new`), then `set_stage`, `set_time` and `apply_pending_updates`.
@@ -150,9 +199,8 @@ renderer appends it as a scene index plugin).
   world transform, visibility, purpose, constant primvars, binding
   opinions, `model`, `geomModel` and `__usdUpAxis`. It runs inside native
   instancing, and stays a public filter.
-- **The resolving filters** turn binding opinions, light-link collections
-  and the stage's `__usdRender*` data into `materialBindings`, categories
-  and `renderSettings`.
+- **The resolving filters** turn binding opinions and the stage's
+  `__usdRender*` data into `materialBindings` and `renderSettings`.
   - Material binding resolving is `UsdImagingMaterialBindingsResolvingSceneIndex`.
     Per purpose, walking the flattened opinions from the root down, at each
     level: a matching stronger-than-descendants collection binding wins and
@@ -169,18 +217,46 @@ renderer appends it as a scene index plugin).
     Hydra tracks no such dependency. A `collection:*` edit on a prim
     applying `MaterialBindingAPI` dirties its opinions, which flattening
     carries to its descendants.
-  - Light linking still asks the stage index for collection membership,
-    through `CollectionMembership`, until `hydra-parity-chain`.
-- **`MergingSceneIndex`** combines several inputs over one namespace
-  (`add_input_scene(index, root)`, `remove_input_scene`). It lists children
-  in input order, strongest first, then the prims implied by deeper roots;
-  Hydra's gives no order.
+- **`MergingSceneIndex`** is `HdMergingSceneIndex`: several inputs over one
+  namespace (`add_input_scene(index, root)`, `remove_input_scene`), earlier
+  inputs stronger. Adding an input notifies its root and every descendant it
+  lists, defined or not (not the root's strict ancestors: Hydra's test is
+  inverted); removing one walks its prims, re-adding what another input
+  holds. Inputs' notices are forwarded without filtering by root, an added
+  entry with its merged type. A single input answers every path. Children
+  come in no promised order.
 - **Every prim carries `primOrigin/scenePath`**, Hydra's prim origin: the
   USD prim's path, relative to its prototype root inside a USD prototype.
   The instancing propagations keep it on the prims they re-root.
 - **Blocks.** `DataSource::Block` is Hydra's `HdBlockDataSource`: in an
   `Overlay` (`HdOverlayContainerDataSource`) it hides what weaker containers
   give at its name.
+
+### Renderer filters
+
+- **`LightLinkingSceneIndex`** is `HdsiLightLinkingSceneIndex` and its
+  cache. It reads lights' `lightLink` and `shadowLink` and light filters'
+  `filterLink` and `shadowLink` from `collections/<name>/membershipExpression`
+  and judges them over its input with Hydra's predicates
+  (`moho::collection`). Equal non-trivial expressions share a category id
+  `group_<n>`; a trivial one (everything, or everything but properties) has
+  the empty id and is not tracked. A light or filter that transports the
+  collection gives the id at `light/lightLink`, `light/shadowLink` or
+  `light/lightFilterLink`. Geometry no instancer instances gets
+  `categories` (absent when empty); a native instancer gets
+  `instanceCategories` per instance location and `__dependencies` on the
+  instances' `categories`; a point instancer gets `categories` judged at its
+  own path. A changed collection dirties the matches of its old and new
+  expressions at `categories` and its light at `light/<collection name>`.
+  Built over a populated input, it reads its lights first, as a first
+  population would.
+- **`DependencyForwardingSceneIndex`** is `HdDependencyForwardingSceneIndex`.
+  A prim's `__dependencies` (`HdDependenciesSchema`: `dependedOnPrimPath`,
+  `dependedOnDataSourceLocator`, `affectedDataSourceLocator`) count once the
+  prim has been read through it. A dirtied prim dirties its dependents at
+  their affected locators, transitively, each (prim, locator) once per
+  notice; a depended-on prim removed or added again dirties its dependents.
+  Tracked dependencies are answered as a block.
 
 ### The absolute root
 
@@ -218,6 +294,13 @@ namespace of its authored outputs (`""` for `outputs:surface`, `mtlx` for
   the material dirties `material`, a `config:*` edit nothing; a removed
   shader notifies nothing.
 
+Light filters (`LightFilter` and the types derived from it) are UsdImaging's
+light filter adapter: type `lightFilter`, and `material`, the filter as the
+one node, by its absolute path, feeding the terminal `lightFilter`,
+identified by `<context>:lightFilter:shaderId`. Like a material, a filter
+represents its descendants. It has no `light` of its own (light linking gives
+it one); its collections come from the collection adapter.
+
 Lights are UsdImaging's light API adapter. `light` names `filters`,
 `isLight` and `materialSyncMode` and answers any other name as
 `LookupLightParamAttribute` (Hydra's tokens read their `inputs:` attribute,
@@ -233,7 +316,11 @@ Render settings, products and vars expose UsdImaging's `__usdRenderSettings`,
 `__usdRenderProduct` and `__usdRenderVar`; a pass exposes `renderPass`. The
 render settings flattening filter gives a settings prim `renderSettings`
 with `HdRenderSettingsSchema`'s fields, its products and their vars
-flattened into `renderProducts`.
+flattened into `renderProducts`, and declares `__dependencies` as UsdImaging
+does (each flattened field on its `__usdRenderSettings` field,
+`renderSettings/renderProducts` on each product and var, `__dependencies`
+on `__usdRenderSettings/products`). It dirties nothing itself: the settings
+are dirtied through dependency forwarding.
 
 ### Generic attribute data, Moho's one addition to Hydra
 
@@ -249,16 +336,18 @@ follow Hydra's convention for private containers (`__usdPrimInfo`).
 
 ## Boundaries
 
-- Moho depends on **openusd only**. It holds no Mantle type (`CookedStage`,
-  `ChangeSet`) and no Crust or Obsidian type. Adapters live in the consumers.
-- **Moho is the stack's openusd.** Its consumers take openusd only through
+- Moho depends on **openusd only**. It holds no consumer's type. Adapters
+  (a DCC's changes to a mirror stage, a renderer's import) live in the
+  consumers.
+- **One openusd for the stack.** Consumers take openusd only through
   `moho::openusd` and `moho::openusd_schemas`, and turn openusd features on
   through Moho's (`mmap`, `serde`, and the schema families Moho does not
-  read). One pin guarantees one openusd in every build, where a `[patch]`
-  per consumer and a check used to: in OpenUSD, imaging and core ship as one
-  build, and Moho plays that role for a pure-Rust stack.
-- Moho is shaped to be offered upstream (as an `openusd-imaging` crate) once
-  its API has settled.
+  read). One pin guarantees one openusd in every build. This is a downstream
+  policy that changes no Hydra behaviour: if Moho moves into openusd's
+  workspace (as an `openusd-imaging` crate), the re-exports move to a thin
+  downstream crate, or consumers depend on openusd at the same rev.
+- Moho is shaped to be offered upstream as that crate once its API has
+  settled.
 
 ## Moho does not stream
 
