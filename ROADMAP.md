@@ -61,11 +61,6 @@ the steps that land in this repository or depend on it.
 - A rule-based collection's membership as one path expression (C++
   `UsdComputePathExpressionFromCollectionMembershipQueryRuleMap`). Moho ports
   it (`crates/moho/src/stage/collection.rs`) until openusd has it.
-- A public instancing key that is stable across stages (today
-  `pcp::instancing::InstanceKey` is crate-private and names layer stacks by
-  a stage-local id), and a non-empty `prim_stack()` for prototype prims. Moho
-  rebuilds the key from the public prim-index graph meanwhile
-  (`crates/moho/src/stage/instancing.rs`).
 - A public `CollectionEvaluator::build(stage, expression)` (today
   `pub(super)`), to judge a USD collection's expression against a stage
   without going through its `MembershipQuery`.
