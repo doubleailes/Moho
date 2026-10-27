@@ -48,45 +48,58 @@ schemas:    typed accessors over containers (MeshSchema, XformSchema, ...)
 
 ## Chain
 
-`moho::chain::standard(stage_index)` builds the standard chain, in
-`UsdImagingCreateSceneIndices`' order, with light linking last, as Hydra
-appends `HdsiLightLinkingSceneIndex` after scenes are merged:
+`moho::chain::standard(stage_index)` builds the standard chain:
 
 ```
-StageSceneIndex --> NativeInstancing --> PointInstancing --> Flattening
-  --> MaterialBindingResolving --> RenderSettingsFlattening      (chain::input)
-  --> LightLinking --> MaterialNodeResolving                     (chain::merged)
+StageSceneIndex --> ExtentResolving --> NativeInstancing --> PointInstancing
+  --> Flattening --> MaterialBindingResolving --> RenderSettingsFlattening
+  --> LightLinking
 ```
 
-`chain::input(stage_index)` is the chain without light linking, what each
-input of a streamed scene runs; `chain::merged(index)` is light linking over
-a merging index of input chains (Streaming, below).
+It is not yet `UsdImagingCreateSceneIndices`' order. The OpenSpec changes
+`hydra-parity-instancing` and `hydra-parity-chain` put point instancing
+before native instancing, run flattening inside native instancing, and move
+light linking out of the chain (a Hydra renderer appends it as a scene
+index plugin).
 
 - **`StageSceneIndex`** has `UsdImagingStageSceneIndex`'s shape: built
   empty (`new`), then `set_stage`, `set_time` and `apply_pending_updates`.
+  - It traverses with UsdImaging's predicate: active, not abstract, and
+    loaded unless unloaded prims are included. A prim need not be defined,
+    so `over`s and their descendants are prims of the index; the point
+    instancing filter makes what lies under them unrenderable.
   - It observes its stage through openusd's `StageSink`, so any author of
-    the stage (a Mantle mirror replaying `usd::Diff`s, or nothing at all for
-    a file opened by `crust render`) produces the same notices.
+    the stage (a DCC mirror replaying `usd::Diff`s, or nothing at all for a
+    file opened by a batch renderer) produces the same notices.
   - Notices are queued and become added, removed and dirtied entries only in
-    `apply_pending_updates`.
+    `apply_pending_updates`. A resynced subtree is notified added, and only
+    the prims that are not re-added are notified removed. A prim-level
+    info-only change (`kind`, stage metadata) notifies nothing, as
+    UsdImaging ignores built-in fields (openusd does not report the changed
+    fields, so the resync UsdImaging does for a plugin field is missed).
   - Per-type adapters build each prim's data and map a changed property to
-    the locators it dirties.
+    the locators it dirties, as UsdImaging's data sources and `Invalidate`.
   - Open stages with `moho::stage::stage_builder()`, which installs
     openusd-schemas' registry, so schema fallbacks and typed views work.
+- **`ExtentResolving`** gives a prim with no `extent` of its own one from
+  its `extentsHint` (purposes `geometry`, `render`, `proxy`).
 - **`NativeInstancing`** turns native instances into instancers over
-  prototypes re-rooted under `MohoNiPropagatedPrototypes`.
-  - Prototypes are named by openusd's instancing key, rebuilt with
-    stage-independent layer names, so chunks agree on them.
+  prototypes re-rooted under `MohoNiPropagatedPrototypes` (Hydra's layout
+  comes with `hydra-parity-instancing`).
 - **`PointInstancing`** re-roots a point instancer's prototypes under
-  `<prototype>/ForInstancer<hash>`.
+  `<prototype>/ForInstancer<hash>`, and, as UsdImaging's whole-stage
+  prototype pass, makes every prim strictly under an instancer or an `over`
+  unrenderable: an empty type unless it is a material,
+  `__usdPrimInfo/niPrototypePath` blocked and `geomModel/applyDrawMode`
+  false.
 - **`Flattening`** resolves inherited data: the world transform,
   visibility, purpose, constant primvars, and binding opinions.
 - **The resolving filters** turn binding opinions, light-link collections
-  and render products into `materialBindings`, categories and
-  `renderSettings`.
-  - Collection membership comes from the stage index, through
-    `CollectionMembership`. After a merge, light linking judges the lights'
-    complete membership expressions instead (path patterns, no predicates).
+  and the stage's `__usdRender*` data into `materialBindings`, categories
+  and `renderSettings`. Collection membership comes from the stage index,
+  through `CollectionMembership`, until the later changes judge collection
+  expressions over the scene index (`moho::collection`, Hydra's evaluator
+  and predicate library).
 - **`MergingSceneIndex`** combines several inputs over one namespace
   (`add_input_scene(index, root)`, `remove_input_scene`). It lists children
   in input order, strongest first, then the prims implied by deeper roots;
@@ -94,24 +107,40 @@ a merging index of input chains (Streaming, below).
 - **Every prim carries `primOrigin/scenePath`**, Hydra's prim origin: the
   USD prim's path, relative to its prototype root inside a USD prototype.
   The instancing filters keep it on the prims they re-root.
+- **Blocks.** `DataSource::Block` is Hydra's `HdBlockDataSource`: in an
+  `Overlay` (`HdOverlayContainerDataSource`) it hides what weaker containers
+  give at its name.
+
+### The absolute root
+
+The absolute root carries what `UsdImagingDataSourceStage` gives:
+`sceneGlobals` (`startTimeCode`, `endTimeCode`, `timeCodesPerSecond`, and
+`activeRenderSettingsPrim` when the stage authors a non-empty
+`renderSettingsPrimPath`) and `__usdUpAxis/upAxis`. UsdImaging's
+`system/assetResolution` is left out: openusd has no resolver context to
+give. A consumer that needs other stage metadata (`metersPerUnit`, or
+whether a field is authored) reads it from the stage it opened, through
+`moho::openusd`.
+
+### Render prims
+
+Render settings, products and vars expose UsdImaging's `__usdRenderSettings`,
+`__usdRenderProduct` and `__usdRenderVar`; a pass exposes `renderPass`. The
+render settings flattening filter gives a settings prim `renderSettings`
+with `HdRenderSettingsSchema`'s fields, its products and their vars
+flattened into `renderProducts`.
 
 ### Generic attribute data, Moho's one addition to Hydra
 
-Every prim also exposes `__usdAttributes` and `__usdRelationships`.
-Crust needs three things Hydra's schemas do not carry, so these containers
-provide them:
+Every prim also exposes `__usdAttributes` and `__usdRelationships`. They
+carry three things Hydra's schemas do not:
 - each value, and whether a layer authors it or it is a schema fallback;
 - the metadata a renderer reads (`colorSpace`, `interpolation`,
   `elementSize`);
-- every renderer attribute (`crust:*`) without a schema of its own.
+- every renderer attribute (`myRenderer:*`) without a schema of its own.
 
-The absolute root carries the same for the stage's metadata,
-`__usdStageMetadata/<field>/{value, authored}`, for the fields the scene
-globals read (time range and rates, metrics, the active render settings):
-Hydra's `sceneGlobals` gives values only.
-
-The leading underscores follow Hydra's convention for private containers
-(`__usdPrimInfo`).
+This is the only data Moho adds to UsdImaging's. The leading underscores
+follow Hydra's convention for private containers (`__usdPrimInfo`).
 
 ## Boundaries
 
@@ -126,38 +155,19 @@ The leading underscores follow Hydra's convention for private containers
 - Moho is shaped to be offered upstream (as an `openusd-imaging` crate) once
   its API has settled.
 
-## Streaming (decided in S0)
+## Moho does not stream
 
-Moho streams the way Crust does, with one population-masked `LoadAll` stage
-per chunk (Crust's `subtree_roots`, from 4 chunks up). It does so in Hydra's
-way, by composing standard indices rather than giving `StageSceneIndex` a
-streaming mode:
+Moho reads one stage, as UsdImaging does: it has no chunked inputs, no
+merged chain and no resolution of material nodes across inputs. Those
+(`streaming`, `chain::input`, `chain::merged`,
+`MaterialNodeResolvingSceneIndex`) were removed for Hydra parity: Hydra has
+no counterpart for population-masked chunk stages merged after the fact,
+and native instancing's prototype names cannot agree between chunk stages.
+Chunking a scene, and finding and loading what a chunk depends on, is the
+consumer's business; `MergingSceneIndex` stays as a general filter.
 
-- the weakest, permanent input is a `chain::input` over the scene opened
-  `LoadNone`, with `set_include_unloaded_prims(true)` so each chunk's root
-  is present: render settings, products, cameras, passes and everything
-  else outside the payloads;
-- each chunk is a `chain::input` over its own masked stage, a stronger
-  input of the same `MergingSceneIndex`, and adding or removing one adds or
-  removes that chunk's payload contents;
-- `chain::merged` puts light linking over the merging index, so a receiver
-  in one chunk gets the categories of lights in any input;
-- a prim can depend on prims no loaded input holds: a material bound from
-  inside another chunk's payload, or a network node outside the material.
-  `streaming::unresolved(index)` lists them; the consumer adds a side input
-  (a `chain::input` over a stage masked to them, payloads loaded), weaker
-  than the chunks and stronger than the scene input. A network node outside
-  the chunk's mask keeps its connection, named by its absolute path;
-  `MaterialNodeResolvingSceneIndex`, in `chain::merged`, fills it from the
-  side input's shader (`__materialNodes`, the shader's own subgraph);
-- the consumer decides when a chunk comes and goes: an offline import adds,
-  pulls and removes each in turn, and a viewport keeps what it shows.
-
-Below 4 chunks, one standard chain over one `LoadAll` stage serves the scene.
-On the S0 fixture, the merged index exposes exactly what one chain over the
-fully loaded stage does (`crates/moho/tests/streaming.rs`).
-
-Payload `load_and_unload` on a single stage was rejected. On Moana its peak
-was 2.56× the masked stages' (5.05 against 1.97 GiB), because unloading does
-not give back memory. The numbers, the notice probe and the reasoning are in
-`streaming-spike.md`.
+The S0 spike measured streaming strategies (masked stages per chunk against
+payload `load_and_unload` on one stage); its numbers and reasoning are in
+`streaming-spike.md`. Its strategy (D) now reads one standard chain over a
+`LoadAll` stage, whole: the benchmark of Moho's per-prim cost against direct
+reading.
