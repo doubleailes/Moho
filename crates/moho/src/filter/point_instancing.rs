@@ -9,6 +9,11 @@
 //! is not drawn on its own. Native instancers (which carry
 //! `instanceLocations`) are left alone.
 //!
+//! A prototype target inside a native instance (an instance proxy, which the
+//! index does not hold) is copied from the same prim in that instance's
+//! propagated prototype, to `I/ForInstancer<hash>/prototype<i>`: under the
+//! instancer, so the native instances of that prototype do not draw it.
+//!
 //! An instancer inside a prototype is re-instanced in every copy, as Hydra's
 //! propagation does: the copy of a nested instancer gets copies of its own
 //! prototypes (inside the enclosing copy), named by its output path, and a
@@ -53,6 +58,10 @@ struct Model {
     /// in the order they were found: a copy's original always lies outside
     /// the copies made after it.
     instancers: Vec<Instancer>,
+    /// Children the model adds beside the copies hosted at their originals:
+    /// an instancer's `ForInstancer<hash>` scope, and the copies of its
+    /// prototypes that are instance proxies, under that scope.
+    extra_children: std::collections::BTreeMap<sdf::Path, Vec<sdf::Path>>,
 }
 
 impl Model {
@@ -106,13 +115,23 @@ impl Model {
         out
     }
 
-    /// The copies hosted at `out` (the copy roots whose original is `out`).
+    /// The copies hosted at `out` (the copy roots whose original is `out`),
+    /// and the scope and proxy copies the model adds under it.
     fn hosted(&self, out: &sdf::Path) -> impl Iterator<Item = &sdf::Path> {
         self.instancers
             .iter()
             .flat_map(|i| i.copies.iter())
             .filter(move |(_, original)| original == out)
             .map(|(copy, _)| copy)
+            .chain(self.extra_children.get(out).into_iter().flatten())
+    }
+
+    /// Whether `out` is an instancer's `ForInstancer<hash>` scope for proxy
+    /// prototypes.
+    fn is_scope(&self, out: &sdf::Path) -> bool {
+        self.instancers
+            .iter()
+            .any(|i| self.extra_children.get(&i.path).is_some_and(|c| c.contains(out)))
     }
 
     /// Whether `out` is drawn only through an instancer: it lies under an
@@ -208,6 +227,81 @@ impl PointInstancingSceneIndex {
         }
     }
 
+    /// `out`'s data in the model's namespace (re-rooted through its copies).
+    fn data_in(&self, model: &Model, out: &sdf::Path) -> Option<ContainerHandle> {
+        let (input, maps) = self.data_at(model, out)?;
+        let data = input.data?;
+        Some(maps.iter().fold(data, |d, (from, to)| {
+            crate::filter::rerooting::rerooted(d, from, to)
+        }))
+    }
+
+    /// For a prototype target inside a native instance (an instance proxy,
+    /// which the index does not hold), the same prim in that instance's
+    /// propagated prototype: the nearest ancestor carrying `instance` names
+    /// its instancer, whose topology names the propagated prototype.
+    fn through_instance(&self, model: &Model, target: &sdf::Path) -> Option<sdf::Path> {
+        for ancestor in target.strict_ancestors_below_root() {
+            let Some(data) = self.data_in(model, &ancestor) else {
+                continue;
+            };
+            let Some(instance) = member_container(&data, t::INSTANCE) else {
+                continue;
+            };
+            let instancer = paths(instance.get(&Token::from(t::INSTANCER)).and_then(|d| d.value()))
+                .into_iter()
+                .next()?;
+            let topology = self
+                .data_in(model, &instancer)
+                .and_then(|d| member_container(&d, t::INSTANCER_TOPOLOGY))?;
+            let prototype = paths(topology.get(&Token::from(t::PROTOTYPES)).and_then(|d| d.value()))
+                .into_iter()
+                .next()?;
+            return target.replace_prefix(&ancestor, &prototype);
+        }
+        None
+    }
+
+    /// Adds `instancer` to `model`, resolving its prototypes that are
+    /// instance proxies through native instancing's propagated prototypes:
+    /// their copies go under the instancer's `ForInstancer<hash>` scope, not
+    /// under the propagated prototype (whose instances would draw them).
+    fn add_instancer(&self, model: &mut Model, mut instancer: Instancer) {
+        let mut scope_children = Vec::new();
+        let scope = instancer
+            .copies
+            .first()
+            .and_then(|(copy, _)| copy.name())
+            .and_then(|suffix| instancer.path.append_path(suffix).ok());
+        for (i, (copy, original)) in instancer.copies.iter_mut().enumerate() {
+            if self.data_in(model, original).is_some() {
+                continue;
+            }
+            let (Some(resolved), Some(scope)) = (self.through_instance(model, original), &scope) else {
+                continue;
+            };
+            let Ok(relocated) = scope.append_path(format!("prototype{i}").as_str()) else {
+                continue;
+            };
+            *copy = relocated.clone();
+            *original = resolved;
+            scope_children.push(relocated);
+        }
+        if let Some(scope) = scope.filter(|_| !scope_children.is_empty()) {
+            model
+                .extra_children
+                .entry(instancer.path.clone())
+                .or_default()
+                .push(scope.clone());
+            model
+                .extra_children
+                .entry(scope)
+                .or_default()
+                .extend(scope_children);
+        }
+        model.instancers.push(instancer);
+    }
+
     fn model(&self) -> Rc<Model> {
         if let Some(model) = self.model.borrow().as_ref() {
             return model.clone();
@@ -218,7 +312,7 @@ impl PointInstancingSceneIndex {
             if let Some(data) = self.input.prim(&path).data
                 && let Some(instancer) = instancer_at(&path, &data)
             {
-                model.instancers.push(instancer);
+                self.add_instancer(&mut model, instancer);
             }
             stack.extend(self.input.children(&path));
         }
@@ -245,7 +339,7 @@ impl PointInstancingSceneIndex {
                             crate::filter::rerooting::rerooted(d, from, to)
                         });
                         if let Some(instancer) = instancer_at(&path, &data) {
-                            model.instancers.push(instancer);
+                            self.add_instancer(&mut model, instancer);
                             continue;
                         }
                     }
@@ -319,6 +413,12 @@ impl PointInstancingSceneIndex {
 impl SceneIndex for PointInstancingSceneIndex {
     fn prim(&self, path: &sdf::Path) -> Prim {
         let model = self.model();
+        if model.is_scope(path) {
+            return Prim::new(
+                Token::default(),
+                crate::data_source::retained::RetainedContainer::default().into_handle(),
+            );
+        }
         let Some((input, maps)) = self.data_at(&model, path) else {
             return Prim::undefined();
         };

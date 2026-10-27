@@ -315,3 +315,68 @@ fn a_nested_instancer_is_reinstanced_in_every_copy() {
         )]))
     );
 }
+
+/// A point instancer whose prototype targets a prim inside a native instance
+/// (an instance proxy), as Moana's coral does (M12).
+const PROXY_PROTOTYPES: &str = r#"#usda 1.0
+def Xform "staghorn"
+{
+    def Mesh "geo"
+    {
+        int[] faceVertexCounts = [3]
+        int[] faceVertexIndices = [0, 1, 2]
+        point3f[] points = [(0, 0, 0), (1, 0, 0), (0, 1, 0)]
+    }
+}
+def Xform "world"
+{
+    def PointInstancer "coral"
+    {
+        rel prototypes = [</world/coral/Prototypes/staghorn/geo>]
+        int[] protoIndices = [0, 0, 0]
+        point3f[] positions = [(0, 0, 0), (2, 0, 0), (4, 0, 0)]
+        def Scope "Prototypes"
+        {
+            def "staghorn" (
+                instanceable = true
+                prepend references = </staghorn>
+            )
+            {
+            }
+        }
+    }
+}
+"#;
+
+#[test]
+fn a_prototype_inside_a_native_instance_is_copied_from_its_propagated_prototype() {
+    let (_dir, usd) = stage(PROXY_PROTOTYPES);
+    let stage_index = StageSceneIndex::new();
+    stage_index.set_stage(usd);
+    let chain = moho::chain::standard(stage_index);
+    let coral = p("/world/coral");
+    let Some(Value::PathVec(copies)) = read(chain.as_ref(), &coral, "instancerTopology/prototypes") else {
+        panic!()
+    };
+    assert_eq!(copies.len(), 1);
+    let copy = &copies[0];
+    assert!(
+        copy.has_prefix(&coral) && copy.as_str().contains("ForInstancer"),
+        "under the instancer, not under the propagated prototype: {copy}"
+    );
+    assert_eq!(chain.prim(copy).ty, "mesh", "the proxied mesh, not an empty prim");
+    assert_eq!(
+        read(chain.as_ref(), copy, "primvars/points/primvarValue")
+            .map(|v| matches!(v, Value::Vec3fVec(ref p) if p.len() == 3)),
+        Some(true)
+    );
+    assert_eq!(
+        read(chain.as_ref(), copy, "instancedBy/paths"),
+        Some(Value::PathVec(vec![coral.clone()]))
+    );
+    // Reachable from the instancer, through its scope.
+    let scope = copy.parent().unwrap();
+    assert!(chain.children(&coral).contains(&scope));
+    assert!(chain.children(&scope).contains(copy));
+    assert_eq!(chain.prim(&scope).ty, "");
+}
