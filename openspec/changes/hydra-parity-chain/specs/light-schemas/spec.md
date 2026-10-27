@@ -47,10 +47,12 @@ locator when its id changes.
 ### Requirement: Light filters
 A `LightFilter` prim (or a prim of a type derived from it) SHALL have type
 `lightFilter` and SHALL expose, as UsdImaging's light filter adapter does,
-its collections (`filterLink` among them), `light` answering its parameters
-by name, and `material`, a network with the terminal `lightFilter` whose
-node is the filter prim, keyed by its absolute path, with the identifier
-its `lightFilter:shaderId` gives. A light's `light/filters` SHALL name the
+its collections (`filterLink` among them) and `material`, a network with
+the terminal `lightFilter` whose node is the filter prim, keyed by its
+absolute path, with the identifier its `lightFilter:shaderId` gives (its
+parameters are that node's). It SHALL have no `light` of its own: the light
+linking filter gives it one. A light filter SHALL represent its
+descendants, as a material does. A light's `light/filters` SHALL name the
 filters it targets.
 
 #### Scenario: A light with a filter
