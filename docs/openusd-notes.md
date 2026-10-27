@@ -333,8 +333,10 @@ Read at `d7d2a29`.
   receivers sit on different input stages, therefore judges expressions
   without predicates (`PathExpressionEval` with an empty library).
 - `CommittedChange::changed_info_only` names the paths, not the fields that
-  changed on them (C++ `GetChangedFields`). A prim's info-only change is
-  taken as a possible `kind` change (`stage/mod.rs`).
+  changed on them (C++ `GetChangedFields`). UsdImaging resyncs a prim for a
+  plugin field and ignores built-in ones; Moho ignores every prim-level
+  info-only change, so a plugin field's resync (a `renderSettingsPrimPath`
+  edit, chiefly) is missed (`stage/pending.rs`).
 - `sdf::Value` has no single-path variant (C++ `VtValue` of `SdfPath`):
   Hydra's single `SdfPath` fields are one-element `Value::PathVec`s, absent
   when Hydra's path would be empty (`data_source.rs`).

@@ -17,10 +17,6 @@ pub struct Pending {
     pub resynced_properties: BTreeMap<sdf::Path, BTreeSet<String>>,
     /// Per prim, the properties whose value or metadata changed.
     pub updated_properties: BTreeMap<sdf::Path, BTreeSet<String>>,
-    /// Whether the stage's own metadata (the pseudo-root's) changed.
-    pub stage_metadata: bool,
-    /// Prims whose own metadata changed without a resync.
-    pub updated_prims: BTreeSet<sdf::Path>,
 }
 
 impl Pending {
@@ -39,18 +35,18 @@ impl Pending {
             }
         }
         for path in changed_info_only {
-            // A prim's own info-only change (kind, documentation...) can
-            // change its `kind`; a change to anything else Moho exposes
-            // (active, instanceable, typeName, apiSchemas) arrives as a
-            // resync. The pseudo-root's is the stage's metadata.
+            // A prim's own info-only change (its `kind`, or the stage's
+            // metadata at the absolute root) notifies nothing.
+            // `UsdImagingStageSceneIndex` ignores built-in fields and
+            // resyncs the prim for a plugin field (such as
+            // `renderSettingsPrimPath`).
+            //
+            // Workaround, an upstream candidate in `ROADMAP.md`: openusd's
+            // commit notice names info-only paths but not their changed
+            // fields (C++ `GetChangedFields`), so every such change is taken
+            // as a built-in field's, and a plugin field's resync is missed.
             if path.is_property() {
                 Self::property(&mut self.updated_properties, path);
-            } else if path.is_abs_root() {
-                // Time range, rate, render settings, metrics: the scene
-                // globals.
-                self.stage_metadata = true;
-            } else {
-                self.updated_prims.insert(path.prim_path());
             }
         }
     }

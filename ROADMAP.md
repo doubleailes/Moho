@@ -75,9 +75,12 @@ the steps that land in this repository or depend on it.
   stage; today it judges path patterns only
   (`crates/moho/src/chain.rs`, `merged`).
 - The changed fields of an info-only path in `StageSink::after_commit` (C++
-  `UsdNotice::ObjectsChanged::GetChangedFields`). Moho dirties every prim
-  with an info-only change for its `kind` meanwhile
-  (`crates/moho/src/stage/mod.rs`).
+  `UsdNotice::ObjectsChanged::GetChangedFields`). UsdImaging resyncs a prim
+  whose changed metadata includes a plugin field (such as the stage's
+  `renderSettingsPrimPath`) and ignores built-in fields (`kind`, time
+  codes). Without the fields, Moho ignores every prim-level info-only
+  change, and misses the plugin-field resyncs
+  (`crates/moho/src/stage/pending.rs`).
 - A single-path value (`Value::Path`, C++ `VtValue` holding an `SdfPath`).
   Hydra types many fields as one `SdfPath`; Moho holds each as a
   one-element `Value::PathVec` meanwhile (`crates/moho/src/data_source.rs`),

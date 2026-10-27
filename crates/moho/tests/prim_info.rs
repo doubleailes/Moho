@@ -196,8 +196,8 @@ fn time_variance_does_not_depend_on_the_index_time() {
 }
 
 #[test]
-fn a_kind_edit_dirties_the_prim_info() {
-    use moho::scene_index::testing::{Notice, RecordingObserver};
+fn a_kind_edit_notifies_nothing() {
+    use moho::scene_index::testing::RecordingObserver;
 
     let (_dir, usd) = stage(SCENE);
     let index = StageSceneIndex::new();
@@ -211,10 +211,8 @@ fn a_kind_edit_dirties_the_prim_info() {
         .set_metadata("kind", Token::from("assembly"))
         .unwrap();
     index.apply_pending_updates();
+    // `kind` is a built-in field: UsdImaging ignores its change.
     let notices = recorder.take();
-    assert!(
-        notices.iter().any(|n| matches!(n, Notice::Dirtied(d) if d.path == p("/world") && d.locators.contains(&Locator::parse("__usdPrimInfo/kind")))),
-        "{notices:?}"
-    );
+    assert!(notices.is_empty(), "{notices:?}");
     assert_eq!(info(&index, "/world", "kind"), token("assembly"));
 }
