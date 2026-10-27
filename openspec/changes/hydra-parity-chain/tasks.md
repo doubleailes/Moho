@@ -41,12 +41,12 @@
 
 ## 5. Merging
 
-- [ ] 5.1 `filter/merging.rs`: adding an input notifies root and every listed descendant, defined or not; notices forwarded without root filtering; rename as remove plus add (unchanged)
-- [ ] 5.2 Keep the deterministic child listing as an implementation detail; drop it from docs as a promise
+- [x] 5.1 `filter/merging.rs`: adding an input notifies root and every listed descendant, defined or not; notices forwarded without root filtering; rename as remove plus add (unchanged)
+- [x] 5.2 Keep the deterministic child listing as an implementation detail; drop it from docs as a promise
 
 ## 6. Tests
 
-- [ ] 6.1 Delete: `merging.rs::renames_outside_a_root_stay_hidden` (a filtering Hydra does not do); `merging.rs::merged_children_are_in_input_order` (no order promised) (2)
+- [x] 6.1 Delete: `merging.rs::renames_outside_a_root_stay_hidden` (a filtering Hydra does not do); `merging.rs::merged_children_are_in_input_order` (no order promised) (2)
 - [ ] 6.2 Modify: `light_linking.rs` (4: ids `group_<n>`, absent `categories`, the filter added over `chain::standard`, invalidation targets); `collections.rs::a_light_link_collection` (expression through the evaluator); `point_instancing.rs::instance_categories_are_judged_per_instance` (now `categories` on the point instancer); `render_flatten.rs::a_var_change_dirties_its_settings` and `removing_and_adding_a_product_dirties_its_settings` (through dependency forwarding); `merging.rs::a_chunk_comes_and_goes`, `two_inputs_share_a_prim`, `a_weaker_input_removes_a_shared_prim` (neutral names), `an_input_at_the_root_notifies_the_root`, `prims_under_undefined_ancestors_are_merged` (undefined descendants notified); `chain.rs` (2: composition, no categories) (about 14)
 - [ ] 6.3 Add: equal expressions share an id; instanced geometry without categories; native `instanceCategories`; a light filter's `lightFilterLink`; `chain::standard` alone has no categories; renderer filter ordering; dependency forwarding (chained, removed depended-on prim); render settings without forwarding are not dirtied; prim type batching (consolidation, removal first, priority, empty before flush); managing observer (create, dirty, release); merging an undefined root; a notice outside a root forwarded (about 16)
 - [ ] 6.4 `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`

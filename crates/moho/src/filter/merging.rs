@@ -1,18 +1,29 @@
 //! `MergingSceneIndex`: several input scene indices over one namespace, as
 //! `HdMergingSceneIndex`.
 //!
-//! Each input is added at a root and answers only for paths at or under it.
+//! Each input is added at a root and answers for paths at or under it.
 //! Earlier inputs are stronger: a prim takes the first non-empty type, and
-//! its data overlays the inputs' containers, stronger first. The ancestors
-//! of every root exist, with empty data where no input holds them. Adding an
-//! input notifies its subtree added (not the ancestors of its root, as
-//! Hydra's); removing one notifies removed what no other input holds and
-//! re-added what one does. Nothing is computed for notices while no one
+//! its data overlays the inputs' containers, stronger first. The strict
+//! ancestors of every root exist, with empty data where no input holds them.
+//! With a single input, the merge is that input, whatever the path (as
+//! Hydra's). Children are the union of the inputs' children and of the
+//! prims implied by deeper roots, in no specified order.
+//!
+//! Adding an input notifies added its root and every descendant the input
+//! lists, defined or not, each with its merged type (not the strict
+//! ancestors of its root: `HdMergingSceneIndex`'s
+//! `_AddStrictPrefixesOfSceneRoots` skips every valid root, its test being
+//! inverted). Removing one walks its prims from its root: what another input
+//! still holds is notified added, the rest removed. The inputs' notices are
+//! forwarded without being filtered by their roots, as Hydra's: an added
+//! entry takes its merged type, a removal of a prim another input still
+//! holds is followed by its subtree added again, and renames are forwarded
+//! as removals and additions. Nothing is computed for notices while no one
 //! observes the index. With many inputs, a prim is answered from the inputs
 //! at its ancestors (Hydra's path table), not by scanning them all.
 
 use std::cell::{Cell, RefCell};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::rc::{Rc, Weak};
 
 use openusd::sdf;
@@ -22,6 +33,7 @@ use crate::data_source::retained::RetainedContainer;
 use crate::data_source::{ContainerHandle, Overlay};
 use crate::scene_index::{
     Added, Dirtied, Observer, Observers, Prim, Removed, Renamed, SceneIndex, SceneIndexHandle,
+    renamed_as_removed_and_added,
 };
 
 struct Input {
@@ -109,12 +121,8 @@ impl MergingSceneIndex {
     }
 
     /// Inserts `index` at `root` at `position` in strength order (0 is the
-    /// strongest).
-    ///
-    /// Notifies added the new input's prims at and under `root`, not the
-    /// ancestors of `root` it makes exist: `HdMergingSceneIndex`'s
-    /// `_AddStrictPrefixesOfSceneRoots` skips every valid root (its test is
-    /// inverted), so Hydra never notifies them either.
+    /// strongest), and notifies added `root` and every descendant `index`
+    /// lists, defined or not, with their merged types.
     pub fn insert_input_scene(&self, position: usize, index: SceneIndexHandle, root: sdf::Path) {
         let observer: Weak<dyn Observer> = self.me.clone();
         index.add_observer(observer);
@@ -144,18 +152,21 @@ impl MergingSceneIndex {
         if self.observers.is_empty() {
             return;
         }
-        let added: Vec<Added> = subtree(index.as_ref(), &root)
-            .into_iter()
-            .map(|path| {
-                let ty = self.prim(&path).ty;
-                Added { path, ty }
-            })
-            .collect();
+        // `_FillAddedChildEntriesRecursively`: the input's own listing, each
+        // prim typed as the merge answers it.
+        let mut added = Vec::new();
+        let mut stack = vec![root];
+        while let Some(path) = stack.pop() {
+            stack.extend(index.children(&path).into_iter().rev());
+            let ty = self.prim(&path).ty;
+            added.push(Added { path, ty });
+        }
         self.observers.send_added(self, &added);
     }
 
-    /// Removes `index`: what no other input holds is notified removed, and
-    /// what one still holds is re-added with its merged type.
+    /// Removes `index`. Its prims are walked from its root: one the merge
+    /// still holds is notified added (and its children in `index` walked),
+    /// one it does not removed.
     pub fn remove_input_scene(&self, index: &SceneIndexHandle) {
         let removed = {
             let mut inputs = self.inputs.borrow_mut();
@@ -168,16 +179,21 @@ impl MergingSceneIndex {
         if self.observers.is_empty() {
             return;
         }
+        let mut visited: HashSet<sdf::Path> = HashSet::new();
         let mut gone: Vec<Removed> = Vec::new();
         let mut kept: Vec<Added> = Vec::new();
-        for path in subtree(removed.index.as_ref(), &removed.root) {
-            if gone.iter().any(|g| path.has_prefix(&g.path)) {
-                continue;
-            }
+        let mut queue = vec![removed.root.clone()];
+        while let Some(path) = queue.pop() {
             let prim = self.prim(&path);
             if prim.is_defined() {
-                kept.push(Added { path, ty: prim.ty });
-            } else {
+                if visited.insert(path.clone()) {
+                    kept.push(Added {
+                        path: path.clone(),
+                        ty: prim.ty,
+                    });
+                }
+                queue.extend(removed.index.children(&path));
+            } else if visited.insert(path.clone()) {
                 gone.push(Removed { path });
             }
         }
@@ -213,45 +229,15 @@ impl MergingSceneIndex {
         found
     }
 
-    /// Every root `sender` is added at (an index may be added at several).
-    fn roots_of(&self, sender: &dyn SceneIndex) -> Vec<sdf::Path> {
-        self.inputs
-            .borrow()
-            .iter()
-            .filter(|i| same(sender, &i.index))
-            .map(|i| i.root.clone())
-            .collect()
+    /// Whether `sender` is one of the inputs (Hydra stops observing a
+    /// removed input; Moho's observers cannot be unregistered, so a removed
+    /// input's notices are dropped here).
+    fn is_input(&self, sender: &dyn SceneIndex) -> bool {
+        self.inputs.borrow().iter().any(|i| same(sender, &i.index))
     }
 
-    fn merged_subtree(&self, path: &sdf::Path, out: &mut Vec<sdf::Path>) {
-        out.extend(subtree(self, path));
-    }
-
-    fn forward_added(&self, roots: &[sdf::Path], paths: impl IntoIterator<Item = sdf::Path>) {
-        let added: Vec<Added> = paths
-            .into_iter()
-            .filter(|path| under_any(path, roots))
-            .map(|path| {
-                let ty = self.prim(&path).ty;
-                Added { path, ty }
-            })
-            .collect();
-        self.observers.send_added(self, &added);
-    }
-
-    fn forward_removed(&self, roots: &[sdf::Path], paths: impl IntoIterator<Item = sdf::Path>) {
-        let removed: Vec<Removed> = paths
-            .into_iter()
-            .filter(|path| under_any(path, roots) || roots.iter().any(|r| r.has_prefix(path)))
-            .map(|path| Removed { path })
-            .collect();
-        self.observers.send_removed(self, &removed);
-        // What another input still holds comes back.
-        let mut still = Vec::new();
-        for e in &removed {
-            self.merged_subtree(&e.path, &mut still);
-        }
-        self.forward_added(&[sdf::Path::abs_root()], still);
+    fn input_count(&self) -> usize {
+        self.inputs.borrow().len()
     }
 }
 
@@ -260,30 +246,21 @@ fn input_strength(input: &Input, next: &Cell<u64>) {
     next.set(next.get() + 1);
 }
 
-fn under_any(path: &sdf::Path, roots: &[sdf::Path]) -> bool {
-    roots.iter().any(|r| path.has_prefix(r))
-}
-
-/// Every defined prim at or under `root` in `index`, parents first. The walk
-/// goes on through undefined prims, which may hold defined descendants. The
-/// absolute root is included when `index` defines it (it carries the scene
-/// globals), so an input mounted at `/` notifies the root it changes.
-fn subtree(index: &dyn SceneIndex, root: &sdf::Path) -> Vec<sdf::Path> {
-    let mut out = Vec::new();
-    let mut stack = vec![root.clone()];
-    while let Some(path) = stack.pop() {
-        if index.prim(&path).is_defined() {
-            out.push(path.clone());
-        }
-        let mut children = index.children(&path);
-        children.reverse();
-        stack.extend(children);
-    }
-    out
-}
-
 impl SceneIndex for MergingSceneIndex {
     fn prim(&self, path: &sdf::Path) -> Prim {
+        {
+            let inputs = self.inputs.borrow();
+            match inputs.len() {
+                0 => return Prim::undefined(),
+                // As Hydra's: a single input answers every path.
+                1 => {
+                    let only = inputs[0].index.clone();
+                    drop(inputs);
+                    return only.prim(path);
+                }
+                _ => {}
+            }
+        }
         let mut ty = Token::default();
         let mut data: Vec<ContainerHandle> = Vec::new();
         for input in self.inputs_at(path) {
@@ -303,10 +280,10 @@ impl SceneIndex for MergingSceneIndex {
         Prim { ty, data }
     }
 
-    /// The children of `path`, in input order, strongest first: each input's
-    /// children in its own order, each path once, then the intermediate prims
-    /// implied by deeper input roots, in input order. (`HdMergingSceneIndex`
-    /// collects them in a hash set and gives no order.)
+    /// The union of the inputs' children of `path` and of the intermediate
+    /// prims implied by deeper input roots. `HdMergingSceneIndex` collects
+    /// them in a hash set and gives no order; Moho lists them in input
+    /// order, each once, which is not part of its contract.
     fn children(&self, path: &sdf::Path) -> Vec<sdf::Path> {
         let mut children: Vec<sdf::Path> = Vec::new();
         let push = |child: sdf::Path, children: &mut Vec<sdf::Path>| {
@@ -334,34 +311,80 @@ impl SceneIndex for MergingSceneIndex {
 }
 
 impl Observer for MergingSceneIndex {
+    /// Forwarded with each entry's merged type: the first non-empty type
+    /// among the inputs whose root covers it (the empty type where none
+    /// does).
     fn added(&self, sender: &dyn SceneIndex, entries: &[Added]) {
-        let roots = self.roots_of(sender);
-        self.forward_added(&roots, entries.iter().map(|e| e.path.clone()));
+        if self.observers.is_empty() || !self.is_input(sender) {
+            return;
+        }
+        if self.input_count() < 2 {
+            self.observers.send_added(self, entries);
+            return;
+        }
+        let resolved: Vec<Added> = entries
+            .iter()
+            .map(|entry| {
+                let ty = self
+                    .inputs_at(&entry.path)
+                    .iter()
+                    .map(|input| {
+                        if same(sender, &input.index) {
+                            entry.ty.clone()
+                        } else {
+                            input.index.prim(&entry.path).ty
+                        }
+                    })
+                    .find(|ty| !ty.as_str().is_empty())
+                    .unwrap_or_default();
+                Added {
+                    path: entry.path.clone(),
+                    ty,
+                }
+            })
+            .collect();
+        self.observers.send_added(self, &resolved);
     }
 
+    /// Forwarded; a removed prim the merge still holds is then added again
+    /// with every descendant it lists.
     fn removed(&self, sender: &dyn SceneIndex, entries: &[Removed]) {
-        let roots = self.roots_of(sender);
-        self.forward_removed(&roots, entries.iter().map(|e| e.path.clone()));
+        if self.observers.is_empty() || !self.is_input(sender) {
+            return;
+        }
+        if self.input_count() < 2 {
+            self.observers.send_removed(self, entries);
+            return;
+        }
+        let mut added = Vec::new();
+        for entry in entries {
+            let prim = self.prim(&entry.path);
+            if !prim.is_defined() {
+                continue;
+            }
+            added.push(Added {
+                path: entry.path.clone(),
+                ty: prim.ty,
+            });
+            let mut stack: Vec<sdf::Path> = self.children(&entry.path).into_iter().rev().collect();
+            while let Some(path) = stack.pop() {
+                stack.extend(self.children(&path).into_iter().rev());
+                let ty = self.prim(&path).ty;
+                added.push(Added { path, ty });
+            }
+        }
+        self.observers.send_removed(self, entries);
+        self.observers.send_added(self, &added);
     }
 
     fn dirtied(&self, sender: &dyn SceneIndex, entries: &[Dirtied]) {
-        let roots = self.roots_of(sender);
-        let dirtied: Vec<Dirtied> = entries
-            .iter()
-            .filter(|e| under_any(&e.path, &roots))
-            .cloned()
-            .collect();
-        self.observers.send_dirtied(self, &dirtied);
+        if self.observers.is_empty() || !self.is_input(sender) {
+            return;
+        }
+        self.observers.send_dirtied(self, entries);
     }
 
     fn renamed(&self, sender: &dyn SceneIndex, entries: &[Renamed]) {
-        // Each rename becomes the old path removed and the new subtree added
-        // (`HdSceneIndexObserver::ConvertPrimsRenamedToRemovedAndAdded`), so
-        // that each side is checked against the roots the sender answers for
-        // and against what the other inputs hold.
-        let roots = self.roots_of(sender);
-        self.forward_removed(&roots, entries.iter().map(|e| e.old.clone()));
-        let added: Vec<sdf::Path> = entries.iter().flat_map(|e| subtree(sender, &e.new)).collect();
-        self.forward_added(&roots, added);
+        renamed_as_removed_and_added(self, sender, entries);
     }
 }

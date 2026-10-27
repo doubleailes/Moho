@@ -227,3 +227,22 @@ prim factory.
   dirtied entries, which would go nowhere.
 - **Category order.** Hydra lists a prim's categories in hash order; Moho
   lists them in id order (`group_0` first).
+- **Merging does not notify the strict ancestors of a new root** (spec
+  "Adding and removing an input" and D5 said it does).
+  `HdMergingSceneIndex::_AddStrictPrefixesOfSceneRoots` skips every root
+  for which `IsAbsoluteRootOrPrimPath()` holds, that is every valid root
+  (its test is inverted at the reference revision), so Hydra never sends
+  them; `hydra-parity-instancing` had already found and followed this. The
+  spec scenario "An input comes and goes" is corrected: adding notifies
+  `/world/elem` and its descendants, not `/world`.
+- **Merging, other quirks reproduced.** With a single input, the merge is
+  that input at every path (`GetPrim` does not check the root); an added
+  entry outside every root takes the empty type once there are two inputs
+  (no input gives one); a removed input's notices are dropped, since Moho's
+  observers cannot be unregistered as Hydra's are.
+- **Merging notices through the instancing propagations.** Checked against
+  USD 26.08 on the instancing fixtures: what remains different comes from
+  openusd renumbering prototypes when one is retired (an upstream candidate
+  since `hydra-parity-instancing`) and, on removing a nested point
+  instancer, from re-additions the propagation's own input handling makes;
+  neither is merging's.
