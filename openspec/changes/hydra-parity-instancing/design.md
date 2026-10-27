@@ -195,10 +195,11 @@ new prototype paths.
   propagations insert inputs into a `MergingSceneIndex` on edits (a new
   prototype target, a new native instancer). Moho's merging notified every
   strict ancestor of a new root added, resyncing `/world` and the like on
-  each insertion. It now adds only the prefixes from the first one that has
-  no prim, as `HdMergingSceneIndex::_AddStrictPrefixesOfSceneRoots`, skips
-  notice computation while unobserved, and finds inputs through a path
-  table once it has five or more, as Hydra does. Its other notice
+  each insertion. It now notifies none of them, as Hydra's (whose
+  `_AddStrictPrefixesOfSceneRoots` skips every valid root: its test is
+  inverted at the reference revision), skips notice computation while
+  unobserved, and finds inputs through a path table once it has five or
+  more, as Hydra does. Its other notice
   differences (filtering by root, defined prims only, the root not always
   added) stay for `hydra-parity-chain`.
 - **Instance indices are read fresh.** UsdImaging serves an instance's
