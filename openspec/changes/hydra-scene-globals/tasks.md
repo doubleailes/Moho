@@ -12,8 +12,8 @@
 
 ## 3. Placement
 
-- [ ] 3.1 Add `RendererFilter::scene_globals(on_built)` at `SCENE_GLOBALS_PHASE` (0), `AtStart`, handing the built index to the host
-- [ ] 3.2 Tests: its place among light linking and dependency forwarding; the stage index's time not setting the current frame
+- [x] 3.1 Add `RendererFilter::scene_globals(on_built)` at `SCENE_GLOBALS_PHASE` (0), `AtStart`, handing the built index to the host
+- [x] 3.2 Tests: its place among light linking and dependency forwarding; the stage index's time not setting the current frame
 
 ## 4. Docs and parity
 

@@ -35,10 +35,12 @@
 //! It is not part of [`chain::standard`](crate::chain::standard):
 //! UsdImaging's chain does not build it. usdview's `UsdImagingGLEngine`
 //! registers it for every renderer at insertion phase 0, `AtStart`, so the
-//! renderer filters after it can read and observe the scene globals. Built
-//! by hand and given as the renderer filters' input, as below, it lands in
-//! the same place unless another filter is at a negative phase or at phase
-//! 0 `AtStart`.
+//! renderer filters after it can read and observe the scene globals.
+//! [`RendererFilter::scene_globals`](crate::chain::RendererFilter::scene_globals)
+//! places it there and hands the built index to the host. Built by hand and
+//! given as the renderer filters' input, as below, it lands in the same
+//! place unless another filter is at a negative phase or at phase 0
+//! `AtStart`.
 //!
 //! # The host pattern
 //!

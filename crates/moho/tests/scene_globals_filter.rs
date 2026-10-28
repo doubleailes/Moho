@@ -297,3 +297,52 @@ fn the_inputs_notices_pass_through() {
         ]
     );
 }
+
+#[test]
+fn a_renderer_filter_at_phase_zero_handed_to_the_host() {
+    use moho::chain::{InsertionOrder, LIGHT_LINKING_PHASE, RendererFilter, SCENE_GLOBALS_PHASE};
+    use moho::filter::LightLinkingSceneIndex;
+    use moho::scene_index::SceneIndexHandle;
+    use std::cell::{OnceCell, RefCell};
+
+    let (_dir, stage) = stage(AUTHORED);
+    let stage_index = StageSceneIndex::new();
+    stage_index.set_stage(stage);
+    let held: Rc<OnceCell<Rc<SceneGlobalsSceneIndex>>> = Rc::default();
+    let slot = held.clone();
+    let below_light_linking: Rc<RefCell<Option<SceneIndexHandle>>> = Rc::default();
+    let seen = below_light_linking.clone();
+    let terminal = chain::renderer_filters(
+        chain::standard(stage_index.clone()),
+        &[
+            RendererFilter::new(
+                LIGHT_LINKING_PHASE,
+                InsertionOrder::AtStart,
+                move |input: SceneIndexHandle| {
+                    *seen.borrow_mut() = Some(input.clone());
+                    LightLinkingSceneIndex::new(input)
+                },
+            ),
+            RendererFilter::dependency_forwarding(),
+            RendererFilter::scene_globals(move |index| {
+                assert!(slot.set(index).is_ok(), "built once");
+            }),
+        ],
+    );
+    assert_eq!(SCENE_GLOBALS_PHASE, 0);
+    let globals = held.get().unwrap();
+    // Light linking's input is the scene globals index.
+    let input = below_light_linking.borrow().clone().unwrap();
+    assert!(std::ptr::addr_eq(Rc::as_ptr(&input), Rc::as_ptr(globals)));
+
+    // The host drives it; the terminal reads and notifies it.
+    let recorder = RecordingObserver::on(terminal.as_ref());
+    let time = moho::openusd::usd::TimeCode::new(1001.0);
+    stage_index.set_time(time);
+    globals.set_current_frame(time.value());
+    assert!(recorder.take().contains(&dirtied_root("currentFrame")));
+    assert_eq!(
+        read(terminal.as_ref(), "sceneGlobals/currentFrame"),
+        Some(Value::Double(1001.0))
+    );
+}
