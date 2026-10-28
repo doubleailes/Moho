@@ -1,9 +1,10 @@
 # filtering-scene-indices Specification
 
 ## Purpose
-Scene indices that take other scene indices as input: flattening resolves
-inherited data down the hierarchy, and merging combines several inputs over
-one namespace, which is how Moho streams a scene by chunks.
+Scene indices that take other scene indices as input, as Hydra's and
+UsdImaging's filters: flattening resolves inherited data down the
+hierarchy, merging combines several inputs over one namespace, and the
+standard chain plus the renderer filters a consumer inserts by phase.
 ## Requirements
 ### Requirement: Flattened transforms
 A flattening index SHALL give each prim a world transform: its local matrix
@@ -55,78 +56,147 @@ data depends on it SHALL be dirtied for the same data.
 - **THEN** observers of the flattening index receive `/a` and every prim under it dirtied for `xform`
 
 ### Requirement: Merging inputs
-A merging index SHALL combine inputs, each added at a root path, with
-earlier inputs stronger. A prim present in several inputs SHALL take the
+A merging index, as `HdMergingSceneIndex`, SHALL combine inputs, each added
+at a root path, with earlier inputs stronger. An input SHALL contribute
+only at and under its root. A prim present in several inputs SHALL take the
 first non-empty type, and its data SHALL overlay the inputs' containers,
-stronger first. Its children SHALL be the union of the inputs' children.
+stronger first; a strict ancestor of a root that no input holds SHALL be a
+typeless prim with an empty container. Its children SHALL be the union of
+the inputs' children, in no specified order.
 
 #### Scenario: Two inputs share a prim
-- **WHEN** a chunk input and a scene input both hold `/world/elem`, with the chunk input stronger
-- **THEN** reading `/world/elem` gives the chunk input's data where both define it, and the scene input's elsewhere
+- **WHEN** two inputs both hold `/world/elem`, the first stronger
+- **THEN** reading `/world/elem` gives the first input's data where both define it, and the second's elsewhere
 
 ### Requirement: Adding and removing an input
-Adding an input SHALL notify its root's ancestors and its whole subtree
-added. Removing an input SHALL notify removed the prims no other input
-holds, and re-added the prims another input still holds.
+Adding an input SHALL notify added its root and every descendant its input
+lists, whether or not the input defines it, each with its merged type; the
+strict ancestors of its root are not notified (`HdMergingSceneIndex`'s
+`_AddStrictPrefixesOfSceneRoots` skips every valid root). Removing an input SHALL walk the
+removed input's prims and notify added those another input still holds and
+removed the others.
 
-#### Scenario: A chunk comes and goes
-- **WHEN** a chunk input rooted at `/world/elem` is added and later removed, over a scene input holding `/world/elem` without its payload contents
-- **THEN** adding notifies the chunk's prims added; removing notifies the payload contents removed and `/world/elem` re-added from the scene input
+#### Scenario: An input comes and goes
+- **WHEN** an input rooted at `/world/elem` is added and later removed, over another input holding `/world/elem` but not its children
+- **THEN** adding notifies `/world/elem` and every descendant the first input lists added; removing notifies those descendants removed and `/world/elem` added from the other input
+
+#### Scenario: An undefined root
+- **WHEN** an input whose index does not define its root `/w` is added
+- **THEN** `/w` is notified added all the same
 
 ### Requirement: Inputs' notices pass through
-The merging index SHALL forward its inputs' notices, correcting the type of
-an added prim to the merged type, and re-adding a prim one input removed
-while another still holds it.
+The merging index SHALL forward its inputs' added, removed and dirtied
+notices without filtering them by the inputs' roots, correcting the type of
+an added prim to the merged type, and re-adding, with its subtree, a prim
+one input removed while another still holds it. Renames SHALL be forwarded
+as removals and additions.
 
 #### Scenario: A weaker input removes a shared prim
-- **WHEN** the scene input removes `/world/elem` while a chunk input still holds it
-- **THEN** observers receive `/world/elem` removed and then added with the chunk input's type
+- **WHEN** the weaker input removes `/world/elem` while the stronger input still holds it
+- **THEN** observers receive `/world/elem` removed and then added with the stronger input's type
 
-### Requirement: Prims outside the loaded inputs
-A consumer SHALL be able to list the prims a merged index depends on that
-no input holds: each material a prim's resolved binding names, and each
-node of a held material's network that lies outside the material. Adding
-an input that holds them SHALL resolve them, with no other change to what
-the index exposes.
+#### Scenario: A notice outside a root
+- **WHEN** an input rooted at `/a` notifies `/b/x` dirtied
+- **THEN** the merging index forwards it, as Hydra's does
 
-#### Scenario: A material bound from another chunk
-- **WHEN** a chunk's mesh is bound to a material inside another chunk's payload, and only the first chunk and the scene input are inputs
-- **THEN** the material's path is listed as unresolved, and once an input over a stage masked to it is added, the material's network is readable and nothing is listed
+### Requirement: Extent resolving
+An extent resolving index, as `UsdImagingExtentResolvingSceneIndex` with
+the purposes `geometry`, `render` and `proxy`, SHALL give a prim that has
+no `extent` of its own but has an `extentsHint` the union of its hint's
+ranges for those purposes as its `extent` (`min`, `max`). A prim's own
+`extent` SHALL be left as it is. A change to `extentsHint` SHALL also dirty
+`extent`.
 
-### Requirement: Merged children order
-A merging index SHALL list a prim's children in input order, strongest
-first: each input's children in that input's own order, each path once,
-then the intermediate prims implied by deeper input roots, in input order.
+#### Scenario: A model with only a hint
+- **WHEN** a model authors `extentsHint` with a geometry range of (0,0,0)–(1,1,1) and a render range of (-1,0,0)–(0,1,1), and no `extent`
+- **THEN** its resolved `extent` is (-1,0,0)–(1,1,1)
 
-#### Scenario: Two inputs with shared and own children
-- **WHEN** a stronger input lists `/w/b` then `/w/a` and a weaker input lists `/w/a` then `/w/c`
-- **THEN** the merged children of `/w` are `/w/b`, `/w/a`, `/w/c`
+#### Scenario: An authored extent wins
+- **WHEN** a mesh authors both `extent` and `extentsHint`
+- **THEN** its resolved `extent` is its authored `extent`
 
-### Requirement: Material nodes resolved after the merge
-After the merge, a material network's nodes named by absolute paths that it
-does not hold SHALL be filled from the `__materialNodes` of the prims at
-those paths, repeatedly, until no new node is asked for; a connection to a
-node graph SHALL be rewritten to the connection its output reads. Such a
-node SHALL be listed by `streaming::unresolved` until an input holds it. The
-material SHALL be notified dirtied for `material` when a prim its last
-resolution read (a dangling node, a node its subgraph brought, or a node
-graph) is added, removed, or dirtied for `__materialNodes` or
-`__materialNodeGraph`, including a time change of an animated parameter;
-a prim it no longer reads SHALL no longer dirty it.
+### Requirement: Flattening inside native instancer propagation
+Flattening SHALL run inside native instancer propagation, as Hydra's
+`HdFlatteningSceneIndex` with `UsdImagingFlattenedDataSourceProviders`
+does: once over the stage without its USD prototypes, and once over each
+propagated prototype in the prototype's own namespace, its root carrying
+the group's instance data. Instance aggregation SHALL read the flattened
+data. A flattening index SHALL remain usable on its own, outside the
+standard chain.
 
-#### Scenario: A side input brings a shared shader
-- **WHEN** chunk `/B`'s material connects to `/Shared/Tint`, only chunk `/B` is an input, and then a side input over a stage masked to `/Shared/Tint` is added
-- **THEN** `/Shared/Tint` is first listed as unresolved, then the material is notified dirtied, its network holds the node with the parameters the fully loaded stage gives, and nothing is listed
+#### Scenario: Prototype prims are flattened in their prototype
+- **WHEN** an instance at `/world/inst` is translated by (5, 0, 0) and its asset's mesh by (0, 1, 0)
+- **THEN** the prototype's mesh has the flattened transform (0, 1, 0), and the instancer's `hydra:instanceTransforms` holds (5, 0, 0) for that instance
 
-#### Scenario: An upstream node of a shared shader changes
-- **WHEN** a side input holds `/Shared`, the material reads `/Shared/Tint`, which reads `/Shared/Noise`, and `/Shared/Noise` is edited or its animated parameter changes with the side input's time
-- **THEN** the material is notified dirtied for `material`
+### Requirement: Flattened model data and up axis
+A flattening index SHALL also flatten, as UsdImaging's providers do:
+- `__usdUpAxis` and `model`, a prim's own data overlaying its parent's flattened data;
+- `geomModel`: a prim without its own takes its parent's flattened `geomModel`; a prim with its own takes `drawMode` and `cardVisibility` from its parent's when it has none (or `drawMode` is `inherited`).
 
-#### Scenario: A node graph outside the mask
-- **WHEN** an input connects to `/Shared/Graph.outputs:out` outside the mask, and a side input holds `/Shared/Graph`
-- **THEN** the connection reads `/Shared/Graph/Inner`, as on the fully loaded stage
+A change to these on a prim SHALL dirty the same data on every descendant
+that inherits it.
 
-#### Scenario: The side input leaves
-- **WHEN** that side input is removed
-- **THEN** the material is notified dirtied and its network no longer holds the node
+#### Scenario: The up axis reaches every prim
+- **WHEN** the stage authors `upAxis = "Z"`
+- **THEN** every prim of the flattened index has `__usdUpAxis/upAxis` `Z`
+
+#### Scenario: An inherited draw mode
+- **WHEN** a model authors `model:drawMode = "bounds"` and its child applies `GeomModelAPI` without a draw mode
+- **THEN** the child's flattened `geomModel/drawMode` is `bounds`
+
+### Requirement: The standard chain
+`chain::standard` SHALL build, over a stage scene index, exactly the
+filters `UsdImagingCreateSceneIndices` builds with
+`addDrawModeSceneIndex = false`, `displayUnloadedPrimsWithBounds = false`,
+no overrides callback and no UsdImaging scene index plugins, in its order:
+extent resolving, point instancer propagation, native instancer
+propagation, instance proxy path translation, material binding resolving,
+render settings flattening. Its material locator cache, notice batching and
+selection scene indices are left out: none changes what the chain exposes
+or notifies while batching is disabled and nothing is selected.
+
+#### Scenario: Composition
+- **WHEN** a consumer builds `chain::standard` over a stage index
+- **THEN** a native instance inside a point instancer prototype is scattered, bindings into instances resolve, flattened render settings are present, and no prim carries light linking `categories`
+
+### Requirement: Renderer filters by phase
+A consumer SHALL be able to apply its renderer filters, Hydra's scene index
+plugins, over any scene index (the standard chain, or a merge of several),
+as an ordered list of entries `(phase, order, constructor)`, `order` being
+`AtStart` or `AtEnd`. They SHALL be applied in
+`HdSceneIndexPluginRegistry`'s order: ascending phase, then `AtStart`
+entries before `AtEnd` entries, then list position; each entry's
+constructor wrapping the result of the previous one.
+
+#### Scenario: Light linking and dependency forwarding
+- **WHEN** a consumer passes dependency forwarding at phase 1000 `AtEnd`, light linking at phase 4 `AtStart` and its own fix at phase 0 `AtEnd`, in that list order
+- **THEN** the terminal index is dependency forwarding over light linking over the fix over its input
+
+### Requirement: Dependency forwarding
+A dependency forwarding index, as `HdDependencyForwardingSceneIndex`, SHALL
+read every prim's `__dependencies` and, when a prim is dirtied at locators
+intersecting an entry's depended-on locator, also notify the declaring prim
+dirtied at that entry's affected locator, transitively, each prim and
+locator once per notice. Removing or adding a depended-on prim SHALL dirty
+its dependents likewise. It SHALL be a filter a consumer adds, not part of
+the standard chain.
+
+#### Scenario: A chained dependency
+- **WHEN** `/a` declares `x` depends on `/b`'s `y`, and `/b` declares `y` depends on `/c`'s `z`, and `/c` is dirtied for `z`
+- **THEN** observers receive `/c` dirtied for `z`, `/b` for `y` and `/a` for `x`
+
+### Requirement: Notice batching by prim type
+A prim type notice batching index, as `HdsiPrimTypeNoticeBatchingSceneIndex`,
+SHALL hold its input's notices until flushed and SHALL appear empty until
+its first flush. It SHALL consolidate them: several dirtied entries for a
+path become one with the union of locators; an added entry absorbs later
+dirtied entries for its path; a removal discards earlier added and dirtied
+entries at or under its path, and a removal under another removal is
+dropped. A flush SHALL send all removals, then the added and dirtied
+entries grouped by the priority a consumer-given functor assigns their prim
+types, lower first.
+
+#### Scenario: Materials before geometry
+- **WHEN** a mesh and its material are added, the functor ranks `material` before `mesh`, and the index is flushed
+- **THEN** observers receive the material added before the mesh, in one flush, and nothing before it
 

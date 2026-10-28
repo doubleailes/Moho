@@ -3,9 +3,7 @@
 ## Purpose
 How a scene index exposes UsdVol volumes: the volume prim with its field
 bindings, and each field asset.
-
 ## Requirements
-
 ### Requirement: Volumes and field bindings
 A `Volume` SHALL have type `volume` and SHALL expose `volumeFieldBinding`, a
 container mapping each `field:<name>` relationship to the field prim's path.
@@ -27,9 +25,10 @@ An `OpenVDBAsset` or `Field3DAsset` SHALL have type `openvdbAsset` or
 
 ### Requirement: Renderer-defined volumes
 A prim that carries no UsdVol schema SHALL still expose its attributes
-through the generic attribute data, so renderer-defined volumes (such as
-Crust's `crust:volume:*`) stay readable.
+through the generic attribute data, so volumes defined in a renderer's own
+namespace stay readable.
 
 #### Scenario: A procedural volume
-- **WHEN** a prim authors `crust:volume:type = "noise"` and its noise parameters
+- **WHEN** a prim authors `myRenderer:volume:type = "noise"` and its noise parameters
 - **THEN** a consumer reads them through the prim's generic attribute data
+
