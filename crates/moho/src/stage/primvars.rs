@@ -429,8 +429,10 @@ impl PrimvarEntry {
     /// empty token for a custom primvar (UsdImaging builds it regardless).
     fn role(&self) -> Option<Token> {
         match &self.source {
-            Source::Primvar(_) | Source::Relationship(_) | Source::Instance(_) => self.hd_role(),
-            Source::Custom(_) => Some(self.hd_role().unwrap_or_default()),
+            Source::Primvar(_) | Source::Relationship(_) => self.hd_role(),
+            // `UsdImagingDataSourceCustomPrimvars` always builds a role,
+            // empty when the attribute has none.
+            Source::Custom(_) | Source::Instance(_) => Some(self.hd_role().unwrap_or_default()),
         }
     }
 
