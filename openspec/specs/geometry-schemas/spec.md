@@ -4,9 +4,7 @@
 The typed data a scene index exposes for geometry, with Hydra 2.0's schema
 names: transforms, meshes and subdivision, primvars, visibility, purpose,
 extent, basis curves, NURBS curves and implicit shapes.
-
 ## Requirements
-
 ### Requirement: Transform
 A transformable prim SHALL expose `xform` with `matrix`, its local transform
 from its `xformOpOrder` at the index's time, and `resetXformStack`. A prim
@@ -78,12 +76,17 @@ SHALL expose `extent` with `min` and `max`.
 A `BasisCurves` SHALL have type `basisCurves` and SHALL expose
 `basisCurves/topology` with `curveVertexCounts`, `type`, `basis` and `wrap`,
 and `widths` as a primvar. A `NurbsCurves` SHALL have type `nurbsCurves` and
-SHALL expose `curveVertexCounts`, `order`, `knots`, `ranges` and
-`pointWeights`, with `widths` as a primvar.
+SHALL expose `nurbsCurves` with `curveVertexCounts`, `order`, `knots` and
+`ranges`, with `widths` and `pointWeights` as primvars, as UsdImaging's
+NURBS curves data source does.
 
 #### Scenario: Cubic B-spline hair
 - **WHEN** a basis curves prim authors type `cubic`, basis `bspline` and two curves of 4 vertices
 - **THEN** its topology gives those, and `primvars/widths` holds its widths
+
+#### Scenario: Rational NURBS curves
+- **WHEN** a NURBS curves prim authors `pointWeights`
+- **THEN** `primvars/pointWeights/primvarValue` gives them, and `nurbsCurves` has no `pointWeights`
 
 ### Requirement: Implicit shapes
 `Sphere`, `Cube`, `Cone`, `Cylinder`, `Capsule` and `Plane` SHALL have their
@@ -98,3 +101,4 @@ Shapes SHALL NOT be converted to meshes.
 #### Scenario: A tapered cylinder
 - **WHEN** a `Cylinder_1` authors radiusBottom 2, radiusTop 1, height 4 and axis `X`
 - **THEN** its type is `cylinder` and `cylinder` gives those four values
+

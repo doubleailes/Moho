@@ -4,9 +4,7 @@
 The contract every Moho scene index honours, in Hydra 2.0's model: prims as
 types plus lazily read data, children, observers of what changed, and
 hierarchical locators naming that data.
-
 ## Requirements
-
 ### Requirement: Prims and children
 A scene index SHALL answer, for any absolute path, the prim at that path as
 a type token and a container of data, or an undefined prim when nothing is
@@ -99,3 +97,109 @@ the index. Values read from them SHALL be movable to other threads.
 #### Scenario: Values cross threads
 - **WHEN** a consumer reads a mesh's points and hands them to a worker thread
 - **THEN** the worker can use them while the index stays on its own thread
+
+### Requirement: Path values
+A data source standing for one of Hydra's single `SdfPath` fields (such as
+`materialBindings/<purpose>/path`, `instance/instancer`,
+`__usdPrimInfo/niPrototypePath` or `sceneGlobals/activeRenderSettingsPrim`)
+SHALL hold a path array of exactly one element. A field Hydra types as a
+path array SHALL hold a path array of any length. An empty path SHALL be
+represented by the field's absence.
+
+#### Scenario: A resolved binding path
+- **WHEN** a consumer reads a prim's resolved `materialBindings` path
+- **THEN** it receives a path array holding exactly the bound material's path
+
+#### Scenario: No active render settings
+- **WHEN** the stage authors no `renderSettingsPrimPath`
+- **THEN** the root's `sceneGlobals` has no `activeRenderSettingsPrim`
+
+### Requirement: Blocked data
+An overlay of containers SHALL honour a block, as Hydra's
+`HdBlockDataSource`: a block at a name in a stronger container SHALL hide
+the data weaker containers give at that name, and the overlay SHALL give no
+data source there.
+
+#### Scenario: A blocked prototype path
+- **WHEN** a filter overlays a block at `__usdPrimInfo/niPrototypePath` over a prim whose input data gives that path
+- **THEN** reading `__usdPrimInfo/niPrototypePath` gives nothing, and `__usdPrimInfo`'s other fields still read through
+
+### Requirement: Collection expressions over a scene index
+A path expression SHALL be judgeable against any scene index, as Hydra's
+`HdCollectionExpressionEvaluator` judges it: a path matches when the
+expression's patterns match it and every predicate in it holds for the
+scene index's prim at that path. The predicates SHALL be those of Hydra's
+collection predicate library, under both names:
+- `hdType(t)` / `type(t)`: the prim's type is `t`;
+- `hdVisible(v)` / `visible(v)`: the prim has `visibility/visibility` and it equals `v` (default true); a prim without that data matches neither value;
+- `hdPurpose(p)` / `purpose(p)`: the prim's `purpose/purpose` is `p`;
+- `hdHasDataSource(l)` / `hasDataSource(l)`: the prim has data at locator `l`;
+- `hdHasPrimvar(n)` / `hasPrimvar(n)`: the prim has the primvar `n`;
+- `hdHasMaterialBinding(s)` / `hasMaterialBinding(s)`: the text of the prim's resolved all-purpose `materialBindings` path contains `s`.
+
+An expression that uses a predicate outside that library SHALL match
+nothing. Instance proxies are not traversed: only prims the scene index
+holds can match.
+
+#### Scenario: A type predicate
+- **WHEN** the expression `/world//{hdType:mesh}` is judged against a scene index holding `/world/geo` (a mesh) and `/world/cam` (a camera)
+- **THEN** `/world/geo` matches and `/world/cam` does not
+
+#### Scenario: A USD-only predicate
+- **WHEN** an expression uses a predicate Hydra's library does not define
+- **THEN** it matches no path
+
+### Requirement: Dependencies data
+A prim MAY declare dependencies in `__dependencies`, as
+`HdDependenciesSchema` lays them out: a container of named entries, each
+giving `dependedOnPrimPath`, `dependedOnDataSourceLocator` and
+`affectedDataSourceLocator`, meaning that when the depended-on prim is
+dirtied at a locator intersecting the depended-on locator, this prim's
+affected locator is dirty too. An empty depended-on prim path SHALL mean
+the declaring prim itself.
+
+#### Scenario: A self dependency
+- **WHEN** a prim declares an entry with an empty depended-on path, depended-on locator `__usdRenderSettings/camera` and affected locator `renderSettings/camera`
+- **THEN** a consumer reading it knows that a dirty `__usdRenderSettings/camera` on that prim makes `renderSettings/camera` dirty
+
+### Requirement: Managing prims from notices
+A consumer SHALL be able to observe a scene index as
+`HdsiPrimManagingSceneIndexObserver` does: given a prim factory, the
+observer SHALL create one managed prim per prim the index holds when the
+observer is made and per added entry (replacing a prim already at that
+path), SHALL pass each dirtied entry, with its locator set, to the managed
+prim at its path, and SHALL release every managed prim at or under a
+removed path. A managed prim SHALL be retrievable by path.
+
+#### Scenario: Added, dirtied, removed
+- **WHEN** an observer with a factory recording calls watches an index that adds `/world/geo`, dirties it for `primvars/points`, then removes `/world`
+- **THEN** the factory was asked for `/world/geo` once, its managed prim received one dirty with `primvars/points`, and after the removal the observer holds no prim at or under `/world`
+
+### Requirement: Update scope of a camera edit and a light addition
+An edit SHALL dirty no more than Hydra dirties for it, through
+`chain::standard` followed by the light linking and dependency forwarding
+renderer filters. Editing a camera attribute SHALL dirty only that camera
+prim, at the locators `UsdImagingDataSourceCameraPrim::Invalidate` gives
+(for example `camera/focalLength` for `focalLength`, `xform` for a
+transform op). Adding a light SHALL add that light prim. If its light link
+and shadow link collections are trivial (they include everything), as
+`HdsiLightLinkingSceneIndex` treats them, nothing else SHALL be added or
+dirtied. Otherwise, only the prims whose membership changes SHALL be
+dirtied, and only at `categories` (or `instanceCategories`).
+
+#### Scenario: A camera's focal length
+- **WHEN** a stage holding a camera and 1,000 meshes is edited to change the camera's `focalLength`, and pending updates are applied
+- **THEN** the observer receives one dirtied entry, for the camera, at `camera/focalLength`, and no added or removed entries
+
+#### Scenario: A camera move
+- **WHEN** the camera's transform op is edited
+- **THEN** the observer receives one dirtied entry, for the camera, at `xform`
+
+#### Scenario: Adding a light that lights everything
+- **WHEN** a sphere light with default collections is added under `/lights` on a stage holding 1,000 meshes
+- **THEN** the observer receives an added entry for the light and no dirtied entry for any mesh
+
+#### Scenario: Adding a light linked to a few prims
+- **WHEN** a light whose `collection:lightLink` includes only `/world/a` is added
+- **THEN** besides the light's added entry, only the prims whose categories change are dirtied, and only at `categories`
+

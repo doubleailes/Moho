@@ -3,9 +3,7 @@
 ## Purpose
 How a scene index exposes cameras: projection, aperture and lens, clipping,
 shutter and exposure, with Hydra 2.0's schema names.
-
 ## Requirements
-
 ### Requirement: Camera data
 A `Camera` SHALL have type `camera` and SHALL expose `camera` with:
 - `projection`;
@@ -27,10 +25,3 @@ unit to scene units.
 - **WHEN** a camera authors `shutter:open = -0.25` and `shutter:close = 0.25`
 - **THEN** its `camera/shutterOpen` is -0.25 and `camera/shutterClose` is 0.25
 
-### Requirement: Camera units and stage metadata
-The stage's `metersPerUnit` and up axis SHALL be readable from the scene
-globals, so a consumer can convert lens and clipping units.
-
-#### Scenario: Centimetre stage
-- **WHEN** the stage authors `metersPerUnit = 0.01`
-- **THEN** the scene globals give 0.01
