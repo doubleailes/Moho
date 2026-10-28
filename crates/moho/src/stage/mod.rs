@@ -368,60 +368,55 @@ impl StageSceneIndex {
                 roots.push(path);
             }
         }
-        let mut dirty: BTreeMap<sdf::Path, LocatorSet> = BTreeMap::new();
-        // A shader or node graph resynced under a material or light filter
-        // is a property resync of it (UsdImaging's `RepresentedByAncestor`
-        // prims); a prim gone from the stage has no adapter, and is removed
+        // As `UsdImagingStageSceneIndex::ApplyPendingUpdates`: the
+        // properties whose spec came or went (the `Resync` pass), then those
+        // whose value changed (the `Update` pass), each pass one entry per
+        // prim it invalidates, so a prim both passes invalidate is dirtied
+        // twice. A shader or node graph resynced under a material or light
+        // filter is a property resync of it with the empty name (UsdImaging's
+        // `RepresentedByAncestor` prims), replacing its other resynced
+        // properties; the property changes under a repopulated prim are
+        // dropped; a prim gone from the stage has no adapter, and is removed
         // only if it was added.
-        for (ancestor, prim) in represented.into_iter().flatten() {
-            let all: BTreeSet<String> = [String::new()].into();
-            let locators = invalidate_from_descendant(&ancestor, &prim, &all);
-            dirty
-                .entry(ancestor.path().clone())
-                .or_default()
-                .insert_set(&locators);
+        let mut resynced_properties = pending.resynced_properties;
+        let mut updated_properties = pending.updated_properties;
+        for (root, represented) in roots.iter().zip(&represented) {
+            if represented.is_some() {
+                resynced_properties.insert(root.clone(), [String::new()].into());
+            }
         }
-        // Per prim, the properties whose spec came or went (UsdImaging's
-        // `Resync` invalidation) and those whose value changed (`Update`).
-        let mut by_prim: BTreeMap<sdf::Path, (BTreeSet<String>, BTreeSet<String>)> = BTreeMap::new();
-        for (prim, names) in pending.resynced_properties {
-            by_prim.entry(prim).or_default().0.extend(names);
-        }
-        for (prim, names) in pending.updated_properties {
-            by_prim.entry(prim).or_default().1.extend(names);
-        }
-        for (prim, (resynced, updated)) in by_prim {
-            if roots.iter().any(|r| prim.has_prefix(r)) {
+        for (i, root) in roots.iter().enumerate() {
+            if represented.get(i).is_some_and(Option::is_some) {
                 continue;
             }
-            // A shader or node graph is represented by its material or light
-            // filter, which invalidates for it (each kind of change apart, as
-            // UsdImaging).
-            if let Some((ancestor, descendant)) = self.representing_ancestor(&prim) {
-                for properties in [&resynced, &updated] {
-                    if properties.is_empty() {
-                        continue;
-                    }
-                    let locators = invalidate_from_descendant(&ancestor, &descendant, properties);
-                    dirty
-                        .entry(ancestor.path().clone())
-                        .or_default()
-                        .insert_set(&locators);
+            resynced_properties.retain(|p, _| !p.has_prefix(root));
+            updated_properties.retain(|p, _| !p.has_prefix(root));
+        }
+        let none = BTreeSet::new();
+        let mut dirtied: Vec<Dirtied> = Vec::new();
+        for (properties, resync) in [(resynced_properties, true), (updated_properties, false)] {
+            for (prim, names) in properties {
+                // A shader or node graph is represented by its material or
+                // light filter, which invalidates for it.
+                let (path, locators) = if let Some((ancestor, descendant)) = self.representing_ancestor(&prim)
+                {
+                    let locators = invalidate_from_descendant(&ancestor, &descendant, &names);
+                    (ancestor.path().clone(), locators)
+                } else if self.populated.borrow().contains(&prim) {
+                    let locators = if resync {
+                        self.invalidate(&prim, &names, &none)
+                    } else {
+                        self.invalidate(&prim, &none, &names)
+                    };
+                    (prim, locators)
+                } else {
+                    continue;
+                };
+                if !locators.is_empty() {
+                    dirtied.push(Dirtied { path, locators });
                 }
-                continue;
-            }
-            if !self.populated.borrow().contains(&prim) {
-                continue;
-            }
-            let locators = self.invalidate(&prim, &resynced, &updated);
-            if !locators.is_empty() {
-                dirty.entry(prim.clone()).or_default().insert_set(&locators);
             }
         }
-        let dirtied: Vec<Dirtied> = dirty
-            .into_iter()
-            .map(|(path, locators)| Dirtied { path, locators })
-            .collect();
         self.observers.send_removed(self, &removed);
         self.observers.send_added(self, &added);
         self.observers.send_dirtied(self, &dirtied);
