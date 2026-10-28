@@ -7,9 +7,10 @@
 //! 1. the application builds UsdImaging's chain ([`standard`]), possibly
 //!    merging several ([`MergingSceneIndex`](crate::filter::MergingSceneIndex));
 //! 2. the render index applies the renderer's scene index plugins, ordered
-//!    by `HdSceneIndexPluginRegistry` ([`renderer_filters`]): hdPrman and
-//!    arnold-usd add light linking at phase 4, arnold-usd dependency
-//!    forwarding at phase 1000;
+//!    by `HdSceneIndexPluginRegistry` ([`renderer_filters`]): usdview adds
+//!    the scene globals a host sets at phase 0
+//!    ([`RendererFilter::scene_globals`]), hdPrman and arnold-usd add light
+//!    linking at phase 4, arnold-usd dependency forwarding at phase 1000;
 //! 3. the render delegate receives the terminal scene index, batches its
 //!    notices by prim type
 //!    ([`PrimTypeNoticeBatchingSceneIndex`](crate::filter::PrimTypeNoticeBatchingSceneIndex))
@@ -104,7 +105,7 @@ use crate::filter::extent_resolving::{self, ExtentResolvingSceneIndex};
 use crate::filter::{
     DependencyForwardingSceneIndex, InstanceProxyPathTranslationSceneIndex, LightLinkingSceneIndex,
     MaterialBindingResolvingSceneIndex, NativeInstancingSceneIndex, PointInstancingSceneIndex,
-    RenderSettingsFlatteningSceneIndex,
+    RenderSettingsFlatteningSceneIndex, SceneGlobalsSceneIndex,
 };
 use crate::scene_index::SceneIndexHandle;
 use crate::stage::StageSceneIndex;
@@ -130,7 +131,9 @@ use crate::tokens::material_bindings;
 /// selection scene index (adds nothing until something is selected).
 ///
 /// Light linking and dependency forwarding are not in it: a renderer adds
-/// them as [`renderer_filters`].
+/// them as [`renderer_filters`]. Nor are the scene globals a host sets
+/// (`sceneGlobals/currentFrame`): the host adds them as a renderer filter
+/// ([`RendererFilter::scene_globals`]).
 pub fn standard(stage: Rc<StageSceneIndex>) -> SceneIndexHandle {
     let extents = ExtentResolvingSceneIndex::new(stage, extent_resolving::STANDARD_PURPOSES.iter().copied());
     let point = PointInstancingSceneIndex::new(extents);
@@ -152,6 +155,9 @@ pub enum InsertionOrder {
     AtEnd,
 }
 
+/// The phase usdview's `UsdImagingGLEngine` adds the scene globals filter
+/// at, for every renderer.
+pub const SCENE_GLOBALS_PHASE: i32 = 0;
 /// The phase hdPrman and arnold-usd add light linking at.
 pub const LIGHT_LINKING_PHASE: i32 = 4;
 /// The phase arnold-usd adds dependency forwarding at.
@@ -186,6 +192,20 @@ impl RendererFilter {
     pub fn light_linking() -> Self {
         Self::new(LIGHT_LINKING_PHASE, InsertionOrder::AtStart, |input| {
             LightLinkingSceneIndex::new(input)
+        })
+    }
+
+    /// The scene globals a host sets ([`SceneGlobalsSceneIndex`]) at phase
+    /// 0, `AtStart`, as usdview's `UsdImagingGLEngine` registers it for
+    /// every renderer ("insert earlier so downstream scene indices can query
+    /// and be notified of changes"). `on_built` receives the built index,
+    /// for the host to drive (`set_current_frame` with the stage index's
+    /// time, and so on), as the engine keeps it in its app scene indices.
+    pub fn scene_globals(on_built: impl Fn(Rc<SceneGlobalsSceneIndex>) + 'static) -> Self {
+        Self::new(SCENE_GLOBALS_PHASE, InsertionOrder::AtStart, move |input| {
+            let index = SceneGlobalsSceneIndex::new(input);
+            on_built(index.clone());
+            index
         })
     }
 
