@@ -11,26 +11,32 @@ A `RenderSettings` prim SHALL have type `renderSettings` and SHALL expose
 `resolution`, `pixelAspectRatio`, `aspectRatioConformPolicy`,
 `dataWindowNDC`, `disableMotionBlur`, `disableDepthOfField`, `camera`,
 `includedPurposes`, `materialBindingPurposes`, `renderingColorSpace`,
-`products` (the products relationship's targets) and `namespacedSettings`
-(every other authored attribute and relationship by full name, such as
-`myRenderer:samplesPerPixel`).
+`instantaneousShutter` (UsdImaging takes `UsdRenderSettings`' attribute
+names with the inherited `UsdRenderSettingsBase` ones,
+`dataSourceRenderPrims.cpp`), `products` (the products relationship's
+targets) and `namespacedSettings` (every other authored attribute and
+relationship by full name, such as `myRenderer:samplesPerPixel`).
 
 A render settings flattening index SHALL give it `renderSettings`, with
 exactly the fields `UsdImagingRenderSettingsFlatteningSceneIndex` fills:
 `namespacedSettings`, `camera`, `disableMotionBlur`, `disableDepthOfField`,
 `includedPurposes`, `materialBindingPurposes`, `renderingColorSpace` and
-`renderProducts`, the settings' products flattened with their vars. Settings
-SHALL carry no field outside UsdImaging's schemas (no
-`instantaneousShutter`).
+`renderProducts`, the settings' products flattened with their vars. The
+flattened `renderSettings` SHALL carry no field outside those, so no
+`instantaneousShutter`, which stays in `__usdRenderSettings` only.
 
 #### Scenario: Settings with a product
 - **WHEN** `/Render/settings` names camera `/cam`, resolution 1920×1080, `myRenderer:samplesPerPixel = 64` and one product
 - **THEN** its `__usdRenderSettings` gives the camera and the resolution; its flattened `renderSettings` gives the camera, `myRenderer:samplesPerPixel` 64 in `namespacedSettings`, and one product in `renderProducts` whose resolution is 1920×1080
 
+#### Scenario: An instantaneous shutter
+- **WHEN** `/Render/settings` authors `instantaneousShutter = true`
+- **THEN** its `__usdRenderSettings` gives `instantaneousShutter` true, and its flattened `renderSettings` has no `instantaneousShutter`
+
 ### Requirement: Products and vars
 A `RenderProduct` SHALL have type `renderProduct` and SHALL expose
 `__usdRenderProduct` (`resolution`, `pixelAspectRatio`,
-`aspectRatioConformPolicy`, `dataWindowNDC`, `disableMotionBlur`,
+`aspectRatioConformPolicy`, `dataWindowNDC`, `instantaneousShutter`, `disableMotionBlur`,
 `disableDepthOfField`, `camera`, `productType`, `productName`, `orderedVars`
 and `namespacedSettings`). A `RenderVar` SHALL have type `renderVar` and
 SHALL expose `__usdRenderVar` (`dataType`, `sourceName`, `sourceType` and
