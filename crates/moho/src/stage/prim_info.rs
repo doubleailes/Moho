@@ -1,8 +1,9 @@
 //! `__usdPrimInfo`, as `UsdImagingDataSourceUsdPrimInfo`: the USD prim's
 //! specifier, type name, load state, applied API schemas, kind, variant
 //! selections, and whether it is a native instance (`niPrototypePath`) or a
-//! prototype's root (`isNiPrototype`). Each field is read when asked for,
-//! and an absent field is not named.
+//! prototype's root (`isNiPrototype`). Each field is read when asked for.
+//! The first six are always named, answering nothing when absent (no API
+//! schema, kind or variant selection), as UsdImaging names them.
 
 use std::rc::Rc;
 
@@ -91,7 +92,11 @@ impl Container for PrimInfo {
     fn names(&self) -> Vec<Token> {
         FIELDS
             .iter()
-            .filter(|name| self.field(name).is_some())
+            .filter(|name| match **name {
+                t::NI_PROTOTYPE_PATH => self.prim.is_instance().unwrap_or(false),
+                t::IS_NI_PROTOTYPE => self.field(name).is_some(),
+                _ => true,
+            })
             .map(|name| Token::from(*name))
             .collect()
     }
