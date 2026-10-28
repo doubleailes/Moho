@@ -57,8 +57,10 @@ data depends on it SHALL be dirtied for the same data.
 
 ### Requirement: Merging inputs
 A merging index, as `HdMergingSceneIndex`, SHALL combine inputs, each added
-at a root path, with earlier inputs stronger. An input SHALL contribute
-only at and under its root. A prim present in several inputs SHALL take the
+at a root path, with earlier inputs stronger. With two or more inputs, an
+input SHALL contribute only at and under its root. With a single input, the
+index SHALL answer every path from that input, its root ignored, as
+`HdMergingSceneIndex::GetPrim` returns the sole input's prim. A prim present in several inputs SHALL take the
 first non-empty type, and its data SHALL overlay the inputs' containers,
 stronger first; a strict ancestor of a root that no input holds SHALL be a
 typeless prim with an empty container. Its children SHALL be the union of
@@ -67,6 +69,10 @@ the inputs' children, in no specified order.
 #### Scenario: Two inputs share a prim
 - **WHEN** two inputs both hold `/world/elem`, the first stronger
 - **THEN** reading `/world/elem` gives the first input's data where both define it, and the second's elsewhere
+
+#### Scenario: A sole input answers outside its root
+- **WHEN** a merging index has a single input, rooted at `/a/b/c`, whose index holds `/z`
+- **THEN** reading `/z` gives the input's prim, as Hydra's merging index does with one input
 
 ### Requirement: Adding and removing an input
 Adding an input SHALL notify added its root and every descendant its input
