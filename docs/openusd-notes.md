@@ -413,6 +413,21 @@ Read at `d7d2a29`.
   `UsdStage::CreateInMemory`), used by the chain module's doc test, and
   `Stage::create_relationship(path)` (the update benchmark's linked light).
 
+## Final parity check (`docs/hydra-parity-check.md`)
+
+- `sdf::ValueTypeName::default_value() -> Option<Value>` (C++
+  `SdfValueTypeName::GetDefaultValue`: zero, empty, identity), with
+  `Attribute::type_name() -> Result<Option<ValueTypeName>>`: the value an
+  attribute data source answers when the attribute has neither a value nor
+  a fallback, as UsdImaging's value-initialized `T`.
+- `Attribute::get_at::<Value>(TimeCode::EARLIEST)` reads the earliest
+  sample, as C++ `UsdGeomPointInstancer::UsesOrientationsf` does.
+- `Prim::create_attribute(name, type_name)` then `Attribute::set` notify a
+  property resync, then an info change, as USD's two edits do.
+- `PathExpression`'s `Display` prints a predicate's string argument bare
+  when it re-reads as a token (`{hdType:mesh}`); C++ `GetText` quotes it
+  (`{hdType:"mesh"}`). The same expression.
+
 ## Gaps
 
 - Splines (`Ts`): a `.spline` block only round-trips as a dictionary. There
@@ -476,3 +491,14 @@ Read at `d7d2a29`.
 - `Prim::authored_attributes_in_namespace` lists in composed order where
   C++ sorts into dictionary order first; Moho sorts material inputs and
   outputs itself (`stage/material.rs`).
+- Authoring notices differ from USD's: a value set on an attribute without
+  a spec is one resync (USD: resync, then info change); a write of the
+  value already held notifies nothing; `over` specs created to author
+  through a reference are resynced (USD: info-only).
+- The prototype retiring above also follows an edit of the prototype's
+  source (a prim added or removed under it) or the source instance made
+  non-instanceable.
+- openusd-schemas' UsdGeom schema lacks `model:cardVisibility`.
+- `XformCommonAPI::xform_vectors` casts `double3` rotate and scale ops to
+  `float3`; C++ `GetXformVectors` fails to read them and answers the
+  identity.

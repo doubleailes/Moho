@@ -122,7 +122,10 @@ observer (`docs/update-latency.md`).
     file opened by a batch renderer) produces the same notices.
   - Notices are queued and become added, removed and dirtied entries only in
     `apply_pending_updates`. A resynced subtree is notified added, and only
-    the prims that are not re-added are notified removed. A prim-level
+    the prims that are not re-added are notified removed. Properties are
+    invalidated in two passes, as UsdImaging's: those whose spec came or
+    went, then those whose value changed, one dirtied entry per prim per
+    pass. A prim-level
     info-only change (`kind`, stage metadata) notifies nothing, as
     UsdImaging ignores built-in fields (openusd does not report the changed
     fields, so the resync UsdImaging does for a plugin field is missed).
@@ -198,7 +201,10 @@ observer (`docs/update-latency.md`).
 - **`Flattening`** (`FlatteningSceneIndex`) resolves inherited data: the
   world transform, visibility, purpose, constant primvars, binding
   opinions, `model`, `geomModel` and `__usdUpAxis`. It runs inside native
-  instancing, and stays a public filter.
+  instancing, and stays a public filter. A dirtied prim dirties only the
+  descendants whose flattened data was read since it was last dirtied, as
+  `HdFlatteningSceneIndex` (flattened primvars tracked per primvar); a prim
+  added again dirties its read descendants for every flattened name.
 - **The resolving filters** turn binding opinions and the stage's
   `__usdRender*` data into `materialBindings` and `renderSettings`.
   - Material binding resolving is `UsdImagingMaterialBindingsResolvingSceneIndex`.
@@ -227,7 +233,9 @@ observer (`docs/update-latency.md`).
   come in no promised order.
 - **Every prim carries `primOrigin/scenePath`**, Hydra's prim origin: the
   USD prim's path, relative to its prototype root inside a USD prototype.
-  The instancing propagations keep it on the prims they re-root.
+  The instancing propagations keep it on the prims they re-root. Render
+  prims, shaders and node graphs are the exception: UsdImaging gives them
+  neither it nor `__usdPrimInfo`.
 - **Blocks.** `DataSource::Block` is Hydra's `HdBlockDataSource`: in an
   `Overlay` (`HdOverlayContainerDataSource`) it hides what weaker containers
   give at its name.

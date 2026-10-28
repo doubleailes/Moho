@@ -117,6 +117,20 @@ the steps that land in this repository or depend on it.
   Also, openusd numbers prototypes from `__Prototype_0` where USD numbers
   from `__Prototype_1`, so propagated prototype paths differ from
   UsdImaging's by that number.
+  The same happens on any edit that changes the prototype's source: a prim
+  added or removed under the referenced prim, or the source instance made
+  non-instanceable (found by `docs/hydra-parity-check.md`).
+- Authoring notices as USD's (found by `docs/hydra-parity-check.md`).
+  Setting a value on an attribute without a spec is one resync where USD
+  sends a resync then an info change (UsdImaging dirties the prim twice); a
+  write of the value already held notifies nothing where USD notifies; and
+  the `over` specs created to author through a reference are resynced where
+  USD reports them info-only, so the stage index re-adds that subtree.
+- openusd-schemas' UsdGeom schema predates `model:cardVisibility` (fallback
+  `inherited`), so `geomModel/cardVisibility` has no fallback.
+- `XformCommonAPI::xform_vectors` casts `double3` rotate and scale ops to
+  `float3`, where C++ `GetXformVectors` reads them as `GfVec3f`, fails and
+  answers the identity, as `geomXformVectors` then shows.
 - A single-path value (`Value::Path`, C++ `VtValue` holding an `SdfPath`).
   Hydra types many fields as one `SdfPath`; Moho holds each as a
   one-element `Value::PathVec` meanwhile (`crates/moho/src/data_source.rs`),

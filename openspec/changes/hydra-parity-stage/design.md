@@ -297,8 +297,9 @@ the same step. No rollback beyond reverting the rev.
   (no `ColorSpaceDefinitionAPI`), and openusd's accumulated xform vectors
   read a rotation's angles in the stack's order where C++ reads ZYX angles.
   Found outside the families and left for later changes: render prims
-  carry the base prim data UsdImaging skips for them, and Points,
-  HermiteCurves, TetMesh and NurbsPatch have no adapter.
+  carry the base prim data UsdImaging skips for them (since fixed, see the
+  final parity check below), and Points, HermiteCurves, TetMesh and
+  NurbsPatch have no adapter.
 - **D4, a material under an instancer.** The whole-stage pass empties
   renderable types only, so a material under a point instancer keeps the
   type `material` (Moho emptied every type there before), as UsdImaging.
@@ -312,3 +313,39 @@ the same step. No rollback beyond reverting the rev.
   predicates); a collection without an expression includes nothing.
   `chain::standard` still passes the stage's oracle until
   `hydra-parity-materials`.
+
+### Found by the final parity check (`docs/hydra-parity-check.md`)
+
+Fixed, each with a test: an attribute with neither a value nor a fallback
+reads its type's zero value (`GetTypedValue`'s value-initialized `T`; the
+generic data still answers nothing); `__usdPrimInfo` names its six fields
+on every prim; render settings, products, vars and passes, shaders and node
+graphs carry neither `__usdPrimInfo` nor `primOrigin`; a point instancer
+names all six instance primvars, answers one when authored (an empty array
+included) and always gives its role; and the stage index invalidates in
+UsdImaging's two passes, one entry per prim per pass.
+
+Accepted:
+
+- **`skelBinding` and `coordSysBinding` are not named.** UsdImaging's
+  keyless API schema adapters name both on every prim, null without a
+  binding. Moho has no skeleton data, and coordinate systems are on the
+  ROADMAP; it names neither.
+- **`geomModel/cardVisibility` has no fallback.** openusd-schemas' UsdGeom
+  schema predates `model:cardVisibility`, whose fallback is `inherited`
+  (an upstream candidate).
+- **`geomXformVectors` of a stack with `double3` rotate or scale ops.**
+  `UsdGeomXformCommonAPI::GetXformVectors` reads them as `GfVec3f`, which
+  fails, and answers the identity (scale `(1, 1, 1)`); openusd-schemas casts
+  them (an upstream candidate). Rotations read back by accumulation can be
+  the other equivalent triple (`(180, -20, 180)` for `(-180, -20, -180)`),
+  the order difference recorded under task 2.11.
+- **Authoring granularity, not the index.** openusd reports a value
+  authored on an attribute without a spec as one resync, where USD sends a
+  resync then an info change (so UsdImaging dirties the prim twice, with
+  the same locators); it drops a write of the value already held, which
+  USD notifies; and it reports the `over` specs created to author through a
+  reference as resynced, where USD reports them info-only (so Moho re-adds
+  that subtree). Given USD's notices (an attribute created, then set), the
+  stage index sends UsdImaging's entries (`stage_updates.rs`). Recorded as
+  upstream candidates.
