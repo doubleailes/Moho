@@ -128,9 +128,14 @@ the steps that land in this repository or depend on it.
   USD reports them info-only, so the stage index re-adds that subtree.
 - openusd-schemas' UsdGeom schema predates `model:cardVisibility` (fallback
   `inherited`), so `geomModel/cardVisibility` has no fallback.
-- `XformCommonAPI::xform_vectors` casts `double3` rotate and scale ops to
-  `float3`, where C++ `GetXformVectors` reads them as `GfVec3f`, fails and
-  answers the identity, as `geomXformVectors` then shows.
+- A value read as another type than authored. C++ `UsdAttribute::Get<T>`
+  fails when the authored value type is not `T`, and UsdImaging answers its
+  default: `GetXformVectors` reads a `float3` translate or a `double3`
+  rotate or scale as the identity (`geomXformVectors`), and an `extentsHint`
+  authored `vector3d[]` (ALab) gives no hint and an empty extent. openusd
+  lets a schema's declared type win and casts the value
+  (`XformCommonAPI::xform_vectors`, `Attribute::type_name`), so Moho
+  answers the values.
 - A single-path value (`Value::Path`, C++ `VtValue` holding an `SdfPath`).
   Hydra types many fields as one `SdfPath`; Moho holds each as a
   one-element `Value::PathVec` meanwhile (`crates/moho/src/data_source.rs`),

@@ -320,10 +320,13 @@ Fixed, each with a test: an attribute with neither a value nor a fallback
 reads its type's zero value (`GetTypedValue`'s value-initialized `T`; the
 generic data still answers nothing); `__usdPrimInfo` names its six fields
 on every prim; render settings, products, vars and passes, shaders and node
-graphs carry neither `__usdPrimInfo` nor `primOrigin`; a point instancer
-names all six instance primvars, answers one when authored (an empty array
-included) and always gives its role; and the stage index invalidates in
-UsdImaging's two passes, one entry per prim per pass.
+graphs carry neither `__usdPrimInfo` nor `primOrigin`; `apiSchemas`
+leaves out names no registered schema has; a point instancer names all
+six instance primvars, answers one when authored (an empty array
+included) and always gives its role, and its own primvars are
+instance-rate unless constant or uniform; `Points` read `widths` as a
+primvar; and the stage index invalidates in UsdImaging's two passes, one
+entry per prim per pass.
 
 Accepted:
 
@@ -334,12 +337,15 @@ Accepted:
 - **`geomModel/cardVisibility` has no fallback.** openusd-schemas' UsdGeom
   schema predates `model:cardVisibility`, whose fallback is `inherited`
   (an upstream candidate).
-- **`geomXformVectors` of a stack with `double3` rotate or scale ops.**
-  `UsdGeomXformCommonAPI::GetXformVectors` reads them as `GfVec3f`, which
-  fails, and answers the identity (scale `(1, 1, 1)`); openusd-schemas casts
-  them (an upstream candidate). Rotations read back by accumulation can be
-  the other equivalent triple (`(180, -20, 180)` for `(-180, -20, -180)`),
-  the order difference recorded under task 2.11.
+- **A value authored with another type than UsdImaging reads.**
+  `UsdAttribute::Get<T>` fails when the authored type is not `T`, and
+  UsdImaging answers its default: `geomXformVectors` of a stack with a
+  `float3` translate or a `double3` rotate or scale is the identity there,
+  and an `extentsHint` authored `vector3d[]` (ALab) gives no hint and an
+  empty extent. openusd casts (a schema's declared type wins), so Moho
+  answers the values (an upstream candidate). Rotations read back by
+  accumulation can also be the other equivalent triple (`(180, -20, 180)`
+  for `(-180, -20, -180)`), the order difference recorded under task 2.11.
 - **Authoring granularity, not the index.** openusd reports a value
   authored on an attribute without a spec as one resync, where USD sends a
   resync then an info change (so UsdImaging dirties the prim twice, with

@@ -422,6 +422,10 @@ Read at `d7d2a29`.
   a fallback, as UsdImaging's value-initialized `T`.
 - `Attribute::get_at::<Value>(TimeCode::EARLIEST)` reads the earliest
   sample, as C++ `UsdGeomPointInstancer::UsesOrientationsf` does.
+- `Prim::prim_definition() -> Result<Arc<PrimDefinition>>` and
+  `PrimDefinition::applied_api_schemas() -> &[Token]`: C++
+  `UsdPrim::GetAppliedSchemas`, registered schemas only. `Prim::api_schemas`
+  also keeps the authored names no registered schema has.
 - `Prim::create_attribute(name, type_name)` then `Attribute::set` notify a
   property resync, then an info change, as USD's two edits do.
 - `PathExpression`'s `Display` prints a predicate's string argument bare
@@ -499,6 +503,9 @@ Read at `d7d2a29`.
   source (a prim added or removed under it) or the source instance made
   non-instanceable.
 - openusd-schemas' UsdGeom schema lacks `model:cardVisibility`.
-- `XformCommonAPI::xform_vectors` casts `double3` rotate and scale ops to
-  `float3`; C++ `GetXformVectors` fails to read them and answers the
-  identity.
+- A value authored with another type than the one read is cast: a schema's
+  declared type wins (`Attribute::type_name`), and
+  `XformCommonAPI::xform_vectors` casts a `float3` translate or a `double3`
+  rotate or scale. C++ typed `Get` fails there, and UsdImaging answers its
+  default (identity xform vectors; no `extentsHint` for one authored
+  `vector3d[]`).
