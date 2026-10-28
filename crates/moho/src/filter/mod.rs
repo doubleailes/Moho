@@ -1,5 +1,5 @@
 //! Scene indices that take other scene indices as input: flattening,
-//! merging, and the resolving filters.
+//! merging, the resolving filters, and the filters a renderer or host adds.
 
 pub mod dependency_forwarding;
 pub mod extent_resolving;
@@ -30,6 +30,8 @@ pub use point_instancing::PointInstancingSceneIndex;
 pub use prim_type_notice_batching::{PrimTypeNoticeBatchingSceneIndex, PrimTypePriority};
 pub mod render_settings;
 pub mod rerooting;
+pub mod scene_globals;
 
 pub use render_settings::RenderSettingsFlatteningSceneIndex;
 pub use rerooting::RerootingSceneIndex;
+pub use scene_globals::SceneGlobalsSceneIndex;
