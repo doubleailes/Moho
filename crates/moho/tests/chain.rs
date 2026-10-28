@@ -462,3 +462,37 @@ fn the_standard_chain_composes_and_links_no_lights() {
         stack.extend(chain.children(&path));
     }
 }
+
+#[test]
+fn a_chain_built_before_its_stage_reads_the_root_once_set() {
+    // `_PopulateSubtree` adds the absolute root when it populates from the
+    // pseudo-root, so filters built before `set_stage` read the root again.
+    let (_dir, stage) = stage(
+        r#"#usda 1.0
+(
+    upAxis = "Z"
+)
+def Xform "world"
+{
+}
+"#,
+    );
+    let stage_index = moho::stage::StageSceneIndex::new();
+    let chain = moho::chain::standard(stage_index.clone());
+    let recorder = moho::scene_index::testing::RecordingObserver::on(chain.as_ref());
+    stage_index.set_stage(stage);
+    let added: Vec<String> = recorder
+        .take()
+        .into_iter()
+        .filter_map(|n| match n {
+            moho::scene_index::testing::Notice::Added(a) => Some(a.path.to_string()),
+            _ => None,
+        })
+        .collect();
+    assert!(added.iter().any(|p| p == "/"), "{added:?}");
+    let root = chain.prim(&sdf::Path::abs_root()).data.unwrap();
+    assert_eq!(
+        locate(&root, &Locator::parse("__usdUpAxis/upAxis")).and_then(|d| d.value()),
+        Some(Value::Token(moho::openusd::tf::Token::from("Z")))
+    );
+}
