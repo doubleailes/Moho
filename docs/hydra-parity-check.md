@@ -294,6 +294,34 @@ Notices (all openusd's authoring, not the index; upstream candidates):
 - **No-op writes** (a relationship set to the targets it has) notify
   nothing in openusd; USD notifies. Seen on hand-run edits only.
 
+Hydra artifacts, exempted (deterministic in Hydra, not reproduced;
+decided after a targeted check, `isCoral` and two minimal fixtures):
+
+- **A native instancer whose prototype holds a point instancer carries the
+  flattening's data.** Hydra gives that `.../UsdNiInstancer` an identity
+  `xform`, `visibility` true and the other flattened names null; Moho gives
+  the aggregation's data only. The cause is internal to Hydra. While the
+  nested point instancer is populated, `UsdImagingPiPrototypePropagatingSceneIndex`
+  sends notices into the child prototype's `HdFlatteningSceneIndex`
+  (`piPrototypePropagatingSceneIndex.cpp:334-370`, `:534-560`). Each one
+  consolidates its recent prims (`flatteningSceneIndex.cpp:573-580`), so its
+  `SdfPathTable` gains a placeholder for the data-less `/UsdNiInstancer`,
+  and `GetPrim` then wraps it (`:355-370`). This happens on every run,
+  whatever the consumer reads, and not without a point instancer in the
+  prototype. The values are the defaults a delegate assumes when they are
+  absent (`HdSceneIndexAdapterSceneDelegate::GetTransform`,
+  `GetInstancerTransform` and `GetVisible`), and no notice ever dirties
+  them: across 13 edits in both read states, the entries at and under the
+  instancer are identical on both sides. Consumers treat missing flattened
+  data as its default.
+- **An edit to a prim under an abstract (`class`) prim is also dirtied at
+  that prim's own path.** `UsdImagingStageSceneIndex::_ComputeDirtiedEntries`
+  (`stageSceneIndex.cpp:797` and on) does not check `_populatedPaths`, so
+  editing `/Asset/geo/m.visibility` under a class gives
+  `DIRTIED /Asset/geo/m { visibility }` besides the prototype's entry. Moho
+  sends the prototype's entry only. The path holds no prim in either
+  index, so a consumer has nothing to update.
+
 ### (b) Moho's generic data
 
 `__usdAttributes` and `__usdRelationships` on every prim, and their dirty
@@ -301,7 +329,7 @@ locators on every property edit. Nothing else.
 
 ### (c) Real divergences
 
-None left unfixed but the one paused below.
+None left unfixed.
 
 ## Fixed
 
@@ -335,17 +363,3 @@ Each with a test, one concern per commit:
 The fourth open gap, the stage-level `includeRoot` edit's two entries, is
 openusd's authoring (see "A new spec is one resync"): with USD's two
 notices Moho sends both entries.
-
-## Paused
-
-- **A native instancer carrying the flattening's data in isCoral.** For
-  the instancer of `/isCoral/isCoral` (`.../UsdNiInstancer`), Hydra also
-  gives `xform` (identity), `visibility` (true), and the other flattened
-  names (null); Moho gives the aggregation's data only. It does not happen
-  on the native instancing fixtures. The likely cause is that
-  `HdFlatteningSceneIndex::GetPrim` wraps an input prim without data when
-  its prim table holds an entry there (a placeholder for a cached
-  descendant), and the propagation's merging index overlays that wrapper
-  on the instancer: data that depends on what Hydra's internal indices
-  cached during population. Reproducing it means mirroring Hydra's prim
-  table and query pattern, beyond a correction.
