@@ -19,7 +19,7 @@ def Xform "world" (
 )
 {
     def DomeLight_1 "dome" (
-        prepend apiSchemas = ["ShapingAPI"]
+        prepend apiSchemas = ["ShapingAPI", "NoSuchRendererAPI"]
     )
     {
     }
@@ -76,6 +76,10 @@ fn prim_info_names_the_usd_prim() {
         panic!()
     };
     assert!(schemas.contains(&Token::from("ShapingAPI")), "{schemas:?}");
+    assert!(
+        !schemas.contains(&Token::from("NoSuchRendererAPI")),
+        "a schema the registry does not know is left out, as UsdPrim::GetAppliedSchemas: {schemas:?}"
+    );
     assert_eq!(
         info(&index, "/world/still", "kind"),
         None,
