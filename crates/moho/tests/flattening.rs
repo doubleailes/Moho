@@ -173,6 +173,70 @@ fn a_parent_move_dirties_its_subtree() {
 }
 
 #[test]
+fn purpose_is_flattened_as_hydra() {
+    // `HdFlattenedPurposeDataSourceProvider`: an own purpose passes the
+    // input container through, an inheritable parent's is taken whole, and
+    // a fallback alone gives `purpose` and nothing else.
+    let input = RetainedSceneIndex::new();
+    let purpose = |entries: Vec<(&str, moho::data_source::DataSource)>| {
+        RetainedContainer::new([("purpose", RetainedContainer::new(entries).into_data_source())])
+            .into_handle()
+    };
+    let empty: [(&str, moho::data_source::DataSource); 0] = [];
+    input.add_prims([
+        (
+            p("/a"),
+            Prim::new(
+                "",
+                purpose(vec![
+                    ("purpose", value(Value::Token(Token::from("proxy")))),
+                    ("inheritable", value(true)),
+                ]),
+            ),
+        ),
+        (
+            p("/a/b"),
+            Prim::new("mesh", RetainedContainer::new(empty).into_handle()),
+        ),
+        (
+            p("/c"),
+            Prim::new(
+                "mesh",
+                purpose(vec![("fallback", value(Value::Token(Token::from("guide"))))]),
+            ),
+        ),
+    ]);
+    let flat = FlatteningSceneIndex::new(input.clone());
+    let names = |path: &str| {
+        let data = flat.prim(&p(path)).data.unwrap();
+        locate(&data, &Locator::parse("purpose"))
+            .unwrap()
+            .as_container()
+            .unwrap()
+            .names()
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(
+        names("/a"),
+        ["purpose", "inheritable"],
+        "the input's own container"
+    );
+    assert_eq!(
+        names("/a/b"),
+        ["purpose", "inheritable"],
+        "the parent's, inherited"
+    );
+    assert_eq!(names("/c"), ["purpose"], "a fallback is not inheritable");
+    assert_eq!(
+        read(&flat, "/c", "purpose/purpose"),
+        Some(Value::Token(Token::from("guide")))
+    );
+    assert_eq!(read(&flat, "/c", "purpose/inheritable"), None);
+}
+
+#[test]
 fn material_bindings_concatenate_down() {
     let input = RetainedSceneIndex::new();
     let bindings = |path: &str| {

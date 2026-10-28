@@ -281,28 +281,30 @@ impl Flattened {
         container([(imageable::VISIBILITY, value(visible))])
     }
 
+    /// `HdFlattenedPurposeDataSourceProvider`: the prim's own `purpose`
+    /// container when it has a purpose, else its parent's flattened one
+    /// when inheritable, else the fallback alone (not inheritable), else
+    /// the input as it is.
     fn purpose(&self) -> Option<DataSource> {
-        let local = PurposeSchema::get(&self.local);
-        if let Some(purpose) = local.as_ref().and_then(|p| p.purpose()) {
-            return Some(container([
-                (imageable::PURPOSE, value(Value::Token(purpose))),
-                (imageable::INHERITABLE, value(true)),
-            ]));
-        }
-        if let Some(parent) = self.parent().and_then(|p| PurposeSchema::get(&p))
-            && parent.inheritable() == Some(true)
-            && let Some(purpose) = parent.purpose()
+        let local = member_container(&self.local, imageable::PURPOSE);
+        if let Some(local) = &local
+            && local.get(&Token::from(imageable::PURPOSE)).is_some()
         {
-            return Some(container([
-                (imageable::PURPOSE, value(Value::Token(purpose))),
-                (imageable::INHERITABLE, value(true)),
-            ]));
+            return Some(DataSource::Container(local.clone()));
         }
-        let fallback = local.and_then(|p| p.fallback())?;
-        Some(container([
-            (imageable::PURPOSE, value(Value::Token(fallback))),
-            (imageable::INHERITABLE, value(false)),
-        ]))
+        if let Some(parent) = self.parent()
+            && PurposeSchema::get(&parent).and_then(|p| p.inheritable()) == Some(true)
+            && let Some(parent) = member_container(&parent, imageable::PURPOSE)
+        {
+            return Some(DataSource::Container(parent));
+        }
+        if let Some(fallback) = local
+            .as_ref()
+            .and_then(|c| c.get(&Token::from(imageable::FALLBACK)))
+        {
+            return Some(container([(imageable::PURPOSE, fallback)]));
+        }
+        local.map(DataSource::Container)
     }
 
     /// Always a container, empty for a prim that has and inherits no
