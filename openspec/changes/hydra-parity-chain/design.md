@@ -252,3 +252,28 @@ prim factory.
   `light/lightLink` (`_InvalidateLights` for the collection it just
   processed), after the added entry; Moho does the same, and the test pins
   it.
+
+### Found by the final parity check (`docs/hydra-parity-check.md`)
+
+Fixed, each with a test: flattening dirties only the descendants whose
+flattened data was read since it was last dirtied (`_DirtyHierarchy`,
+flattened primvars tracked per primvar), and a prim added again dirties its
+read descendants for every flattened name, after the added entry
+(`_PrimsAdded`); the flattened `purpose` is
+`HdFlattenedPurposeDataSourceProvider`'s (the input container as it is, an
+inheritable parent's whole, or a fallback alone, without `inheritable`).
+
+Accepted:
+
+- **Category ids are numbered in another order.** Light linking numbers a
+  new expression when it first meets it, in the order prims are added
+  (Hydra) or read at construction (Moho), both depth first; Moho's merging
+  lists children in path order, Hydra's in hash order, so on ALab a light's
+  id differs (`group_0` against `group_3`). The ids stay consistent between
+  lights and the prims they link.
+- **An explicit collection's union order.** For `explicitOnly` (and a
+  property path) C++ unions the included paths in hash map order
+  (`/world/c /world/a`); openusd's port in path order. The same expression.
+- **A path expression's text.** openusd prints a predicate's string
+  argument bare when it can (`{hdType:mesh}`), C++ quoted
+  (`{hdType:"mesh"}`). The same expression.
