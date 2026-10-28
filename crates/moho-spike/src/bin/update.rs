@@ -83,9 +83,8 @@ fn run() -> moho_spike::Result<()> {
         let samples: Vec<Sample> = (0..runs).map(|i| bench.run(edit, i)).collect::<Result<_, _>>()?;
         let (median, worst) = median_and_worst(&samples);
         let counts = samples.last().map(|s| s.counts).unwrap_or_default();
-        let mut authoring: Vec<Duration> = samples.iter().map(|s| s.authoring).collect();
-        authoring.sort();
-        let authoring = authoring.get(authoring.len() / 2).copied().unwrap_or_default();
+        let authoring: Vec<Duration> = samples.iter().map(|s| s.authoring).collect();
+        let authoring = moho_spike::update::median(&authoring);
         println!(
             "| {edit} | {} | {} | {} | {} | {} | {} | {} |",
             ms(median),

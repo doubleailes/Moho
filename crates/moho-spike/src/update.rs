@@ -321,13 +321,28 @@ impl Bench {
     }
 }
 
+/// The median of `times`: the middle one, or the mean of the two middle
+/// ones when there is an even number of them (zero when there is none).
+pub fn median(times: &[Duration]) -> Duration {
+    let mut times = times.to_vec();
+    times.sort();
+    let mid = times.len() / 2;
+    match (
+        times.len() % 2,
+        mid.checked_sub(1).and_then(|lower| times.get(lower)),
+        times.get(mid),
+    ) {
+        (0, Some(lower), Some(upper)) => (*lower + *upper) / 2,
+        (_, _, Some(middle)) => *middle,
+        _ => Duration::ZERO,
+    }
+}
+
 /// The median and worst of `samples`.
 pub fn median_and_worst(samples: &[Sample]) -> (Duration, Duration) {
-    let mut times: Vec<Duration> = samples.iter().map(|s| s.elapsed).collect();
-    times.sort();
-    let median = times.get(times.len() / 2).copied().unwrap_or_default();
-    let worst = times.last().copied().unwrap_or_default();
-    (median, worst)
+    let times: Vec<Duration> = samples.iter().map(|s| s.elapsed).collect();
+    let worst = times.iter().max().copied().unwrap_or_default();
+    (median(&times), worst)
 }
 
 /// A fixture: a camera with a translate op, `meshes` meshes under `/world`
@@ -351,6 +366,18 @@ mod tests {
 
     use super::*;
     use crate::fixture::TempDir;
+
+    #[test]
+    fn the_median_of_an_even_count_is_the_mean_of_the_middle_two() {
+        let ms = |v: &[u64]| v.iter().map(|&m| Duration::from_millis(m)).collect::<Vec<_>>();
+        assert_eq!(median(&ms(&[])), Duration::ZERO);
+        assert_eq!(median(&ms(&[7])), Duration::from_millis(7));
+        assert_eq!(median(&ms(&[9, 1, 5])), Duration::from_millis(5));
+        assert_eq!(median(&ms(&[4, 1, 9, 2])), Duration::from_millis(3));
+        // The binary's default of 20 runs.
+        let twenty: Vec<u64> = (1..=20).rev().collect();
+        assert_eq!(median(&ms(&twenty)), Duration::from_micros(10_500));
+    }
 
     #[test]
     fn each_edit_reaches_the_observer() {
