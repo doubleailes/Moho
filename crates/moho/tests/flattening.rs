@@ -146,6 +146,9 @@ fn constant_primvars_are_inherited() {
 #[test]
 fn a_parent_move_dirties_its_subtree() {
     let (_dir, stage_index, flat) = setup();
+    for path in ["/a/b", "/a/plain/deep", "/a/reset"] {
+        world(&flat, path);
+    }
     let recorder = RecordingObserver::on(flat.as_ref());
     stage_index
         .stage()
@@ -170,6 +173,44 @@ fn a_parent_move_dirties_its_subtree() {
     dirtied.sort();
     assert_eq!(dirtied, ["/a", "/a/b", "/a/plain", "/a/plain/deep", "/a/reset"]);
     assert_eq!(world(&flat, "/a/b"), gf::Mat4d::translation([5.0, 2.0, 0.0]));
+}
+
+#[test]
+fn only_what_was_read_is_dirtied_below() {
+    // `HdFlatteningSceneIndex` dirties the descendants whose flattened data
+    // it computed: none before any read, and once dirtied, none until read
+    // again.
+    let (_dir, stage_index, flat) = setup();
+    let recorder = RecordingObserver::on(flat.as_ref());
+    let move_a = |x: f64| {
+        stage_index
+            .stage()
+            .unwrap()
+            .attribute("/a.xformOp:translate")
+            .unwrap()
+            .set(gf::Vec3d { x, y: 0.0, z: 0.0 })
+            .unwrap();
+        stage_index.apply_pending_updates();
+        let mut dirtied: Vec<String> = recorder
+            .take()
+            .into_iter()
+            .filter_map(|n| match n {
+                Notice::Dirtied(d) => Some(d.path.to_string()),
+                _ => None,
+            })
+            .collect();
+        dirtied.sort();
+        dirtied
+    };
+    assert_eq!(move_a(5.0), ["/a"], "nothing read");
+    world(&flat, "/a/plain/deep");
+    assert_eq!(move_a(6.0), ["/a", "/a/plain", "/a/plain/deep"], "the path read");
+    assert_eq!(move_a(7.0), ["/a"], "dirtied, then not read again");
+    // A visibility read is not an xform read.
+    VisibilitySchema::get(&flat.prim(&p("/a/b")).data.unwrap())
+        .unwrap()
+        .visibility();
+    assert_eq!(move_a(8.0), ["/a"]);
 }
 
 #[test]
@@ -359,6 +400,21 @@ fn descendants_are_dirtied_for_what_they_inherit() {
     let flat = FlatteningSceneIndex::new(input.clone());
     let recorder = RecordingObserver::on(flat.as_ref());
     let child_locators = |locators: &[&str]| -> Vec<String> {
+        // Read every flattened name of the child first: only data read is
+        // dirtied below.
+        let data = flat.prim(&p("/a/b")).data.unwrap();
+        for name in [
+            "xform",
+            "visibility",
+            "purpose",
+            "usdMaterialBindings",
+            "geomModel",
+            "model",
+            "__usdUpAxis",
+        ] {
+            data.get(&Token::from(name));
+        }
+        locate(&data, &Locator::parse("primvars/tint"));
         input.dirty_prims([(
             p("/a"),
             locators.iter().map(|l| Locator::parse(l)).collect::<LocatorSet>(),

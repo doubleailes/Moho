@@ -19,16 +19,25 @@
 //!   with `drawMode` and `cardVisibility` from the parent where the prim has
 //!   none or `inherited` (`UsdImagingFlattenedGeomModelDataSourceProvider`).
 //!
-//! When a prim's flattened data is dirtied, every descendant is dirtied for
+//! When a prim's flattened data is dirtied, its descendants are dirtied for
 //! what its providers say descendants inherit
 //! (`ComputeDirtyLocatorsForDescendants`): the whole `xform`, `visibility`
 //! and `purpose`; the same `primvars` locators unless one may change an
 //! interpolation (then all of `primvars`); `usdMaterialBindings` per
 //! purpose; the same `model` and `__usdUpAxis` locators; and only
 //! `geomModel`'s `drawMode` and `cardVisibility`.
+//!
+//! As `HdFlatteningSceneIndex`, only the descendants whose flattened data
+//! was read since it was last dirtied are: the walk down from the dirtied
+//! prim stops at a prim read through this index whose dirtied data was not
+//! read (its descendants computed theirs through it, so none was), and goes
+//! on through a prim never read. Flattened `primvars` are tracked per
+//! primvar, as Hydra's invalidatable flattened primvars. A prim added again
+//! dirties its read descendants for every flattened name, after the added
+//! entry.
 
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::rc::{Rc, Weak};
 
 use openusd::gf;
@@ -90,11 +99,65 @@ fn dirty_for_descendants(name: &str, relative: Vec<Locator>) -> Option<Vec<Locat
     }
 }
 
+/// The index in [`FLATTENED`] of the flattened `primvars`.
+const PRIMVARS_SLOT: usize = 3;
+
+/// What a dirtied entry invalidates of one flattened data source, relative
+/// to it (Hydra's `relativeDirtyLocators`).
+#[derive(Clone)]
+enum Relative {
+    Nothing,
+    All,
+    Some(Vec<Locator>),
+}
+
+/// The flattened data read from one prim since it was last dirtied: a bit
+/// per [`FLATTENED`] name (Hydra's cached flattened data sources), and the
+/// flattened primvars read by name (its invalidatable primvars cache).
+#[derive(Default)]
+struct Read {
+    names: u16,
+    primvars: HashSet<Token>,
+}
+
+impl Read {
+    /// Forgets what `relative` invalidates (`_PrimLevelWrappingDataSource::
+    /// PrimDirtied`): whether any of it had been read.
+    fn dirty(&mut self, relative: &[Relative]) -> bool {
+        let mut any = false;
+        for (slot, relative) in relative.iter().enumerate() {
+            let bit = 1 << slot;
+            if matches!(relative, Relative::Nothing) || self.names & bit == 0 {
+                continue;
+            }
+            match relative {
+                Relative::Some(locators) if slot == PRIMVARS_SLOT => {
+                    for locator in locators {
+                        if let Some(name) = locator.elements().first() {
+                            any |= self.primvars.remove(name);
+                        }
+                    }
+                }
+                _ => {
+                    self.names &= !bit;
+                    if slot == PRIMVARS_SLOT {
+                        self.primvars.clear();
+                    }
+                    any = true;
+                }
+            }
+        }
+        any
+    }
+}
+
 /// A scene index whose prims carry their inherited data resolved.
 pub struct FlatteningSceneIndex {
     input: SceneIndexHandle,
     me: Weak<FlatteningSceneIndex>,
     cache: RefCell<HashMap<sdf::Path, Prim>>,
+    /// The prims read through this index (Hydra's prim table), by path.
+    read: RefCell<BTreeMap<sdf::Path, Read>>,
     observers: Observers,
 }
 
@@ -105,6 +168,7 @@ impl FlatteningSceneIndex {
             input: input.clone(),
             me: me.clone(),
             cache: RefCell::new(HashMap::new()),
+            read: RefCell::new(BTreeMap::new()),
             observers: Observers::default(),
         });
         let observer: Weak<dyn Observer> = index.me.clone();
@@ -125,12 +189,55 @@ impl FlatteningSceneIndex {
 
     fn forget_under(&self, root: &sdf::Path) {
         self.cache.borrow_mut().retain(|p, _| !p.has_prefix(root));
+        self.read.borrow_mut().retain(|p, _| !p.has_prefix(root));
     }
 
-    fn descendants(&self, path: &sdf::Path, out: &mut Vec<sdf::Path>) {
-        for child in self.input.children(path) {
-            out.push(child.clone());
-            self.descendants(&child, out);
+    /// Records that the flattened data `slot` of `path` was read.
+    fn mark(&self, path: &sdf::Path, slot: usize) {
+        if let Some(read) = self.read.borrow_mut().get_mut(path) {
+            read.names |= 1 << slot;
+        }
+    }
+
+    /// Records that the flattened primvar `name` of `path` was read.
+    fn mark_primvar(&self, path: &sdf::Path, name: &Token) {
+        if let Some(read) = self.read.borrow_mut().get_mut(path) {
+            read.primvars.insert(name.clone());
+        }
+    }
+
+    /// `HdFlatteningSceneIndex::_DirtyHierarchy`: forgets what `relative`
+    /// invalidates of `path` and the prims read below it, and dirties at
+    /// `locators` each descendant that had read some of it; the walk skips
+    /// the subtree of a read prim that had not.
+    fn dirty_hierarchy(
+        &self,
+        path: &sdf::Path,
+        relative: &[Relative],
+        locators: &LocatorSet,
+        out: &mut Vec<Dirtied>,
+    ) {
+        let mut read = self.read.borrow_mut();
+        let mut skipped: Vec<sdf::Path> = Vec::new();
+        // Paths are ordered by their text: the subtree follows `path`, mixed
+        // with siblings whose names extend its own.
+        for (prim, state) in read.range_mut(path.clone()..) {
+            if !prim.as_str().starts_with(path.as_str()) {
+                break;
+            }
+            if !prim.has_prefix(path) || skipped.iter().any(|s| prim.has_prefix(s)) {
+                continue;
+            }
+            if state.dirty(relative) {
+                if prim != path {
+                    out.push(Dirtied {
+                        path: prim.clone(),
+                        locators: locators.clone(),
+                    });
+                }
+            } else {
+                skipped.push(prim.clone());
+            }
         }
     }
 }
@@ -154,6 +261,7 @@ impl SceneIndex for FlatteningSceneIndex {
             data: Some(data),
         };
         self.cache.borrow_mut().insert(path.clone(), prim.clone());
+        self.read.borrow_mut().entry(path.clone()).or_default();
         prim
     }
 
@@ -167,11 +275,24 @@ impl SceneIndex for FlatteningSceneIndex {
 }
 
 impl Observer for FlatteningSceneIndex {
+    /// As `HdFlatteningSceneIndex::_PrimsAdded`: a prim added again
+    /// dirties the descendants that read its flattened data, for every
+    /// flattened name, after the added entries; its own data is read anew.
     fn added(&self, _: &dyn SceneIndex, entries: &[Added]) {
+        let all = vec![Relative::All; FLATTENED.len()];
+        let locators: LocatorSet = FLATTENED.iter().map(|name| Locator::new([*name])).collect();
+        let mut dirtied = Vec::new();
         for e in entries {
-            self.forget_under(&e.path);
+            self.dirty_hierarchy(&e.path, &all, &locators, &mut dirtied);
+        }
+        for e in entries {
+            self.cache.borrow_mut().retain(|p, _| !p.has_prefix(&e.path));
+            self.read.borrow_mut().remove(&e.path);
         }
         self.observers.send_added(self, entries);
+        if !dirtied.is_empty() {
+            self.observers.send_dirtied(self, &dirtied);
+        }
     }
 
     fn removed(&self, _: &dyn SceneIndex, entries: &[Removed]) {
@@ -187,31 +308,39 @@ impl Observer for FlatteningSceneIndex {
             // Per flattened name, as `HdFlatteningSceneIndex::_PrimDirtied`:
             // the whole name when a broader locator covers it, else what the
             // provider says descendants inherit of the changes under it.
+            let mut relative = vec![Relative::Nothing; FLATTENED.len()];
             let mut inherited = LocatorSet::new();
-            for name in FLATTENED {
+            for (slot, name) in FLATTENED.iter().enumerate() {
                 let flattened = Locator::new([*name]);
                 if !e.locators.intersects(&flattened) {
                     continue;
                 }
                 if e.locators.contains(&flattened) {
+                    relative[slot] = Relative::All;
                     inherited.insert(flattened);
                     continue;
                 }
-                let relative: Vec<Locator> = e
+                let changed: Vec<Locator> = e
                     .locators
                     .iter()
                     .filter(|l| l.has_prefix(&flattened))
                     .map(|l| Locator::new(l.elements().iter().skip(1).cloned()))
                     .collect();
-                match dirty_for_descendants(name, relative) {
-                    None => inherited.insert(flattened),
-                    Some(relative) => {
-                        for l in relative {
+                match dirty_for_descendants(name, changed) {
+                    None => {
+                        relative[slot] = Relative::All;
+                        inherited.insert(flattened);
+                    }
+                    Some(changed) => {
+                        for l in &changed {
                             let mut absolute = flattened.clone();
                             for element in l.elements() {
                                 absolute = absolute.append(element.clone());
                             }
                             inherited.insert(absolute);
+                        }
+                        if !changed.is_empty() {
+                            relative[slot] = Relative::Some(changed);
                         }
                     }
                 }
@@ -219,12 +348,7 @@ impl Observer for FlatteningSceneIndex {
             if inherited.is_empty() {
                 continue;
             }
-            let mut descendants = Vec::new();
-            self.descendants(&e.path, &mut descendants);
-            out.extend(descendants.into_iter().map(|path| Dirtied {
-                path,
-                locators: inherited.clone(),
-            }));
+            self.dirty_hierarchy(&e.path, &relative, &inherited, &mut out);
         }
         self.observers.send_dirtied(self, &out);
     }
@@ -314,6 +438,8 @@ impl Flattened {
             .parent()
             .and_then(|p| member_container(&p, primvars::PRIMVARS));
         Some(DataSource::Container(Rc::new(FlattenedPrimvars {
+            index: self.index.clone(),
+            path: self.path.clone(),
             local: member_container(&self.local, primvars::PRIMVARS),
             parent,
         })))
@@ -418,6 +544,11 @@ impl Container for Flattened {
     }
 
     fn get(&self, name: &Token) -> Option<DataSource> {
+        if let Some(slot) = FLATTENED.iter().position(|n| name == *n)
+            && let Some(index) = self.index.upgrade()
+        {
+            index.mark(&self.path, slot);
+        }
         match name.as_str() {
             xform::XFORM => Some(self.xform()),
             imageable::VISIBILITY => Some(self.visibility()),
@@ -516,6 +647,8 @@ impl Container for FlattenedGeomModel {
 
 /// A prim's primvars plus its ancestors' constant primvars.
 struct FlattenedPrimvars {
+    index: Weak<FlatteningSceneIndex>,
+    path: sdf::Path,
     local: Option<ContainerHandle>,
     parent: Option<ContainerHandle>,
 }
@@ -551,6 +684,9 @@ impl Container for FlattenedPrimvars {
     }
 
     fn get(&self, name: &Token) -> Option<DataSource> {
+        if let Some(index) = self.index.upgrade() {
+            index.mark_primvar(&self.path, name);
+        }
         if let Some(local) = self.local.as_ref().and_then(|c| c.get(name)) {
             return Some(local);
         }
