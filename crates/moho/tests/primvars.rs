@@ -367,4 +367,17 @@ def PointInstancer "pi"
     assert!(has("hydra:instanceScales"), "an authored empty array");
     assert!(!has("velocities"));
     assert!(!has("hydra:instanceRotations"));
+    let role = |name: &str| {
+        moho::data_source::locate(&data, &Locator::parse(&format!("primvars/{name}/role")))
+            .and_then(|d| d.value())
+    };
+    assert_eq!(
+        role("hydra:instanceTranslations"),
+        Some(Value::Token(Token::from("point")))
+    );
+    assert_eq!(
+        role("hydra:instanceScales"),
+        Some(Value::Token(Token::default())),
+        "a custom primvar's role is built empty"
+    );
 }
