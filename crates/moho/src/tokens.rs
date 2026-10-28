@@ -63,14 +63,21 @@ pub mod usd {
     pub const FORWARDED_TARGETS: &str = "forwardedTargets";
 }
 
-/// Scene globals, at the absolute root (`HdSceneGlobalsSchema`, the fields
-/// `UsdImagingDataSourceStage` fills).
+/// Scene globals, at the absolute root (`HdSceneGlobalsSchema`).
+/// `UsdImagingDataSourceStage` fills the time range and rate and the active
+/// render settings; the scene globals filter
+/// ([`SceneGlobalsSceneIndex`](crate::filter::SceneGlobalsSceneIndex)) the
+/// fields a host sets.
 pub mod scene_globals {
     pub const SCENE_GLOBALS: &str = "sceneGlobals";
     pub const START_TIME_CODE: &str = "startTimeCode";
     pub const END_TIME_CODE: &str = "endTimeCode";
     pub const TIME_CODES_PER_SECOND: &str = "timeCodesPerSecond";
     pub const ACTIVE_RENDER_SETTINGS_PRIM: &str = "activeRenderSettingsPrim";
+    pub const ACTIVE_RENDER_PASS_PRIM: &str = "activeRenderPassPrim";
+    pub const PRIMARY_CAMERA_PRIM: &str = "primaryCameraPrim";
+    pub const CURRENT_FRAME: &str = "currentFrame";
+    pub const SCENE_STATE_ID: &str = "sceneStateId";
 }
 
 /// `UsdImagingUsdUpAxisSchema` (`__usdUpAxis`), at the absolute root.

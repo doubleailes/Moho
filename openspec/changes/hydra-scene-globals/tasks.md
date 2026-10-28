@@ -1,14 +1,14 @@
 ## 1. The filter
 
-- [ ] 1.1 Add the remaining `HdSceneGlobalsSchema` tokens (`activeRenderPassPrim`, `primaryCameraPrim`, `currentFrame`, `sceneStateId`) to `tokens::scene_globals`
-- [ ] 1.2 Add `filter::scene_globals::SceneGlobalsSceneIndex`: pass-through of prims, children and notices (renames as removed and added), and the root's live `sceneGlobals` overlaid over the input root's data
-- [ ] 1.3 Add its six setters with the reference's equality and one dirtied entry at `/` per change
-- [ ] 1.4 Tests: unset fields (names listed, input's value or nothing), the overlay keeping the input's root data, a set field hiding the input's, an empty path, live reads, a root with no input data, pass-through notices
+- [x] 1.1 Add the remaining `HdSceneGlobalsSchema` tokens (`activeRenderPassPrim`, `primaryCameraPrim`, `currentFrame`, `sceneStateId`) to `tokens::scene_globals`
+- [x] 1.2 Add `filter::scene_globals::SceneGlobalsSceneIndex`: pass-through of prims, children and notices (renames as removed and added), and the root's live `sceneGlobals` overlaid over the input root's data
+- [x] 1.3 Add its six setters with the reference's equality and one dirtied entry at `/` per change
+- [x] 1.4 Tests: unset fields (names listed, input's value or nothing), the overlay keeping the input's root data, a set field hiding the input's, an empty path, live reads, a root with no input data, pass-through notices
 
 ## 2. Notices
 
-- [ ] 2.1 Tests: each setter's notice (exact locator at `/`), no notice for an equal value, the first set notifying, `currentFrame` NaN equal to NaN, `timeCodesPerSecond` NaN notifying again
-- [ ] 2.2 Test: a `currentFrame` round trip (set, set again, change, read back)
+- [x] 2.1 Tests: each setter's notice (exact locator at `/`), no notice for an equal value, the first set notifying, `currentFrame` NaN equal to NaN, `timeCodesPerSecond` NaN notifying again
+- [x] 2.2 Test: a `currentFrame` round trip (set, set again, change, read back)
 
 ## 3. Placement
 
