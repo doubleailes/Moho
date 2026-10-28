@@ -94,9 +94,24 @@ fn prim_info_names_the_usd_prim() {
     };
     assert_eq!(
         names("/world/still"),
-        ["specifier", "typeName", "isLoaded"].map(Token::from),
-        "no apiSchemas, kind or variantSelections when there are none"
+        [
+            "specifier",
+            "typeName",
+            "isLoaded",
+            "apiSchemas",
+            "kind",
+            "variantSelections"
+        ]
+        .map(Token::from),
+        "named when there are none, as UsdImagingDataSourceUsdPrimInfo::GetNames"
     );
+    for field in ["apiSchemas", "kind", "variantSelections"] {
+        assert_eq!(
+            info(&index, "/world/still", field),
+            None,
+            "{field} answers nothing"
+        );
+    }
     assert!(names("/world").contains(&Token::from("kind")));
 }
 
