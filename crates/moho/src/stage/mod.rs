@@ -233,14 +233,19 @@ impl StageSceneIndex {
         self.observers.send_added(self, &added);
     }
 
-    /// The prims the default traversal reaches at and under `root` (the
-    /// absolute root itself excluded), recorded as populated.
+    /// The prims the default traversal reaches at and under `root`,
+    /// recorded as populated. Populating from the absolute root adds the
+    /// absolute root first, typeless, as `_PopulateSubtree` does for the
+    /// pseudo-root ("we have to make sure the prim at the absolute root path
+    /// is added"), so filters built before the stage was set read its data
+    /// again.
     fn populate(&self, root: &sdf::Path) -> Vec<Added> {
         let Some(stage) = self.stage() else {
             return Vec::new();
         };
         let mut paths = Vec::new();
         if root.is_abs_root() {
+            paths.push(sdf::Path::abs_root());
             // A traversal error leaves the prims found so far: the index
             // shows what the stage could compose.
             let _ = stage.traverse(self.predicate(), |path| paths.push(path.clone()));

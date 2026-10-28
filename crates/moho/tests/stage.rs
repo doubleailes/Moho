@@ -37,6 +37,7 @@ fn setting_a_stage_adds_its_prims() {
     assert_eq!(
         recorder.take(),
         [
+            added("/", ""),
             added("/world", ""),
             added("/world/geo", "mesh"),
             added("/world/cam", "camera")
@@ -64,6 +65,7 @@ fn replacing_the_stage_removes_first() {
             Notice::Removed(Removed {
                 path: sdf::Path::abs_root()
             }),
+            added("/", ""),
             added("/other", "mesh")
         ]
     );
@@ -83,6 +85,7 @@ fn a_masked_stage_holds_only_the_mask() {
     assert_eq!(
         recorder.take(),
         [
+            added("/", ""),
             added("/world", ""),
             added("/world/a", "mesh"),
             added("/world/a/inner", "")
