@@ -49,6 +49,7 @@ const GPRIM_CUSTOM: &[(&str, &str, &str)] = &[
     (t::ACCELERATIONS, "accelerations", "PointBased"),
     (t::NORMALS, "normals", "PointBased"),
     (t::WIDTHS, "widths", "Curves"),
+    (t::WIDTHS, "widths", "Points"),
     (t::POINT_WEIGHTS, "pointWeights", "NurbsCurves"),
 ];
 
