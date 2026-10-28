@@ -106,9 +106,23 @@ impl Container for PrimInfo {
     }
 }
 
+/// Whether UsdImaging gives the prim no `UsdImagingDataSourcePrim` data
+/// (`__usdPrimInfo`, `primOrigin`): render settings, products, vars and
+/// passes, whose prim data sources skip it, and shaders and node graphs,
+/// whose adapters (`UsdImagingRepresentedByAncestorPrimAdapter`) give no
+/// data at all. A material, a node graph too, has its own adapter.
+pub(crate) fn skips_prim_data(prim: &usd::Prim) -> bool {
+    let is_a = |schema: &str| prim.is_a(schema).unwrap_or(false);
+    is_a("RenderSettingsBase")
+        || is_a("RenderVar")
+        || is_a("RenderPass")
+        || is_a("Shader")
+        || (is_a("NodeGraph") && !is_a("Material"))
+}
+
 impl Adapter for PrimInfoAdapter {
     fn names(&self, ctx: &PrimContext) -> Vec<Token> {
-        if ctx.path.is_abs_root() || ctx.prim().is_none() {
+        if ctx.path.is_abs_root() || ctx.prim().is_none_or(|p| skips_prim_data(&p)) {
             Vec::new()
         } else {
             vec![Token::from(t::USD_PRIM_INFO)]
@@ -119,7 +133,7 @@ impl Adapter for PrimInfoAdapter {
         if name != t::USD_PRIM_INFO || ctx.path.is_abs_root() {
             return None;
         }
-        let prim = ctx.prim()?;
+        let prim = ctx.prim().filter(|p| !skips_prim_data(p))?;
         Some(DataSource::Container(Rc::new(PrimInfo {
             prim,
             ctx: ctx.clone(),

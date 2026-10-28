@@ -231,3 +231,54 @@ fn a_kind_edit_notifies_nothing() {
     assert!(notices.is_empty(), "{notices:?}");
     assert_eq!(info(&index, "/world", "kind"), token("assembly"));
 }
+
+#[test]
+fn render_prims_shaders_and_node_graphs_have_no_prim_data() {
+    // UsdImaging's render prim data sources skip `UsdImagingDataSourcePrim`'s
+    // data, and the shader and node graph adapters give none.
+    let (_dir, stage) = stage(
+        r#"#usda 1.0
+def Scope "Render"
+{
+    def RenderSettings "settings" {}
+    def RenderProduct "product" {}
+    def RenderVar "color" {}
+}
+def RenderPass "pass" {}
+def Shader "stray" {}
+def NodeGraph "graph" {}
+def Material "mat" {}
+"#,
+    );
+    let index = StageSceneIndex::new();
+    index.set_stage(stage);
+    let names = |path: &str| -> Vec<String> {
+        let data = index.prim(&p(path)).data.unwrap();
+        data.names().iter().map(ToString::to_string).collect()
+    };
+    for path in [
+        "/Render/settings",
+        "/Render/product",
+        "/Render/color",
+        "/pass",
+        "/stray",
+        "/graph",
+    ] {
+        let names = names(path);
+        assert!(
+            !names.iter().any(|n| n == "__usdPrimInfo" || n == "primOrigin"),
+            "{path}: {names:?}"
+        );
+        let data = index.prim(&p(path)).data.unwrap();
+        assert!(
+            locate(&data, &Locator::parse("__usdPrimInfo")).is_none(),
+            "{path}"
+        );
+        assert!(locate(&data, &Locator::parse("primOrigin")).is_none(), "{path}");
+    }
+    for path in ["/Render", "/mat"] {
+        let names = names(path);
+        assert!(names.iter().any(|n| n == "__usdPrimInfo"), "{path}: {names:?}");
+        assert!(names.iter().any(|n| n == "primOrigin"), "{path}: {names:?}");
+    }
+}
