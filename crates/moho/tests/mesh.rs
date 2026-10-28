@@ -109,6 +109,31 @@ fn a_quad() {
 }
 
 #[test]
+fn an_attribute_without_a_value_reads_its_type_zero() {
+    // `UsdImagingDataSourceAttribute::GetTypedValue` returns a
+    // value-initialized `T` when the attribute has neither a value nor a
+    // fallback: an empty array, an empty token or asset path, zero.
+    let (_dir, stage) = stage("#usda 1.0\ndef Mesh \"bare\"\n{\n}\n");
+    let index = StageSceneIndex::new();
+    index.set_stage(stage);
+    let data = index.prim(&p("/bare")).data.unwrap();
+    let read = |l: &str| locate(&data, &Locator::parse(l)).and_then(|d| d.value());
+    assert_eq!(
+        read("mesh/topology/faceVertexCounts"),
+        Some(Value::IntVec(vec![]))
+    );
+    assert_eq!(
+        read("mesh/topology/faceVertexIndices"),
+        Some(Value::IntVec(vec![]))
+    );
+    assert_eq!(
+        read("__usdAttributes/faceVertexIndices/value"),
+        None,
+        "the generic data tells an attribute without a value apart"
+    );
+}
+
+#[test]
 fn creases_and_holes() {
     let (_dir, index) = setup();
     let creased = MeshSchema::get(&index.prim(&p("/creased")).data.unwrap()).unwrap();

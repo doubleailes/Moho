@@ -139,7 +139,12 @@ fn every_light_input_equals_openusd() {
             .attributes_in_namespace("inputs")
             .unwrap()
         {
-            let expected = attribute.get::<Value>().unwrap();
+            // An input with no value reads as its type's zero value, as
+            // UsdImaging's attribute data source does.
+            let expected = attribute
+                .get::<Value>()
+                .unwrap()
+                .or_else(|| attribute.type_name().unwrap().and_then(|t| t.default_value()));
             // As `LookupLightParamAttribute`: an attribute by its own name,
             // and a Hydra token by its input.
             same(param(&light, attribute.name()), expected.clone(), path);
