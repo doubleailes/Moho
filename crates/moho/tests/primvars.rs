@@ -381,3 +381,37 @@ def PointInstancer "pi"
         "a custom primvar's role is built empty"
     );
 }
+
+#[test]
+fn a_point_instancer_primvar_is_instance_rate_unless_constant() {
+    // `dataSourcePointInstancer.cpp`'s `_PrimvarDataSource`: constant and
+    // uniform read as constant, anything else as instance.
+    let (_dir, stage) = stage(
+        r#"#usda 1.0
+def PointInstancer "pi"
+{
+    point3f[] positions = [(0, 0, 0)]
+    int[] primvars:id = [7] (
+        interpolation = "varying"
+    )
+    int[] primvars:group = [1] (
+        interpolation = "uniform"
+    )
+    int primvars:tag = 3 (
+        interpolation = "constant"
+    )
+}
+"#,
+    );
+    let index = StageSceneIndex::new();
+    index.set_stage(stage);
+    let data = index.prim(&p("/pi")).data.unwrap();
+    let interpolation = |name: &str| {
+        moho::data_source::locate(&data, &Locator::parse(&format!("primvars/{name}/interpolation")))
+            .and_then(|d| d.value())
+    };
+    let token = |t: &str| Some(Value::Token(Token::from(t)));
+    assert_eq!(interpolation("id"), token("instance"));
+    assert_eq!(interpolation("group"), token("constant"));
+    assert_eq!(interpolation("tag"), token("constant"));
+}
