@@ -56,9 +56,14 @@ impl PrimInfo {
             }
             t::IS_LOADED => Some(value(prim.is_loaded().unwrap_or(false))),
             // Composed, the typed schema's built-in API schemas included, as
-            // `UsdPrim::GetAppliedSchemas`; absent when there are none.
+            // `UsdPrim::GetAppliedSchemas`: the prim definition's, so a name
+            // no registered schema has is left out (openusd's `api_schemas`
+            // keeps it); absent when there are none.
             t::API_SCHEMAS => {
-                let schemas = prim.api_schemas().unwrap_or_default();
+                let schemas = prim
+                    .prim_definition()
+                    .map(|d| d.applied_api_schemas().to_vec())
+                    .unwrap_or_default();
                 (!schemas.is_empty()).then(|| value(Value::TokenVec(schemas)))
             }
             t::KIND => prim.kind().ok().flatten().map(|kind| value(Value::Token(kind))),
