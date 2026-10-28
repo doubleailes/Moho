@@ -415,3 +415,40 @@ def PointInstancer "pi"
     assert_eq!(interpolation("group"), token("constant"));
     assert_eq!(interpolation("tag"), token("constant"));
 }
+
+#[test]
+fn points_read_their_widths_as_a_primvar() {
+    // `dataSourcePoints.cpp`: `widths` is a custom primvar of `Points`.
+    let (_dir, stage) = stage(
+        r#"#usda 1.0
+def Points "dots"
+{
+    point3f[] points = [(0, 0, 0), (1, 0, 0)]
+    float[] widths = [0.5, 0.25]
+}
+"#,
+    );
+    let index = StageSceneIndex::new();
+    index.set_stage(stage);
+    let data = index.prim(&p("/dots")).data.unwrap();
+    assert_eq!(
+        moho::data_source::locate(&data, &Locator::parse("primvars/widths/primvarValue"))
+            .and_then(|d| d.value()),
+        Some(Value::FloatVec(vec![0.5, 0.25]))
+    );
+    let recorder = RecordingObserver::on(index.as_ref());
+    index
+        .stage()
+        .unwrap()
+        .attribute("/dots.widths")
+        .unwrap()
+        .set(vec![1.0f32, 1.0])
+        .unwrap();
+    index.apply_pending_updates();
+    assert!(
+        recorder.take().iter().any(
+            |n| matches!(n, Notice::Dirtied(d) if d.locators.contains(&Locator::parse("primvars/widths")))
+        ),
+        "a widths edit dirties the primvar"
+    );
+}
