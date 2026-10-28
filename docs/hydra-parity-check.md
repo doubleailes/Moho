@@ -363,3 +363,18 @@ Each with a test, one concern per commit:
 The fourth open gap, the stage-level `includeRoot` edit's two entries, is
 openusd's authoring (see "A new spec is one resync"): with USD's two
 notices Moho sends both entries.
+
+## Scene globals filter (`hydra-scene-globals`)
+
+Checked afterwards against USD 26.08 with a small oracle:
+`HdsiSceneGlobalsSceneIndex` over `UsdImagingCreateSceneIndices` (draw mode
+off) on a stage authoring a time range, a rate, an up axis and a render
+settings path, against `SceneGlobalsSceneIndex` over `chain::standard`. Both
+print the root's `sceneGlobals` unset, after the stage index's time alone
+changes, and after every setter; record the notices of each setter, of
+equal values set again, of NaN frames and rates set twice and of an empty
+settings path; read a root container held from before the sets; and run
+over an input whose root has no data. The transcripts are equal (an empty
+path printed as Hydra's empty `SdfPath`) but for the root's names that
+come from the chain, not the filter (`coordSysBinding`, `skelBinding`,
+`system`), classified above.

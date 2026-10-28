@@ -87,13 +87,17 @@ A Hydra 2.0 renderer consumes Hydra in three steps; Moho offers each.
    applies a consumer's `RendererFilter { phase, order, build }` list in
    `HdSceneIndexPluginRegistry`'s order: phase, then `AtStart` before
    `AtEnd`, then list position (Hydra's plugin id). There is no global
-   registry: the consumer knows its renderer's filters. Moho ships two, not
-   applied by default: light linking (`RendererFilter::light_linking`, phase
-   4 `AtStart`, as hdPrman and arnold-usd register it) and dependency
-   forwarding (`RendererFilter::dependency_forwarding`, phase 1000 `AtEnd`,
-   as arnold-usd does). Without light linking no prim has `categories`;
-   without dependency forwarding nothing is dirtied through `__dependencies`
-   (render settings, instance categories).
+   registry: the consumer knows its renderer's filters. Moho ships three,
+   not applied by default: the scene globals a host sets
+   (`RendererFilter::scene_globals`, phase 0 `AtStart`, as usdview's
+   `UsdImagingGLEngine` registers it for every renderer), light linking
+   (`RendererFilter::light_linking`, phase 4 `AtStart`, as hdPrman and
+   arnold-usd register it) and dependency forwarding
+   (`RendererFilter::dependency_forwarding`, phase 1000 `AtEnd`, as
+   arnold-usd does). Without the scene globals filter the root has no
+   `sceneGlobals/currentFrame`; without light linking no prim has
+   `categories`; without dependency forwarding nothing is dirtied through
+   `__dependencies` (render settings, instance categories).
 3. **The delegate.** As hdPrman's `renderDelegate.cpp`, the delegate wraps
    the terminal index in `PrimTypeNoticeBatchingSceneIndex`
    (`HdsiPrimTypeNoticeBatchingSceneIndex`: notices held until `flush`,
@@ -242,6 +246,19 @@ observer (`docs/update-latency.md`).
 
 ### Renderer filters
 
+- **`SceneGlobalsSceneIndex`** is `HdsiSceneGlobalsSceneIndex`, the scene
+  globals a host sets. Its root's `sceneGlobals` is overlaid over the
+  input root's data, stronger than it, and names `activeRenderPassPrim`,
+  `activeRenderSettingsPrim`, `primaryCameraPrim`, `currentFrame`,
+  `timeCodesPerSecond` and `sceneStateId` whether set or not. A set field
+  reads its value live; an unset one reads the input's (the stage's
+  `timeCodesPerSecond` and `activeRenderSettingsPrim`) or nothing
+  (`currentFrame`). `startTimeCode` and `endTimeCode` stay the stage's: the
+  filter never sets them. An empty path reads as an empty path array, which
+  still hides the input's. Each setter notifies `/` dirtied at its own
+  field only when the value changes (the current frame compared as a time
+  code, NaN equal to NaN). It is in no chain of UsdImaging's: the host adds
+  it, usdview at phase 0 so the filters after it can read and observe it.
 - **`LightLinkingSceneIndex`** is `HdsiLightLinkingSceneIndex` and its
   cache. It reads lights' `lightLink` and `shadowLink` and light filters'
   `filterLink` and `shadowLink` from `collections/<name>/membershipExpression`
@@ -271,7 +288,10 @@ observer (`docs/update-latency.md`).
 The absolute root carries what `UsdImagingDataSourceStage` gives:
 `sceneGlobals` (`startTimeCode`, `endTimeCode`, `timeCodesPerSecond`, and
 `activeRenderSettingsPrim` when the stage authors a non-empty
-`renderSettingsPrimPath`) and `__usdUpAxis/upAxis`. UsdImaging's
+`renderSettingsPrimPath`) and `__usdUpAxis/upAxis`. The scene globals a
+host sets (`currentFrame`, the primary camera, the active render pass, and
+overrides of the stage's) are the scene globals filter's (above), not the
+stage index's, as in Hydra. UsdImaging's
 `system/assetResolution` is left out: openusd has no resolver context to
 give. A consumer that needs other stage metadata (`metersPerUnit`, or
 whether a field is authored) reads it from the stage it opened, through
@@ -341,6 +361,24 @@ carry three things Hydra's schemas do not:
 
 This is the only data Moho adds to UsdImaging's. The leading underscores
 follow Hydra's convention for private containers (`__usdPrimInfo`).
+
+### The host pattern: time and current frame
+
+The stage index owns the time its data sources read; `sceneGlobals/currentFrame`
+tells the renderer and the filters downstream which frame that is. Hydra
+keeps them apart, and so does Moho: a host sets both together, as
+`UsdImagingGLEngine::Render` calls `SetTime` on its stage scene index then
+`SetCurrentFrame` on its scene globals scene index:
+
+```rust
+stage_index.set_time(time);
+scene_globals.set_current_frame(time.value());
+stage_index.apply_pending_updates(); // when edits are pending, as before
+```
+
+A delegate then reads its index's frame from the terminal index's root
+(`sceneGlobals/currentFrame`), exactly as under Hydra, and learns of a new
+frame by the root dirtied at that locator.
 
 ## Boundaries
 

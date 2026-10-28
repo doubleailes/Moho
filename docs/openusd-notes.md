@@ -63,6 +63,11 @@ mxpv/openusd#175) were read at `68a867a`.
   `is_earliest()` are where it resets when its stage is replaced. A query
   at `EARLIEST` resolves the earliest sample; an offset added to it stays
   `EARLIEST` (`f64::MIN` absorbs it).
+  `TimeCode::value()` is the time as an `f64`, what a host gives the scene
+  globals filter's `set_current_frame`.
+- `sdf::Path::default()` is the empty path (`SdfPath()`), which
+  `Path::new` refuses to parse; `Path::is_empty` tests for it. The scene
+  globals filter reads a set empty path as an empty `PathVec`.
 - `Stage::start_time_code`, `end_time_code` and
   `has_authored_time_code_range` read the root and session layers only, as in
   USD.

@@ -17,5 +17,5 @@
 
 ## 4. Docs and parity
 
-- [ ] 4.1 Module docs and `docs/architecture.md`: the filter, its placement, the root's scene globals, and the host pattern (`set_time` with `set_current_frame`)
-- [ ] 4.2 Check against USD 26.08 with a small C++ oracle of `HdsiSceneGlobalsSceneIndex` over `UsdImagingCreateSceneIndices` (names, values and notices), and record the result
+- [x] 4.1 Module docs and `docs/architecture.md`: the filter, its placement, the root's scene globals, and the host pattern (`set_time` with `set_current_frame`)
+- [x] 4.2 Check against USD 26.08 with a small C++ oracle of `HdsiSceneGlobalsSceneIndex` over `UsdImagingCreateSceneIndices` (names, values and notices), and record the result
