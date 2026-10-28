@@ -287,7 +287,9 @@ fn each_family_edit_dirties_its_locators() {
         .unwrap();
     stage_index.apply_pending_updates();
     assert!(dirtied(&recorder.take(), "/Render/settings").is_empty());
-    // A binding change re-resolves descendants.
+    // A binding change re-resolves the descendants whose binding was read,
+    // as `HdFlatteningSceneIndex` dirties only flattened data it computed.
+    let _ = resolved(chain.as_ref(), "/world/geo");
     stage
         .relationship("/world.material:binding")
         .unwrap()
