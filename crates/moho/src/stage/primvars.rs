@@ -53,9 +53,8 @@ const GPRIM_CUSTOM: &[(&str, &str, &str)] = &[
 ];
 
 /// A point instancer's instance data, read as primvars: `(primvar,
-/// attribute)`. The first entry for a primvar whose attribute holds a
-/// non-empty value wins, so `orientationsf` is preferred over
-/// `orientations`.
+/// attribute)`, both rotation attributes listed (either dirties
+/// `hydra:instanceRotations`); [`instancer_custom`] picks one.
 const INSTANCER_CUSTOM: &[(&str, &str)] = &[
     (INSTANCE_TRANSLATIONS, "positions"),
     (INSTANCE_ROTATIONS, "orientationsf"),
@@ -171,30 +170,32 @@ fn gprim_custom(prim: &usd::Prim) -> Vec<(&'static str, &'static str)> {
         .collect()
 }
 
-/// The point instancer data found as primvars, by name.
+/// The point instancer data read as primvars, by name, as
+/// `_GetCustomPrimvarMappings` gives them: every mapping, named whether or
+/// not its attribute has a value (`UsdImagingDataSourceCustomPrimvars`
+/// answers one only when authored), rotations read from `orientationsf`
+/// when it has a non-empty value at the earliest time
+/// (`UsdGeomPointInstancer::UsesOrientationsf`), else `orientations`.
 fn instancer_custom(prim: &usd::Prim) -> Vec<(Token, usd::Attribute)> {
-    let mut found: Vec<(Token, usd::Attribute)> = Vec::new();
     if !prim.is_a("PointInstancer").unwrap_or(false) {
-        return found;
+        return Vec::new();
     }
-    for (name, attribute) in INSTANCER_CUSTOM {
-        if found.iter().any(|(n, _)| n == *name) {
-            continue;
-        }
-        let attribute = prim.attribute(*attribute);
-        // A value that exists, and is not an empty array at the default
-        // time (a sampled-only value has none there and still counts).
-        let non_empty = attribute.has_value().unwrap_or(false)
-            && attribute
-                .get::<Value>()
-                .ok()
-                .flatten()
-                .is_none_or(|v| v.array_len().is_none_or(|n| n > 0));
-        if non_empty {
-            found.push((Token::from(*name), attribute));
-        }
-    }
-    found
+    let uses_orientationsf = prim
+        .attribute("orientationsf")
+        .get_at::<Value>(usd::TimeCode::EARLIEST)
+        .ok()
+        .flatten()
+        .is_some_and(|v| v.array_len().is_some_and(|n| n > 0));
+    let rotations = if uses_orientationsf {
+        "orientationsf"
+    } else {
+        "orientations"
+    };
+    INSTANCER_CUSTOM
+        .iter()
+        .filter(|(name, attribute)| *name != INSTANCE_ROTATIONS || *attribute == rotations)
+        .map(|(name, attribute)| (Token::from(*name), prim.attribute(*attribute)))
+        .collect()
 }
 
 /// The authored primvars UsdImaging names (`GetAuthoredPrimvars`, less the
@@ -326,6 +327,7 @@ impl Primvars {
         instancer_custom(prim)
             .into_iter()
             .find(|(n, _)| n == name)
+            .filter(|(_, a)| a.has_authored_value().unwrap_or(false))
             .map(|(_, a)| Source::Instance(a))
     }
 }
