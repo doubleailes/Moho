@@ -330,3 +330,41 @@ fn an_indices_edit_dirties_as_usd_imaging_does() {
         "{notices:?}"
     );
 }
+
+#[test]
+fn a_point_instancer_names_every_instance_primvar() {
+    // `_GetCustomPrimvarMappings`: every mapping is named; one is answered
+    // only when its attribute is authored, an empty array included.
+    let (_dir, stage) = stage(
+        r#"#usda 1.0
+def PointInstancer "pi"
+{
+    point3f[] positions = [(0, 0, 0)]
+    float3[] scales = []
+}
+"#,
+    );
+    let index = StageSceneIndex::new();
+    index.set_stage(stage);
+    let data = index.prim(&p("/pi")).data.unwrap();
+    let primvars = moho::data_source::locate(&data, &Locator::parse("primvars")).unwrap();
+    let primvars = primvars.as_container().unwrap();
+    let mut names: Vec<String> = primvars.names().iter().map(ToString::to_string).collect();
+    names.sort();
+    assert_eq!(
+        names,
+        [
+            "accelerations",
+            "angularVelocities",
+            "hydra:instanceRotations",
+            "hydra:instanceScales",
+            "hydra:instanceTranslations",
+            "velocities",
+        ]
+    );
+    let has = |name: &str| primvars.get(&Token::from(name)).is_some();
+    assert!(has("hydra:instanceTranslations"));
+    assert!(has("hydra:instanceScales"), "an authored empty array");
+    assert!(!has("velocities"));
+    assert!(!has("hydra:instanceRotations"));
+}
