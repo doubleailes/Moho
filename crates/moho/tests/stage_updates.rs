@@ -153,6 +153,41 @@ fn several_edits_one_application() {
 }
 
 #[test]
+fn a_resynced_and_an_updated_property_dirty_twice() {
+    // `UsdImagingStageSceneIndex::ApplyPendingUpdates` invalidates the
+    // properties whose spec came or went (the `Resync` pass), then those
+    // whose value changed (the `Update` pass), one entry per prim per pass.
+    let (_dir, index, recorder) = setup();
+    set_int(&index, "/world/geo.myRenderer:rayMask", 7);
+    index
+        .stage()
+        .unwrap()
+        .prim("/world/geo")
+        .unwrap()
+        .create_attribute("myRenderer:fresh", "int")
+        .unwrap()
+        .set(1)
+        .unwrap();
+    index.apply_pending_updates();
+    assert_eq!(
+        recorder.take(),
+        [
+            Notice::Dirtied(Dirtied {
+                path: p("/world/geo"),
+                locators: attrs(&["myRenderer:fresh"])
+            }),
+            // Creating the attribute, then setting its value, is a resync
+            // and then an update of it.
+            Notice::Dirtied(Dirtied {
+                path: p("/world/geo"),
+                locators: attrs(&["myRenderer:fresh", "myRenderer:rayMask"])
+            }),
+        ],
+        "the resync pass first"
+    );
+}
+
+#[test]
 fn edits_to_unexposed_prims_are_silent() {
     let (_dir, index, recorder) = setup();
     set_int(&index, "/world/off.myRenderer:rayMask", 9);
