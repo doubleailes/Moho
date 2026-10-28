@@ -400,11 +400,30 @@ impl PrimvarEntry {
                     _ => None,
                 })
         };
-        match &self.source {
+        let primvar = match &self.source {
             Source::Primvar(p) => p
                 .interpolation_token()
                 .unwrap_or_else(|_| Token::from(t::CONSTANT)),
             Source::Relationship(_) => Token::from(t::CONSTANT),
+            _ => Token::default(),
+        };
+        // A point instancer's own primvars are instance-rate unless constant
+        // or uniform, which read as constant (`dataSourcePointInstancer.cpp`,
+        // `_PrimvarDataSource`).
+        let instancer = || {
+            self.ctx
+                .prim()
+                .is_some_and(|p| p.is_a("PointInstancer").unwrap_or(false))
+        };
+        match &self.source {
+            Source::Primvar(_) | Source::Relationship(_) if instancer() => {
+                if primvar == t::CONSTANT || primvar == "uniform" {
+                    Token::from(t::CONSTANT)
+                } else {
+                    Token::from(INSTANCE)
+                }
+            }
+            Source::Primvar(_) | Source::Relationship(_) => primvar,
             Source::Custom(a) => metadata(a).unwrap_or_else(|| Token::from(t::VERTEX)),
             Source::Instance(_) => Token::from(INSTANCE),
         }
