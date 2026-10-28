@@ -446,3 +446,53 @@ fn descendants_are_dirtied_for_what_they_inherit() {
     assert_eq!(child_locators(&["geomModel"]), ["geomModel"]);
     assert!(child_locators(&["mesh/topology"]).is_empty());
 }
+
+#[test]
+fn a_skipped_subtree_stays_skipped_beside_a_sibling_that_extends_its_name() {
+    // `_DirtyHierarchy` skips the subtree of a prim that did not read the
+    // dirtied data. Paths are walked in text order, where `/w/ax` shares
+    // `/w/a`'s text prefix without being under it, and a wide group of
+    // skipped children costs one ancestor walk per prim.
+    let input = RetainedSceneIndex::new();
+    let prim = || {
+        let empty: [(&str, moho::data_source::DataSource); 0] = [];
+        Prim::new("mesh", RetainedContainer::new(empty).into_handle())
+    };
+    let mut prims = vec![
+        (p("/w"), prim()),
+        (p("/w/a"), prim()),
+        (p("/w/a/b"), prim()),
+        (p("/w/ax"), prim()),
+        (p("/w/ax/c"), prim()),
+    ];
+    let wide: Vec<String> = (0..2000).map(|i| format!("/w/g/m{i}")).collect();
+    prims.push((p("/w/g"), prim()));
+    prims.extend(wide.iter().map(|path| (p(path), prim())));
+    input.add_prims(prims);
+    let flat = FlatteningSceneIndex::new(input.clone());
+    let visibility = |path: &str| {
+        VisibilitySchema::get(&flat.prim(&p(path)).data.unwrap()).map(|v| v.visibility());
+    };
+    // `/w/a`, `/w/a/b` and the wide group read visibility only; `/w/ax/c`
+    // reads its world transform, through `/w/ax` and `/w`.
+    for path in ["/w/a", "/w/a/b", "/w/g"]
+        .iter()
+        .copied()
+        .chain(wide.iter().map(String::as_str))
+    {
+        visibility(path);
+    }
+    world(&flat, "/w/ax/c");
+    let recorder = RecordingObserver::on(flat.as_ref());
+    input.dirty_prims([(p("/w"), LocatorSet::from(Locator::parse("xform")))]);
+    let mut dirtied: Vec<String> = recorder
+        .take()
+        .into_iter()
+        .filter_map(|n| match n {
+            Notice::Dirtied(d) => Some(d.path.to_string()),
+            _ => None,
+        })
+        .collect();
+    dirtied.sort();
+    assert_eq!(dirtied, ["/w", "/w/ax", "/w/ax/c"]);
+}

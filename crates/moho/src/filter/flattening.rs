@@ -99,6 +99,23 @@ fn dirty_for_descendants(name: &str, relative: Vec<Locator>) -> Option<Vec<Locat
     }
 }
 
+/// Whether `prim` lies under one of the `skipped` roots, which are all at or
+/// under `top`: its ancestors are tested from its parent up to `top`.
+fn under_skipped(prim: &sdf::Path, top: &sdf::Path, skipped: &HashSet<sdf::Path>) -> bool {
+    if skipped.is_empty() {
+        return false;
+    }
+    for ancestor in prim.strict_ancestors() {
+        if skipped.contains(&ancestor) {
+            return true;
+        }
+        if &ancestor == top {
+            break;
+        }
+    }
+    false
+}
+
 /// The index in [`FLATTENED`] of the flattened `primvars`.
 const PRIMVARS_SLOT: usize = 3;
 
@@ -218,14 +235,17 @@ impl FlatteningSceneIndex {
         out: &mut Vec<Dirtied>,
     ) {
         let mut read = self.read.borrow_mut();
-        let mut skipped: Vec<sdf::Path> = Vec::new();
+        // Roots of the subtrees skipped, as `_DirtyHierarchy`'s
+        // `GetNextSubtree`; a prim is tested against its own ancestors, so
+        // the cost grows with depth, not with the number of skipped roots.
+        let mut skipped: HashSet<sdf::Path> = HashSet::new();
         // Paths are ordered by their text: the subtree follows `path`, mixed
         // with siblings whose names extend its own.
         for (prim, state) in read.range_mut(path.clone()..) {
             if !prim.as_str().starts_with(path.as_str()) {
                 break;
             }
-            if !prim.has_prefix(path) || skipped.iter().any(|s| prim.has_prefix(s)) {
+            if !prim.has_prefix(path) || under_skipped(prim, path, &skipped) {
                 continue;
             }
             if state.dirty(relative) {
@@ -236,7 +256,7 @@ impl FlatteningSceneIndex {
                     });
                 }
             } else {
-                skipped.push(prim.clone());
+                skipped.insert(prim.clone());
             }
         }
     }
