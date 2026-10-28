@@ -13,6 +13,9 @@ use crate::stage::{Globals, PrimContext};
 pub struct AttributeValue {
     attribute: Attribute,
     globals: Rc<Globals>,
+    /// Whether an attribute with no value answers its type's zero value
+    /// (Hydra's schemas) rather than nothing (the generic data).
+    typed: bool,
 }
 
 impl AttributeValue {
@@ -20,12 +23,24 @@ impl AttributeValue {
     /// `ctx` names. If the value may vary over time, the locator is flagged
     /// time-varying, so a time change dirties it.
     pub fn data_source(attribute: Attribute, ctx: &PrimContext, locator: Locator) -> DataSource {
+        Self::flagged(attribute, ctx, locator, true)
+    }
+
+    /// The value of `attribute` as [`data_source`](Self::data_source) gives
+    /// it, but answering nothing when the attribute has no value: the
+    /// generic data's `value`, which tells an unauthored attribute apart.
+    pub fn untyped(attribute: Attribute, ctx: &PrimContext, locator: Locator) -> DataSource {
+        Self::flagged(attribute, ctx, locator, false)
+    }
+
+    fn flagged(attribute: Attribute, ctx: &PrimContext, locator: Locator, typed: bool) -> DataSource {
         if attribute.might_be_time_varying().unwrap_or(false) {
             ctx.globals.flag_time_varying(&ctx.path, locator);
         }
         DataSource::Sampled(Rc::new(Self {
             attribute,
             globals: ctx.globals.clone(),
+            typed,
         }))
     }
 
@@ -35,6 +50,7 @@ impl AttributeValue {
         DataSource::Sampled(Rc::new(Self {
             attribute,
             globals: ctx.globals.clone(),
+            typed: true,
         }))
     }
 }
@@ -72,13 +88,22 @@ impl AttributeValue {
 }
 
 impl Sampled for AttributeValue {
+    /// The resolved value, else (nothing authored and no schema fallback)
+    /// the zero or empty value of the attribute's type, as
+    /// `UsdImagingDataSourceAttribute::GetTypedValue` returns its
+    /// value-initialized `T`.
     fn value(&self, offset: f32) -> Option<Value> {
         let time = TimeCode::new(self.globals.time().value() + f64::from(offset));
-        self.attribute
-            .get_at::<Value>(time)
-            .ok()
-            .flatten()
-            .map(|v| self.anchor(v))
+        match self.attribute.get_at::<Value>(time).ok().flatten() {
+            Some(value) => Some(self.anchor(value)),
+            None if !self.typed => None,
+            None => self
+                .attribute
+                .type_name()
+                .ok()
+                .flatten()
+                .and_then(|type_name| type_name.default_value()),
+        }
     }
 
     fn sample_times(&self, start: f32, end: f32) -> Option<Vec<f32>> {
@@ -125,6 +150,7 @@ impl MappedAttributeValue {
             inner: AttributeValue {
                 attribute,
                 globals: ctx.globals.clone(),
+                typed: true,
             },
             map: Box::new(map),
         }))

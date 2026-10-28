@@ -134,7 +134,7 @@ impl Container for AttributeEntry {
     fn get(&self, name: &Token) -> Option<DataSource> {
         let attribute = self.attribute()?;
         match name.as_str() {
-            t::VALUE => Some(AttributeValue::data_source(
+            t::VALUE => Some(AttributeValue::untyped(
                 attribute,
                 &self.ctx,
                 Locator::new([t::ATTRIBUTES, self.name.as_str()]),
