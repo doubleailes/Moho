@@ -86,6 +86,13 @@ pub mod usd_up_axis {
     pub const UP_AXIS: &str = "upAxis";
 }
 
+/// `__usdMetersPerUnit`, at the absolute root: a Moho extension shaped as
+/// `__usdUpAxis`, which UsdImaging does not give (Hydra carries no unit).
+pub mod usd_meters_per_unit {
+    pub const USD_METERS_PER_UNIT: &str = "__usdMetersPerUnit";
+    pub const METERS_PER_UNIT: &str = "metersPerUnit";
+}
+
 /// `HdXformSchema`.
 pub mod xform {
     pub const XFORM: &str = "xform";
