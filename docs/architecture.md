@@ -350,6 +350,16 @@ does (each flattened field on its `__usdRenderSettings` field,
 on `__usdRenderSettings/products`). It dirties nothing itself: the settings
 are dirtied through dependency forwarding.
 
+Hydra keeps the camera on the settings and the image settings (resolution,
+pixel aspect ratio, conform policy, data window) on each product, the
+product's own opinion or else the settings'. Settings with no product carry
+them only in `__usdRenderSettings`. `moho::schema` reads all three layers:
+`RenderSettingsSchema` (`renderSettings`, its `render_products()`),
+`RenderProductSchema` and `UsdRenderSettingsSchema` (`__usdRenderSettings`).
+Unauthored attributes read UsdRender's schema fallbacks (a pixel aspect ratio
+of 1, a data window of `(0, 0, 1, 1)`); an unauthored relationship reads
+nothing.
+
 ### Generic attribute data, Moho's one addition to Hydra
 
 Every prim also exposes `__usdAttributes` and `__usdRelationships`. They
@@ -380,7 +390,26 @@ A delegate then reads its index's frame from the terminal index's root
 (`sceneGlobals/currentFrame`), exactly as under Hydra, and learns of a new
 frame by the root dirtied at that locator.
 
-## Boundaries
+## What the Hydra parity changes moved
+
+A consumer written against the layout before the four `hydra-parity-*`
+changes reads nothing, without an error, where data moved. What moved, and
+where it is now:
+
+| data | before | now |
+|---|---|---|
+| up axis | `sceneGlobals/upAxis` | `__usdUpAxis/upAxis` on the absolute root |
+| `metersPerUnit`, other stage metadata | `sceneGlobals/metersPerUnit`, `__usdStageMetadata` | the stage, through `moho::openusd` |
+| render image settings | `renderSettings/{resolution, pixelAspectRatio, aspectRatioConformPolicy, dataWindowNDC}` | each `renderSettings/renderProducts` entry; `__usdRenderSettings` without a product (`RenderSettingsSchema`) |
+| `instantaneousShutter` | `renderSettings` | `__usdRenderSettings` only |
+| light parameters | only authored inputs | any name answers (`LookupLightParamAttribute`), unauthored ones with the schema fallback: test an asset path for emptiness, not presence |
+| geom subsets | no adapter | type `geomSubset`, `geomSubset/type` `typeFaceSet` or `typePointSet`, every family and no family name; an edit dirties `indices` or `type` at the subset, never its mesh |
+| native instancing | `MohoNiPropagatedPrototypes/...`, bindings naming `/__Prototype_N` | `UsdNiPropagatedPrototypes/<bindingHash>/__Prototype_N/UsdNiInstancer/UsdNiPrototype`; instances typeless; `instancerTopology/mask`; bindings resolved inside the prototype |
+| light linking | in `chain::standard` | `RendererFilter::light_linking()`, added by the consumer |
+| notices through `__dependencies` (render settings, instance categories) | dirtied by the filters | `RendererFilter::dependency_forwarding()`, added by the consumer |
+| the index's time | the stage's default time | time code 0 until `set_time` |
+| `over` prims | not traversed | prims of the index, made unrenderable by point instancing |
+
 
 - Moho depends on **openusd only**. It holds no consumer's type. Adapters
   (a DCC's changes to a mirror stage, a renderer's import) live in the
