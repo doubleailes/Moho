@@ -458,6 +458,194 @@ impl DependenciesSchema {
     }
 }
 
+/// The first path of a path array: how Moho holds a Hydra `SdfPath` field.
+fn as_path(value: Value) -> Option<sdf::Path> {
+    match value {
+        Value::PathVec(v) => v.into_iter().next(),
+        _ => None,
+    }
+}
+
+fn as_vec2i(value: Value) -> Option<gf::Vec2i> {
+    match value {
+        Value::Vec2i(v) => Some(v),
+        _ => None,
+    }
+}
+
+fn as_vec4f(value: Value) -> Option<gf::Vec4f> {
+    match value {
+        Value::Vec4f(v) => Some(v),
+        _ => None,
+    }
+}
+
+fn as_float(value: Value) -> Option<f32> {
+    match value {
+        Value::Float(v) => Some(v),
+        _ => None,
+    }
+}
+
+fn as_tokens(value: Value) -> Option<Vec<Token>> {
+    match value {
+        Value::TokenVec(v) => Some(v),
+        _ => None,
+    }
+}
+
+/// `HdRenderSettingsSchema` (`renderSettings`): a render settings prim's
+/// flattened settings. Hydra keeps the camera here and the image settings
+/// (resolution, pixel aspect ratio, conform policy, data window) on each
+/// product ([`RenderProductSchema`]), resolved over the settings'. Settings
+/// with no product carry those only in their stage data
+/// ([`UsdRenderSettingsSchema`]).
+pub struct RenderSettingsSchema(ContainerHandle);
+
+impl RenderSettingsSchema {
+    /// The `renderSettings` of a prim's container.
+    pub fn get(prim: &ContainerHandle) -> Option<Self> {
+        member_container(prim, tokens::render::RENDER_SETTINGS).map(Self)
+    }
+
+    pub fn camera(&self) -> Option<sdf::Path> {
+        member_value(&self.0, tokens::render::CAMERA).and_then(as_path)
+    }
+
+    /// Renderer settings by full name (`myRenderer:samplesPerPixel`).
+    pub fn namespaced_settings(&self) -> Option<ContainerHandle> {
+        member_container(&self.0, tokens::render::NAMESPACED_SETTINGS)
+    }
+
+    pub fn included_purposes(&self) -> Option<Vec<Token>> {
+        member_value(&self.0, tokens::render::INCLUDED_PURPOSES).and_then(as_tokens)
+    }
+
+    pub fn material_binding_purposes(&self) -> Option<Vec<Token>> {
+        member_value(&self.0, tokens::render::MATERIAL_BINDING_PURPOSES).and_then(as_tokens)
+    }
+
+    pub fn rendering_color_space(&self) -> Option<Token> {
+        member_value(&self.0, tokens::render::RENDERING_COLOR_SPACE).and_then(as_token)
+    }
+
+    pub fn disable_motion_blur(&self) -> Option<bool> {
+        member_value(&self.0, tokens::render::DISABLE_MOTION_BLUR).and_then(as_bool)
+    }
+
+    pub fn disable_depth_of_field(&self) -> Option<bool> {
+        member_value(&self.0, tokens::render::DISABLE_DEPTH_OF_FIELD).and_then(as_bool)
+    }
+
+    /// The products, in the settings' order.
+    pub fn render_products(&self) -> Vec<RenderProductSchema> {
+        let Some(DataSource::Vector(products)) = member(&self.0, tokens::render::RENDER_PRODUCTS) else {
+            return Vec::new();
+        };
+        (0..products.len())
+            .filter_map(|i| products.get(i)?.as_container().cloned())
+            .map(RenderProductSchema)
+            .collect()
+    }
+}
+
+/// `HdRenderProductSchema`: one entry of `renderSettings/renderProducts`,
+/// each field the product's own opinion or else the settings'.
+pub struct RenderProductSchema(ContainerHandle);
+
+impl RenderProductSchema {
+    /// The product prim.
+    pub fn path(&self) -> Option<sdf::Path> {
+        member_value(&self.0, tokens::render::PATH).and_then(as_path)
+    }
+
+    /// The product type (`raster`, ...).
+    pub fn product_type(&self) -> Option<Token> {
+        member_value(&self.0, tokens::render::TYPE).and_then(as_token)
+    }
+
+    /// The product name (`beauty.exr`).
+    pub fn name(&self) -> Option<Token> {
+        member_value(&self.0, tokens::render::NAME).and_then(as_token)
+    }
+
+    pub fn camera_prim(&self) -> Option<sdf::Path> {
+        member_value(&self.0, tokens::render::CAMERA_PRIM).and_then(as_path)
+    }
+
+    pub fn resolution(&self) -> Option<gf::Vec2i> {
+        member_value(&self.0, tokens::render::RESOLUTION).and_then(as_vec2i)
+    }
+
+    pub fn pixel_aspect_ratio(&self) -> Option<f32> {
+        member_value(&self.0, tokens::render::PIXEL_ASPECT_RATIO).and_then(as_float)
+    }
+
+    pub fn aspect_ratio_conform_policy(&self) -> Option<Token> {
+        member_value(&self.0, tokens::render::ASPECT_RATIO_CONFORM_POLICY).and_then(as_token)
+    }
+
+    pub fn data_window_ndc(&self) -> Option<gf::Vec4f> {
+        member_value(&self.0, tokens::render::DATA_WINDOW_NDC).and_then(as_vec4f)
+    }
+
+    pub fn disable_motion_blur(&self) -> Option<bool> {
+        member_value(&self.0, tokens::render::DISABLE_MOTION_BLUR).and_then(as_bool)
+    }
+
+    pub fn disable_depth_of_field(&self) -> Option<bool> {
+        member_value(&self.0, tokens::render::DISABLE_DEPTH_OF_FIELD).and_then(as_bool)
+    }
+
+    pub fn namespaced_settings(&self) -> Option<ContainerHandle> {
+        member_container(&self.0, tokens::render::NAMESPACED_SETTINGS)
+    }
+}
+
+/// `UsdImagingUsdRenderSettingsSchema` (`__usdRenderSettings`): a render
+/// settings prim's stage data, before flattening. The only place settings
+/// with no product carry their image settings.
+pub struct UsdRenderSettingsSchema(ContainerHandle);
+
+impl UsdRenderSettingsSchema {
+    /// The `__usdRenderSettings` of a prim's container.
+    pub fn get(prim: &ContainerHandle) -> Option<Self> {
+        member_container(prim, tokens::render::USD_RENDER_SETTINGS).map(Self)
+    }
+
+    pub fn camera(&self) -> Option<sdf::Path> {
+        member_value(&self.0, tokens::render::CAMERA).and_then(as_path)
+    }
+
+    pub fn resolution(&self) -> Option<gf::Vec2i> {
+        member_value(&self.0, tokens::render::RESOLUTION).and_then(as_vec2i)
+    }
+
+    pub fn pixel_aspect_ratio(&self) -> Option<f32> {
+        member_value(&self.0, tokens::render::PIXEL_ASPECT_RATIO).and_then(as_float)
+    }
+
+    pub fn aspect_ratio_conform_policy(&self) -> Option<Token> {
+        member_value(&self.0, tokens::render::ASPECT_RATIO_CONFORM_POLICY).and_then(as_token)
+    }
+
+    pub fn data_window_ndc(&self) -> Option<gf::Vec4f> {
+        member_value(&self.0, tokens::render::DATA_WINDOW_NDC).and_then(as_vec4f)
+    }
+
+    /// The products relationship's targets.
+    pub fn products(&self) -> Vec<sdf::Path> {
+        match member_value(&self.0, tokens::render::PRODUCTS) {
+            Some(Value::PathVec(v)) => v,
+            _ => Vec::new(),
+        }
+    }
+
+    pub fn namespaced_settings(&self) -> Option<ContainerHandle> {
+        member_container(&self.0, tokens::render::NAMESPACED_SETTINGS)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
