@@ -65,7 +65,7 @@ fn fallbacks() {
 }
 
 #[test]
-fn the_root_carries_scene_globals_and_up_axis_only() {
+fn the_root_carries_scene_globals_up_axis_and_unit_only() {
     let (_dir, stage) = stage(AUTHORED);
     let index = StageSceneIndex::new();
     index.set_stage(stage);
@@ -73,6 +73,8 @@ fn the_root_carries_scene_globals_and_up_axis_only() {
     let names = root.names();
     assert!(names.contains(&Token::from("sceneGlobals")));
     assert!(names.contains(&Token::from("__usdUpAxis")));
+    assert!(names.contains(&Token::from("__usdMetersPerUnit")));
+    assert_eq!(names.len(), 3, "{names:?}");
     assert!(!names.contains(&Token::from("__usdStageMetadata")));
     let globals = root.get(&Token::from("sceneGlobals")).unwrap();
     let mut fields = globals.as_container().unwrap().names();
@@ -115,4 +117,62 @@ fn a_stage_metadata_edit_notifies_nothing() {
         locate(&root, &Locator::parse("sceneGlobals/endTimeCode")).and_then(|d| d.value()),
         Some(Value::Double(1100.0))
     );
+}
+
+fn meters_per_unit(index: &dyn SceneIndex, path: &str) -> Option<Value> {
+    let data = index.prim(&p(path)).data?;
+    locate(&data, &Locator::parse("__usdMetersPerUnit/metersPerUnit")).and_then(|d| d.value())
+}
+
+#[test]
+fn an_authored_unit_is_on_the_root_only() {
+    let text = AUTHORED.replace("metersPerUnit = 0.01", "metersPerUnit = 1");
+    let (_dir, stage) = stage(&text);
+    let index = StageSceneIndex::new();
+    index.set_stage(stage);
+    assert_eq!(meters_per_unit(index.as_ref(), "/"), Some(Value::Double(1.0)));
+    assert_eq!(globals(&text, "metersPerUnit"), None, "not a scene global");
+    assert_eq!(meters_per_unit(index.as_ref(), "/world"), None);
+}
+
+#[test]
+fn an_unauthored_unit_is_absent_not_the_fallback() {
+    let plain = "#usda 1.0
+def Xform \"world\"
+{
+}
+";
+    let (_dir, stage) = stage(plain);
+    let index = StageSceneIndex::new();
+    index.set_stage(stage);
+    let root = index.prim(&sdf::Path::abs_root()).data.unwrap();
+    assert!(!root.names().contains(&Token::from("__usdMetersPerUnit")));
+    assert_eq!(meters_per_unit(index.as_ref(), "/"), None);
+}
+
+#[test]
+fn a_unit_edit_notifies_nothing_and_reads_anew() {
+    let (_dir, stage) = stage(AUTHORED);
+    let index = StageSceneIndex::new();
+    index.set_stage(stage);
+    let recorder = RecordingObserver::on(index.as_ref());
+    index
+        .stage()
+        .unwrap()
+        .set_stage_metadata("metersPerUnit", 1.0)
+        .unwrap();
+    index.apply_pending_updates();
+    let notices = recorder.take();
+    assert!(notices.is_empty(), "{notices:?}");
+    assert_eq!(meters_per_unit(index.as_ref(), "/"), Some(Value::Double(1.0)));
+}
+
+#[test]
+fn through_the_standard_chain_the_unit_stays_on_the_root() {
+    let (_dir, stage) = stage(AUTHORED);
+    let index = StageSceneIndex::new();
+    index.set_stage(stage);
+    let chain = moho::chain::standard(index);
+    assert_eq!(meters_per_unit(&*chain, "/"), Some(Value::Double(0.01)));
+    assert_eq!(meters_per_unit(&*chain, "/world"), None);
 }

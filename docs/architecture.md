@@ -288,14 +288,20 @@ observer (`docs/update-latency.md`).
 The absolute root carries what `UsdImagingDataSourceStage` gives:
 `sceneGlobals` (`startTimeCode`, `endTimeCode`, `timeCodesPerSecond`, and
 `activeRenderSettingsPrim` when the stage authors a non-empty
-`renderSettingsPrimPath`) and `__usdUpAxis/upAxis`. The scene globals a
+`renderSettingsPrimPath`) and `__usdUpAxis/upAxis`, and one Moho extension
+UsdImaging does not give: `__usdMetersPerUnit/metersPerUnit`, the stage's
+unit, present only when its session or root layer authors one (Hydra
+carries no unit, and a renderer converting lens millimetres needs it
+without a stage). It is read at the root only: not flattened, not an
+instance data source. As for the root's other data, a stage metadata edit
+notifies nothing, and the next read gives the new value. The scene globals a
 host sets (`currentFrame`, the primary camera, the active render pass, and
 overrides of the stage's) are the scene globals filter's (above), not the
 stage index's, as in Hydra. UsdImaging's
 `system/assetResolution` is left out: openusd has no resolver context to
-give. A consumer that needs other stage metadata (`metersPerUnit`, or
-whether a field is authored) reads it from the stage it opened, through
-`moho::openusd`.
+give. A consumer that needs other stage metadata (or whether a field other
+than `metersPerUnit` is authored) reads it from the stage it opened,
+through `moho::openusd`.
 
 ### Materials and lights
 
@@ -399,7 +405,8 @@ where it is now:
 | data | before | now |
 |---|---|---|
 | up axis | `sceneGlobals/upAxis` | `__usdUpAxis/upAxis` on the absolute root |
-| `metersPerUnit`, other stage metadata | `sceneGlobals/metersPerUnit`, `__usdStageMetadata` | the stage, through `moho::openusd` |
+| `metersPerUnit` | `sceneGlobals/metersPerUnit` | `__usdMetersPerUnit/metersPerUnit` on the absolute root, only when authored (`stage-meters-per-unit`) |
+| other stage metadata | `__usdStageMetadata` | the stage, through `moho::openusd` |
 | render image settings | `renderSettings/{resolution, pixelAspectRatio, aspectRatioConformPolicy, dataWindowNDC}` | each `renderSettings/renderProducts` entry; `__usdRenderSettings` without a product (`RenderSettingsSchema`) |
 | `instantaneousShutter` | `renderSettings` | `__usdRenderSettings` only |
 | light parameters | only authored inputs | any name answers (`LookupLightParamAttribute`), unauthored ones with the schema fallback: test an asset path for emptiness, not presence |
