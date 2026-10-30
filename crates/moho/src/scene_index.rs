@@ -2,7 +2,7 @@
 //! removed, dirtied and renamed prims, as `HdSceneIndexBase`.
 
 use std::cell::RefCell;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::rc::{Rc, Weak};
 
 use openusd::sdf;
@@ -190,8 +190,47 @@ impl Observers {
 /// that they list it among their children, as Hydra's does.
 #[derive(Default)]
 pub struct RetainedSceneIndex {
-    prims: RefCell<BTreeMap<sdf::Path, Prim>>,
+    prims: RefCell<Retained>,
     observers: Observers,
+}
+
+/// The prims, and each prim's children in path order (Hydra's
+/// `SdfPathTable` links children to their parent).
+#[derive(Default)]
+struct Retained {
+    prims: BTreeMap<sdf::Path, Prim>,
+    children: sdf::PathMap<BTreeSet<sdf::Path>>,
+}
+
+impl Retained {
+    /// Holds `path`, linked to its parent.
+    fn hold(&mut self, path: sdf::Path, prim: Option<Prim>) {
+        if let Some(parent) = path.parent() {
+            self.children.entry(parent).or_default().insert(path.clone());
+        }
+        match prim {
+            Some(prim) => {
+                self.prims.insert(path, prim);
+            }
+            None => {
+                self.prims.entry(path).or_default();
+            }
+        }
+    }
+
+    /// Drops `path` and its subtree.
+    fn drop_subtree(&mut self, path: &sdf::Path) {
+        if let Some(parent) = path.parent()
+            && let Some(siblings) = self.children.get_mut(&parent)
+        {
+            siblings.remove(path);
+        }
+        let mut stack = vec![path.clone()];
+        while let Some(next) = stack.pop() {
+            self.prims.remove(&next);
+            stack.extend(self.children.remove(&next).into_iter().flatten());
+        }
+    }
 }
 
 impl RetainedSceneIndex {
@@ -204,16 +243,16 @@ impl RetainedSceneIndex {
     pub fn add_prims(&self, prims: impl IntoIterator<Item = (sdf::Path, Prim)>) {
         let mut added = Vec::new();
         {
-            let mut map = self.prims.borrow_mut();
+            let mut retained = self.prims.borrow_mut();
             for (path, prim) in prims {
                 for ancestor in path.strict_ancestors() {
-                    map.entry(ancestor).or_default();
+                    retained.hold(ancestor, None);
                 }
                 added.push(Added {
                     path: path.clone(),
                     ty: prim.ty.clone(),
                 });
-                map.insert(path, prim);
+                retained.hold(path, Some(prim));
             }
         }
         self.observers.send_added(self, &added);
@@ -223,9 +262,9 @@ impl RetainedSceneIndex {
     pub fn remove_prims(&self, paths: impl IntoIterator<Item = sdf::Path>) {
         let mut removed = Vec::new();
         {
-            let mut map = self.prims.borrow_mut();
+            let mut retained = self.prims.borrow_mut();
             for path in paths {
-                map.retain(|p, _| !p.has_prefix(&path));
+                retained.drop_subtree(&path);
                 removed.push(Removed { path });
             }
         }
@@ -245,16 +284,16 @@ impl RetainedSceneIndex {
 
 impl SceneIndex for RetainedSceneIndex {
     fn prim(&self, path: &sdf::Path) -> Prim {
-        self.prims.borrow().get(path).cloned().unwrap_or_default()
+        self.prims.borrow().prims.get(path).cloned().unwrap_or_default()
     }
 
     fn children(&self, path: &sdf::Path) -> Vec<sdf::Path> {
         self.prims
             .borrow()
-            .keys()
-            .filter(|p| !p.is_abs_root() && p.parent().as_ref() == Some(path))
-            .cloned()
-            .collect()
+            .children
+            .get(path)
+            .map(|children| children.iter().cloned().collect())
+            .unwrap_or_default()
     }
 
     fn add_observer(&self, observer: Weak<dyn Observer>) {
@@ -379,6 +418,14 @@ mod tests {
         assert!(!index.prim(&p("/world/a")).is_defined());
         assert!(!index.prim(&p("/world/a/b")).is_defined());
         assert!(index.prim(&p("/world/c")).is_defined());
+        assert_eq!(index.children(&p("/world")), [p("/world/c")]);
+        assert!(index.children(&p("/world/a")).is_empty());
+        // Added again, the subtree lists only what is added.
+        index.add_prims([(p("/world/a"), mesh())]);
+        assert_eq!(index.children(&p("/world")), [p("/world/a"), p("/world/c")]);
+        assert!(index.children(&p("/world/a")).is_empty());
+        index.remove_prims([sdf::Path::abs_root()]);
+        assert!(index.children(&sdf::Path::abs_root()).is_empty());
     }
 
     #[test]
