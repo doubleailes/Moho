@@ -24,6 +24,19 @@ use moho::tokens::material_bindings;
 
 use crate::Result;
 
+/// The layers [`Chain::new`] builds, by name, in order.
+pub const LAYER_NAMES: [&str; 9] = [
+    "stage",
+    "extent resolving",
+    "point instancing",
+    "native instancing",
+    "instance proxy path translation",
+    "material binding resolving",
+    "render settings flattening",
+    "light linking",
+    "dependency forwarding",
+];
+
 /// One layer of the chain, named after the filter on top of it.
 pub struct Layer {
     pub name: &'static str,
@@ -175,7 +188,8 @@ mod tests {
         let root = dir.path().join("walk.usda");
         std::fs::write(&root, fixture_text(10)).unwrap();
         let (_stage, _, chain) = Chain::open(root.to_str().unwrap()).unwrap();
-        assert_eq!(chain.layers.len(), 9);
+        let names: Vec<&str> = chain.layers.iter().map(|l| l.name).collect();
+        assert_eq!(names, LAYER_NAMES);
         // The root, /world, its 10 meshes and /cam.
         for layer in &chain.layers {
             assert_eq!(walk(layer.index.as_ref()), 13, "{}", layer.name);
