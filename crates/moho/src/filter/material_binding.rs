@@ -53,7 +53,7 @@ type Evaluator = Option<Rc<CollectionExpressionEvaluator>>;
 pub struct MaterialBindingResolvingSceneIndex {
     input: SceneIndexHandle,
     me: Weak<MaterialBindingResolvingSceneIndex>,
-    cache: RefCell<HashMap<sdf::Path, Prim>>,
+    cache: RefCell<sdf::PathMap<Prim>>,
     /// The evaluators of the collections bindings named, by collection prim
     /// and name; dropped when that prim's `collections` change.
     evaluators: RefCell<HashMap<(sdf::Path, Token), Evaluator>>,
@@ -66,7 +66,7 @@ impl MaterialBindingResolvingSceneIndex {
         let index = Rc::new_cyclic(|me| Self {
             input: input.clone(),
             me: me.clone(),
-            cache: RefCell::new(HashMap::new()),
+            cache: RefCell::default(),
             evaluators: RefCell::new(HashMap::new()),
             observers: Observers::default(),
         });

@@ -23,7 +23,6 @@
 //! at its ancestors (Hydra's path table), not by scanning them all.
 
 use std::cell::{Cell, RefCell};
-use std::collections::{HashMap, HashSet};
 use std::rc::{Rc, Weak};
 
 use openusd::sdf;
@@ -51,9 +50,9 @@ type Inputs = Vec<Rc<Input>>;
 #[derive(Default)]
 struct PathTable {
     /// Inputs by root.
-    at_root: HashMap<sdf::Path, Inputs>,
+    at_root: sdf::PathMap<Inputs>,
     /// Inputs by each strict ancestor of their root.
-    under: HashMap<sdf::Path, Inputs>,
+    under: sdf::PathMap<Inputs>,
 }
 
 fn insert_sorted(list: &mut Inputs, input: &Rc<Input>) {
@@ -70,7 +69,7 @@ impl PathTable {
     }
 
     fn remove(&mut self, input: &Rc<Input>) {
-        let drop_from = |map: &mut HashMap<sdf::Path, Inputs>, key: sdf::Path| {
+        let drop_from = |map: &mut sdf::PathMap<Inputs>, key: sdf::Path| {
             if let Some(list) = map.get_mut(&key) {
                 list.retain(|i| !Rc::ptr_eq(i, input));
                 if list.is_empty() {
@@ -179,7 +178,7 @@ impl MergingSceneIndex {
         if self.observers.is_empty() {
             return;
         }
-        let mut visited: HashSet<sdf::Path> = HashSet::new();
+        let mut visited = sdf::PathSet::default();
         let mut gone: Vec<Removed> = Vec::new();
         let mut kept: Vec<Added> = Vec::new();
         let mut queue = vec![removed.root.clone()];
@@ -286,7 +285,7 @@ impl SceneIndex for MergingSceneIndex {
     /// order, each once, which is not part of its contract.
     fn children(&self, path: &sdf::Path) -> Vec<sdf::Path> {
         let mut children: Vec<sdf::Path> = Vec::new();
-        let mut seen: HashSet<sdf::Path> = HashSet::new();
+        let mut seen = sdf::PathSet::default();
         let mut push = |child: sdf::Path, children: &mut Vec<sdf::Path>| {
             if seen.insert(child.clone()) {
                 children.push(child);
