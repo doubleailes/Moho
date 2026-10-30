@@ -437,8 +437,38 @@ Read at `d7d2a29`.
   when it re-reads as a token (`{hdType:mesh}`); C++ `GetText` quotes it
   (`{hdType:"mesh"}`). The same expression.
 
+## Walk cost (Moho issue #27)
+
+- `sdf::PathMap<V>` and `sdf::PathSet` (`sdf/path.rs`): a `HashMap` and
+  `HashSet` keyed by `Path` with `FxBuildHasher`. A `Path` is an `Arc` of
+  its text and the hash of that text, computed once, so a lookup mixes one
+  word where `std`'s `RandomState` runs SipHash over the whole text. The
+  path-keyed caches of the stage index, flattening, material binding
+  resolving and merging use them.
+- `Prim::stage() -> &Stage`, `Stage::schema_registry() -> &Arc<SchemaRegistry>`,
+  `Prim::prim_type_info() -> Result<Arc<PrimTypeInfo>>`,
+  `PrimTypeInfo::schema_type_name() -> &Token` and
+  `SchemaRegistry::is_a(schema, base) -> bool`: what `Prim::is_a` does, in
+  parts, so that Moho can remember the answer per registry, schema type and
+  base (`stage::is_a`). The registry's base graph is fixed once `build`
+  returns (only its `type_infos` cache is behind a lock).
+- `Stage::prototypes()` re-runs `discover_prototypes`, a walk of the whole
+  populated namespace, the first time it is called after any structural
+  edit (the population epoch moved; openusd's own `TODO(perf)` in
+  `usd/stage.rs`). The stage index lists the prototypes among the
+  absolute root's children, as UsdImaging does, so the first walk after a
+  resync pays it: about 20 ms of a linked light's 25 ms on the 10 000 mesh
+  fixture (`docs/update-latency.md`).
+
 ## Gaps
 
+- `SchemaRegistry::is_a` walks the base graph with a fresh `HashSet` on
+  every call (its `TODO(perf)`: a transitive closure computed in `build`).
+  It was most of a walk's cost through the stage index; Moho memoizes it
+  (`stage/mod.rs`, `is_a`).
+- Prototype discovery is not incremental: any structural edit makes the
+  next `Stage::prototypes()` walk the whole stage, where C++'s
+  `Usd_InstanceCache` is updated from the change set.
 - Splines (`Ts`): a `.spline` block only round-trips as a dictionary. There
   are no typed knots, evaluation, authoring or usdc encoding.
 - `load_rules_changed` reports the nearest ancestor whose load rule changes
