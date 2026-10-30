@@ -18,7 +18,7 @@ use std::time::Duration;
 use moho_spike::fixture::TempDir;
 use moho_spike::mem::Memory;
 use moho_spike::update::fixture_text;
-use moho_spike::walk::{Chain, time_walks};
+use moho_spike::walk::{Chain, LAYER_NAMES, time_walks};
 
 const USAGE: &str =
     "usage: walk [--runs N] [--layer NAME] <scene>\n       walk [--runs N] [--layer NAME] --fixture MESHES";
@@ -51,6 +51,15 @@ fn run() -> moho_spike::Result<()> {
             _ if scene.is_none() && !arg.starts_with('-') => scene = Some(arg),
             _ => return Err(format!("unexpected argument {arg}").into()),
         }
+    }
+    if let Some(only) = &only
+        && !LAYER_NAMES.contains(&only.as_str())
+    {
+        return Err(format!(
+            "no layer named {only:?}; the layers are {}",
+            LAYER_NAMES.join(", ")
+        )
+        .into());
     }
     let dir = TempDir::new()?;
     let scene = match (fixture, scene) {
