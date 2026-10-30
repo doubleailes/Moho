@@ -64,9 +64,28 @@ a prim defined and one removed, a time change), with nothing read first and
 with everything read first, are byte-identical before and after on
 crust-render's 44 samples, `Kitchen_set` and `Kitchen_set_instanced`,
 MaterialX's teapot and lion, Moana's `isCoral` and ALab (nothing read).
-The C++ Hydra harness of `hydra-parity-check.md` was not re-run: it is not
-in the repository, and the comparison above is against the revision it
-checked.
+
+The Hydra comparison of `hydra-parity-check.md` was re-run (USD 26.08,
+conda-forge `openusd-26.08-py313h6963fe8_0`) on its whole corpus, once
+with Moho at `8163843` and once with these changes:
+
+- **Static data:** 143 scenes, the same prims and types on both sides in
+  each, no unexplained difference. The per-scene tables of the two Moho
+  revisions are identical, and isCoral's full Moho dump (19.9 million
+  lines) is byte-identical.
+- **Notices:** with nothing read, 906 of 1 214 edits give Hydra's entries;
+  with everything read, 874 of 1 192 (two edits more than the parity check
+  counted, from fixtures added since). Every other edit falls in a class
+  that check documents, and the totals per class are the same for both
+  revisions.
+- **Run to run:** an edit making a prim non-instanceable (openusd's
+  prototype retirement, class (a)) varies from run to run in Hydra and in
+  Moho, at either revision: how often an entry is notified depends on the
+  order in which the replacement prototype is composed. Run 40 times per
+  revision, the 11 such edits in the scenes where one run differed give
+  the same sets of variants, or sets that differ only in variants seen
+  once or twice in 40; every other edit of those scenes (164) is
+  deterministic and identical.
 
 ## 10 000 meshes (10 runs)
 
