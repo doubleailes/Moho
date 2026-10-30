@@ -305,7 +305,7 @@ checksum = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
 [[package]]
 name = "openusd"
 version = "0.8.0"
-source = "git+https://github.com/doubleailes/openusd?rev=d7d2a29406871508b6ec3ffe9173a5941b1c6123#d7d2a29406871508b6ec3ffe9173a5941b1c6123"
+source = "git+https://github.com/doubleailes/openusd?rev=6f3250196a02d05f8ecda17f3682b29a1b75231d#6f3250196a02d05f8ecda17f3682b29a1b75231d"
 dependencies = [
  "bitflags",
  "bytemuck",
@@ -327,7 +327,7 @@ dependencies = [
 [[package]]
 name = "openusd-build"
 version = "0.8.0"
-source = "git+https://github.com/doubleailes/openusd?rev=d7d2a29406871508b6ec3ffe9173a5941b1c6123#d7d2a29406871508b6ec3ffe9173a5941b1c6123"
+source = "git+https://github.com/doubleailes/openusd?rev=6f3250196a02d05f8ecda17f3682b29a1b75231d#6f3250196a02d05f8ecda17f3682b29a1b75231d"
 dependencies = [
  "openusd",
  "prettyplease",
@@ -342,7 +342,7 @@ dependencies = [
 [[package]]
 name = "openusd-schemas"
 version = "0.8.0"
-source = "git+https://github.com/doubleailes/openusd?rev=d7d2a29406871508b6ec3ffe9173a5941b1c6123#d7d2a29406871508b6ec3ffe9173a5941b1c6123"
+source = "git+https://github.com/doubleailes/openusd?rev=6f3250196a02d05f8ecda17f3682b29a1b75231d#6f3250196a02d05f8ecda17f3682b29a1b75231d"
 dependencies = [
  "bitflags",
  "derive_more",
