@@ -345,3 +345,78 @@ def Xform "world"
     index.apply_pending_updates();
     assert_eq!(index.children(&p("/world")), [p("/world/inst")]);
 }
+
+/// A reorder of a prim's children (`primOrder`, or the order its layer lists
+/// them in) changes what `children` lists, though it adds and removes no prim:
+/// held children are forgotten on any change to the parent's own fields, as
+/// they were re-read on every call before they were held.
+#[test]
+fn children_follow_reorders() {
+    let (_dir, usd) = stage(
+        r#"#usda 1.0
+def Xform "world"
+{
+    def Mesh "a"
+    {
+    }
+    def Mesh "b"
+    {
+    }
+}
+"#,
+    );
+    let index = StageSceneIndex::new();
+    index.set_stage(usd);
+    let stage = index.stage().unwrap();
+    // Listed once, so that what follows reads children held since.
+    assert_eq!(index.children(&p("/world")), [p("/world/a"), p("/world/b")]);
+    stage
+        .prim("/world")
+        .unwrap()
+        .set_metadata(
+            "primOrder",
+            moho::openusd::sdf::Value::TokenVec(vec!["b".into(), "a".into()]),
+        )
+        .unwrap();
+    index.apply_pending_updates();
+    assert_eq!(index.children(&p("/world")), [p("/world/b"), p("/world/a")]);
+}
+
+/// A layer listing a prim's children in another order (what a replayed layer
+/// diff authors) resyncs the prim (openusd reports it as C++ `UsdStage` does
+/// for `didReorderChildren`), so the children held for it are listed again.
+#[test]
+fn children_follow_layer_reorders() {
+    use moho::openusd::usd::{ApplyMode, Diff, Edit};
+    let (_dir, usd) = stage(
+        r#"#usda 1.0
+def Xform "world"
+{
+    def Mesh "a"
+    {
+    }
+    def Mesh "b"
+    {
+    }
+}
+"#,
+    );
+    let index = StageSceneIndex::new();
+    index.set_stage(usd);
+    let stage = index.stage().unwrap();
+    // Listed once, so that what follows reads children held since.
+    assert_eq!(index.children(&p("/world")), [p("/world/a"), p("/world/b")]);
+    let root = stage.root_layer().identifier().to_owned();
+    let diff = Diff {
+        edits: vec![Edit::SetField {
+            path: p("/world"),
+            spec_type: moho::openusd::sdf::SpecType::Prim,
+            field: "primChildren".into(),
+            value: moho::openusd::sdf::Value::TokenVec(vec!["b".into(), "a".into()]),
+        }],
+        mapping: None,
+    };
+    stage.apply_diff(&diff, ApplyMode::ExactLayer(&root)).unwrap();
+    index.apply_pending_updates();
+    assert_eq!(index.children(&p("/world")), [p("/world/b"), p("/world/a")]);
+}

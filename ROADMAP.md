@@ -75,7 +75,9 @@ the steps that land in this repository or depend on it.
 - Clip files opened for no reason by `might_be_time_varying` and an
   `AttributeQuery`'s value source (ALab: 26.0 → 11.1 GiB on a raw read):
   [mxpv/openusd#175](https://github.com/mxpv/openusd/pull/175). Moho pins
-  doubleailes/openusd at `d7d2a29` until it merges.
+  doubleailes/openusd at `6f32501` (`prim-children-resync`: `d7d2a29` plus
+  a resync for a prim whose children or properties a layer reorders) until
+  both are upstream.
 
 - Splines (`Ts`): typed knots, evaluation, authoring, usdc encoding.
 - Child listing cost. `Prim::filtered_children` costs about 1 µs per child

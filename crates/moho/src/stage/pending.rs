@@ -17,6 +17,10 @@ pub struct Pending {
     pub resynced_properties: BTreeMap<sdf::Path, BTreeSet<String>>,
     /// Per prim, the properties whose value or metadata changed.
     pub updated_properties: BTreeMap<sdf::Path, BTreeSet<String>>,
+    /// Prims whose own fields changed (info-only): nothing is notified for
+    /// them, but the children held for each are forgotten, since a field
+    /// such as `primOrder` reorders them.
+    pub info_changed: BTreeSet<sdf::Path>,
 }
 
 impl Pending {
@@ -47,6 +51,8 @@ impl Pending {
             // missed.
             if path.is_property() {
                 Self::property(&mut self.updated_properties, path);
+            } else {
+                self.info_changed.insert(path.clone());
             }
         }
     }

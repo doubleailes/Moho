@@ -324,6 +324,15 @@ impl StageSceneIndex {
         else {
             return;
         };
+        // A prim's own field may reorder its children (`primOrder`): the
+        // children held for it are read again, without a notice, as they
+        // were on every call before they were held.
+        if !pending.info_changed.is_empty() {
+            let mut children = self.children.borrow_mut();
+            for path in &pending.info_changed {
+                children.remove(path);
+            }
+        }
         let mut roots = pending.resync_roots();
         // The prototypes populated before this batch, needed only when it
         // resyncs one (rare): not computed on every update.
