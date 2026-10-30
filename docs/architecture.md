@@ -113,7 +113,8 @@ Update latency ranks above first-load time: an edit dirties exactly what
 Hydra dirties (a camera edit its camera at `camera/<field>` or `xform`, a
 light with trivial collections nothing but its own addition), and
 `crates/moho-spike`'s `update` benchmark times edits up to the managing
-observer (`docs/update-latency.md`).
+observer (`docs/update-latency.md`), and its `walk` benchmark the cost of
+`prim()` and `children()` per layer of the chain (`docs/walk.md`).
 
 - **`StageSceneIndex`** has `UsdImagingStageSceneIndex`'s shape: built
   empty (`new`), then `set_stage`, `set_time` and `apply_pending_updates`.

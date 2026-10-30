@@ -37,9 +37,11 @@ the steps that land in this repository or depend on it.
 ## Later
 
 - Instancing and material-network-resolve filters beyond what S2 needs.
-- Profile the standard chain's per-prim cost. Strategy (D), which reads every
-  data source, took 6.6× (B)'s time on Moana (`docs/streaming-spike.md`),
-  about 2 ms per prim on its two largest chunks.
+- Profile the standard chain's per-prim cost when data is read. Strategy
+  (D), which reads every data source, took 6.6× (B)'s time on Moana
+  (`docs/streaming-spike.md`), about 2 ms per prim on its two largest
+  chunks. The cost of `prim()` and `children()` alone was profiled and cut
+  in issue #27 (`docs/walk.md`).
 - Offering Moho upstream as an `openusd-imaging` crate in openusd's
   workspace. The `moho::openusd` and `moho::openusd_schemas` re-exports
   and feature forwarding are a downstream policy (one openusd pin for the
@@ -54,7 +56,9 @@ the steps that land in this repository or depend on it.
 - Update latency: a linked light's invalidation walks the whole scene from
   the root (Hydra's algorithm: the union of the dirty expressions matched
   once over the input), so it grows with the scene
-  (`docs/update-latency.md`).
+  (`docs/update-latency.md`); since issue #27 most of it is openusd's
+  prototype discovery (below). A trivial light's add still grows with the
+  scene, and ALab's first edit after setup takes 16 s; neither is located.
 
 ## Upstream candidates (OpenUSD)
 
@@ -76,8 +80,19 @@ the steps that land in this repository or depend on it.
 - Splines (`Ts`): typed knots, evaluation, authoring, usdc encoding.
 - Child listing cost. `Prim::filtered_children` costs about 1 µs per child
   (10 ms for 10 000 siblings), and about twice that on the first listing
-  after an edit, which the update benchmark meets on every light-linking
-  invalidation (`docs/update-latency.md`).
+  after an edit. The stage index now holds each prim's children until a
+  resync reaches them (`crates/moho/src/stage/mod.rs`).
+- `SchemaRegistry::is_a` walks the base graph with a fresh hash set on
+  every call (openusd's own `TODO(perf)`: a transitive closure computed at
+  `build`). It was most of the stage index's `prim()` and `children()`
+  cost; Moho memoizes it per registry (`crates/moho/src/stage/mod.rs`).
+- Incremental prototype discovery. After any structural edit, the next
+  `Stage::prototypes()` walks the whole populated namespace again (its
+  `TODO(perf)` in `usd/stage.rs`); C++ updates `Usd_InstanceCache` from the
+  change set. The absolute root's children name the prototypes, as in
+  UsdImaging, so every invalidation that walks from the root pays it: about
+  20 ms of a linked light's 25 ms on the 10 000 mesh fixture
+  (`docs/update-latency.md`).
 - Unloading a payload does not free what composing it took (no layer
   eviction). On Moana, RSS under one stage only grew across 22 load/unload
   rounds. This is what rules out single-stage streaming (S0).
