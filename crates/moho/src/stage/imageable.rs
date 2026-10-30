@@ -116,8 +116,8 @@ pub(crate) fn extent_corner(value: Value, corner: usize) -> Option<Value> {
     }
 }
 
-fn is_a(ctx: &PrimContext, schema: &str) -> bool {
-    ctx.prim().is_some_and(|p| p.is_a(schema).unwrap_or(false))
+fn is_a(ctx: &PrimContext, schema: &'static str) -> bool {
+    ctx.prim().is_some_and(|p| crate::stage::is_a(&p, schema))
 }
 
 impl Adapter for ImageableAdapter {

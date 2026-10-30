@@ -117,7 +117,7 @@ impl Container for PrimInfo {
 /// whose adapters (`UsdImagingRepresentedByAncestorPrimAdapter`) give no
 /// data at all. A material, a node graph too, has its own adapter.
 pub(crate) fn skips_prim_data(prim: &usd::Prim) -> bool {
-    let is_a = |schema: &str| prim.is_a(schema).unwrap_or(false);
+    let is_a = |schema| crate::stage::is_a(prim, schema);
     is_a("RenderSettingsBase")
         || is_a("RenderVar")
         || is_a("RenderPass")

@@ -59,7 +59,7 @@ const LIGHT_FILTER_SHADER_ID: &str = "lightFilter:shaderId";
 /// Whether `prim` is a `LightFilter` or of a type derived from it (C++
 /// `UsdLuxLightFilter(prim)`).
 pub(crate) fn is_light_filter(prim: &usd::Prim) -> bool {
-    prim.is_a("LightFilter").unwrap_or(false)
+    crate::stage::is_a(prim, "LightFilter")
 }
 
 /// Whether `prim` applies `LightAPI` (C++ `UsdLuxLightAPI(prim)`).
@@ -389,7 +389,7 @@ fn shaders_under(material: &usd::Prim) -> Vec<usd::Prim> {
     range
         .filter_map(Result::ok)
         .filter(|p| p.path() != material.path())
-        .filter(|p| p.is_a("Shader").unwrap_or(false))
+        .filter(|p| crate::stage::is_a(p, "Shader"))
         .collect()
 }
 

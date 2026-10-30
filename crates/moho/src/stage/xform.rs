@@ -68,7 +68,7 @@ impl Adapter for XformAdapter {
     /// `xform` on every `Xformable` (given only when its ops have an
     /// effect), and `geomXformVectors` where `xformOpOrder` is authored.
     fn names(&self, ctx: &PrimContext) -> Vec<Token> {
-        let xformable = ctx.prim().is_some_and(|p| p.is_a("Xformable").unwrap_or(false));
+        let xformable = ctx.prim().is_some_and(|p| crate::stage::is_a(&p, "Xformable"));
         if ctx.path.is_abs_root() || !xformable {
             return Vec::new();
         }
