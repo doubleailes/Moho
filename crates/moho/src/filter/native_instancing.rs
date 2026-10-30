@@ -206,7 +206,8 @@ fn renamed_as_removed_and_added(observer: &dyn Observer, sender: &dyn SceneIndex
 /// `__usdPrimInfo/isNiPrototype` is true.
 struct PrototypePruningSceneIndex {
     input: SceneIndexHandle,
-    prototypes: RefCell<BTreeSet<sdf::Path>>,
+    /// The USD prototypes, by root prim name.
+    prototypes: RefCell<BTreeSet<String>>,
     observers: Observers,
 }
 
@@ -221,10 +222,11 @@ fn is_usd_prototype(input: &dyn SceneIndex, path: &sdf::Path) -> bool {
 
 impl PrototypePruningSceneIndex {
     fn new(input: SceneIndexHandle) -> Rc<Self> {
-        let prototypes: BTreeSet<sdf::Path> = input
+        let prototypes: BTreeSet<String> = input
             .children(&sdf::Path::abs_root())
             .into_iter()
             .filter(|c| is_usd_prototype(input.as_ref(), c))
+            .filter_map(|c| c.name().map(str::to_owned))
             .collect();
         let index = Rc::new(Self {
             input: input.clone(),
@@ -241,9 +243,8 @@ impl PrototypePruningSceneIndex {
         let prototypes = self.prototypes.borrow();
         !prototypes.is_empty()
             && path
-                .ancestors_below_root()
-                .last()
-                .is_some_and(|root| prototypes.contains(&root))
+                .root_prim_name()
+                .is_some_and(|root| prototypes.contains(root))
     }
 }
 
@@ -265,7 +266,7 @@ impl SceneIndex for PrototypePruningSceneIndex {
                 .input
                 .children(path)
                 .into_iter()
-                .filter(|c| !prototypes.contains(c))
+                .filter(|c| !c.name().is_some_and(|name| prototypes.contains(name)))
                 .collect();
         }
         if self.pruned(path) {
@@ -286,7 +287,9 @@ impl Observer for PrototypePruningSceneIndex {
             .filter(|e| {
                 if e.path.is_root_prim() {
                     if is_usd_prototype(self.input.as_ref(), &e.path) {
-                        self.prototypes.borrow_mut().insert(e.path.clone());
+                        if let Some(name) = e.path.name() {
+                            self.prototypes.borrow_mut().insert(name.to_owned());
+                        }
                         false
                     } else {
                         true
@@ -314,8 +317,10 @@ impl Observer for PrototypePruningSceneIndex {
             for e in entries {
                 if e.path.is_abs_root() {
                     prototypes.clear();
-                } else if e.path.is_root_prim() {
-                    prototypes.remove(&e.path);
+                } else if e.path.is_root_prim()
+                    && let Some(name) = e.path.name()
+                {
+                    prototypes.remove(name);
                 }
             }
         }
