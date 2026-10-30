@@ -24,6 +24,7 @@ pub mod probe;
 pub mod read;
 pub mod strategy;
 pub mod update;
+pub mod walk;
 
 /// The spike's error: anything that stops a run.
 pub type Error = Box<dyn std::error::Error>;
