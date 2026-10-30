@@ -285,3 +285,63 @@ fn a_resync_removes_only_what_goes() {
     removed.sort();
     assert_eq!(removed, [p("/world"), p("/world/cam"), p("/world/geo")]);
 }
+
+#[test]
+fn children_follow_resyncs() {
+    let (_dir, usd) = stage(
+        r#"#usda 1.0
+def Xform "asset"
+{
+    def Mesh "geo"
+    {
+    }
+}
+def Xform "world"
+{
+    def Mesh "a"
+    {
+    }
+    def Xform "inst" (
+        references = </asset>
+    )
+    {
+    }
+}
+"#,
+    );
+    let index = StageSceneIndex::new();
+    index.set_stage(usd);
+    let stage = index.stage().unwrap();
+    let root = moho::openusd::sdf::Path::abs_root();
+    // Listed once, so that what follows reads children held since.
+    assert_eq!(index.children(&root), [p("/asset"), p("/world")]);
+    assert_eq!(index.children(&p("/world")), [p("/world/a"), p("/world/inst")]);
+    assert_eq!(index.children(&p("/world/inst")), [p("/world/inst/geo")]);
+
+    // A sibling defined, then a prim removed: the parent lists them.
+    stage.define_typed_prim("/world/b", "Mesh").unwrap();
+    index.apply_pending_updates();
+    assert_eq!(
+        index.children(&p("/world")),
+        [p("/world/a"), p("/world/inst"), p("/world/b")]
+    );
+    stage.remove_prim("/world/a").unwrap();
+    index.apply_pending_updates();
+    assert_eq!(index.children(&p("/world")), [p("/world/inst"), p("/world/b")]);
+
+    // Made instanceable: the instance's contents go, and the absolute root
+    // lists the new prototype.
+    stage.prim("/world/inst").unwrap().set_instanceable(true).unwrap();
+    index.apply_pending_updates();
+    assert!(index.children(&p("/world/inst")).is_empty());
+    let prototypes = stage.prototypes().unwrap();
+    assert_eq!(prototypes.len(), 1);
+    let mut expected = vec![p("/asset"), p("/world")];
+    expected.extend(prototypes);
+    assert_eq!(index.children(&root), expected);
+
+    // Deactivated: the parent no longer lists it.
+    stage.prim("/world/b").unwrap().set_active(false).unwrap();
+    index.apply_pending_updates();
+    assert_eq!(index.children(&p("/world")), [p("/world/inst")]);
+}

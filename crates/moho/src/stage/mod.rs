@@ -149,7 +149,9 @@ pub struct StageSceneIndex {
     current: RefCell<Option<Current>>,
     globals: Rc<Globals>,
     adapters: AdapterRegistry,
-    cache: RefCell<HashMap<sdf::Path, Prim>>,
+    cache: RefCell<sdf::PathMap<Prim>>,
+    /// Each prim's children, as `children` answers them until a resync.
+    children: RefCell<sdf::PathMap<Vec<sdf::Path>>>,
     /// Every prim announced to observers and not since removed.
     populated: RefCell<BTreeSet<sdf::Path>>,
     /// Whether unloaded prims are prims of the index (UsdImaging's
@@ -170,7 +172,8 @@ impl StageSceneIndex {
             current: RefCell::new(None),
             globals: Rc::new(Globals::default()),
             adapters,
-            cache: RefCell::new(HashMap::new()),
+            cache: RefCell::default(),
+            children: RefCell::default(),
             populated: RefCell::new(BTreeSet::new()),
             include_unloaded: Cell::new(false),
             observers: Observers::default(),
@@ -215,6 +218,7 @@ impl StageSceneIndex {
             previous.stage.remove_sink(previous.sink);
         }
         self.cache.borrow_mut().clear();
+        self.children.borrow_mut().clear();
         self.populated.borrow_mut().clear();
         self.globals.forget_under(&sdf::Path::abs_root());
         if had_stage {
@@ -232,6 +236,19 @@ impl StageSceneIndex {
         *self.current.borrow_mut() = Some(Current { stage, sink, pending });
         let added = self.populate(&sdf::Path::abs_root());
         self.observers.send_added(self, &added);
+    }
+
+    /// Forgets the prims and children held at and under `root`, and the
+    /// children of its parent and of the absolute root (whose children
+    /// include the prototypes, which any resync may add or retire).
+    fn forget_under(&self, root: &sdf::Path) {
+        self.cache.borrow_mut().retain(|p, _| !p.has_prefix(root));
+        let mut children = self.children.borrow_mut();
+        children.retain(|p, _| !p.has_prefix(root));
+        if let Some(parent) = root.parent() {
+            children.remove(&parent);
+        }
+        children.remove(&sdf::Path::abs_root());
     }
 
     /// The prims the default traversal reaches at and under `root`,
@@ -333,7 +350,7 @@ impl StageSceneIndex {
             .map(|root| self.representing_ancestor(root))
             .collect();
         for (root, represented) in roots.iter().zip(&represented) {
-            self.cache.borrow_mut().retain(|p, _| !p.has_prefix(root));
+            self.forget_under(root);
             self.globals.forget_under(root);
             if represented.is_some() {
                 continue;
@@ -366,7 +383,7 @@ impl StageSceneIndex {
         if touches_prototype {
             let (prototypes, instances) = self.repointed_prototypes(&known_prototypes);
             for path in prototypes.into_iter().chain(instances) {
-                self.cache.borrow_mut().retain(|p, _| !p.has_prefix(&path));
+                self.forget_under(&path);
                 self.globals.forget_under(&path);
                 // An instance has no children here: its prim info now names
                 // the new prototype.
@@ -697,6 +714,32 @@ fn prune_material_descendants(stage: &Stage, paths: Vec<sdf::Path>) -> Vec<sdf::
     kept
 }
 
+impl StageSceneIndex {
+    fn compute_children(&self, stage: &Stage, path: &sdf::Path) -> Vec<sdf::Path> {
+        if !path.is_abs_root() && !self.prim(path).is_defined() {
+            return Vec::new();
+        }
+        let Ok(prim) = stage.prim(path) else {
+            return Vec::new();
+        };
+        // A material's or light filter's descendants are not prims of the
+        // index.
+        if represents_descendants(&prim) {
+            return Vec::new();
+        }
+        let mut children: Vec<sdf::Path> = prim
+            .filtered_children(self.predicate())
+            .map(|children| children.iter().map(|c| c.path().clone()).collect())
+            .unwrap_or_default();
+        if path.is_abs_root() {
+            // Prototypes are prims of this index too, as in UsdImaging; the
+            // native-instancing filter re-roots them.
+            children.extend(stage.prototypes().unwrap_or_default());
+        }
+        children
+    }
+}
+
 impl SceneIndex for StageSceneIndex {
     fn prim(&self, path: &sdf::Path) -> Prim {
         if let Some(prim) = self.cache.borrow().get(path) {
@@ -710,29 +753,18 @@ impl SceneIndex for StageSceneIndex {
         prim
     }
 
+    /// Held until a resync at or above `path` or of one of its children,
+    /// as the prims are held: openusd's child listing was most of a walk's
+    /// cost (an upstream candidate in `ROADMAP.md`).
     fn children(&self, path: &sdf::Path) -> Vec<sdf::Path> {
+        if let Some(children) = self.children.borrow().get(path) {
+            return children.clone();
+        }
         let Some(stage) = self.stage() else {
             return Vec::new();
         };
-        if !path.is_abs_root() && !self.prim(path).is_defined() {
-            return Vec::new();
-        }
-        // A material's or light filter's descendants are not prims of the
-        // index.
-        if stage.prim(path).ok().is_some_and(|p| represents_descendants(&p)) {
-            return Vec::new();
-        }
-        let mut children: Vec<sdf::Path> = stage
-            .prim(path)
-            .ok()
-            .and_then(|p| p.filtered_children(self.predicate()).ok())
-            .map(|children| children.iter().map(|c| c.path().clone()).collect())
-            .unwrap_or_default();
-        if path.is_abs_root() {
-            // Prototypes are prims of this index too, as in UsdImaging; the
-            // native-instancing filter re-roots them.
-            children.extend(stage.prototypes().unwrap_or_default());
-        }
+        let children = self.compute_children(&stage, path);
+        self.children.borrow_mut().insert(path.clone(), children.clone());
         children
     }
 
