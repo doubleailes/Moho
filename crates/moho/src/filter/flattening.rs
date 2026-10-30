@@ -37,7 +37,7 @@
 //! entry.
 
 use std::cell::RefCell;
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashSet};
 use std::rc::{Rc, Weak};
 
 use openusd::gf;
@@ -101,7 +101,7 @@ fn dirty_for_descendants(name: &str, relative: Vec<Locator>) -> Option<Vec<Locat
 
 /// Whether `prim` lies under one of the `skipped` roots, which are all at or
 /// under `top`: its ancestors are tested from its parent up to `top`.
-fn under_skipped(prim: &sdf::Path, top: &sdf::Path, skipped: &HashSet<sdf::Path>) -> bool {
+fn under_skipped(prim: &sdf::Path, top: &sdf::Path, skipped: &sdf::PathSet) -> bool {
     if skipped.is_empty() {
         return false;
     }
@@ -172,7 +172,7 @@ impl Read {
 pub struct FlatteningSceneIndex {
     input: SceneIndexHandle,
     me: Weak<FlatteningSceneIndex>,
-    cache: RefCell<HashMap<sdf::Path, Prim>>,
+    cache: RefCell<sdf::PathMap<Prim>>,
     /// The prims read through this index (Hydra's prim table), by path.
     read: RefCell<BTreeMap<sdf::Path, Read>>,
     observers: Observers,
@@ -184,7 +184,7 @@ impl FlatteningSceneIndex {
         let index = Rc::new_cyclic(|me| Self {
             input: input.clone(),
             me: me.clone(),
-            cache: RefCell::new(HashMap::new()),
+            cache: RefCell::default(),
             read: RefCell::new(BTreeMap::new()),
             observers: Observers::default(),
         });
@@ -238,7 +238,7 @@ impl FlatteningSceneIndex {
         // Roots of the subtrees skipped, as `_DirtyHierarchy`'s
         // `GetNextSubtree`; a prim is tested against its own ancestors, so
         // the cost grows with depth, not with the number of skipped roots.
-        let mut skipped: HashSet<sdf::Path> = HashSet::new();
+        let mut skipped = sdf::PathSet::default();
         // Paths are ordered by their text: the subtree follows `path`, mixed
         // with siblings whose names extend its own.
         for (prim, state) in read.range_mut(path.clone()..) {
