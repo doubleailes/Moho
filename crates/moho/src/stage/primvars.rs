@@ -159,14 +159,14 @@ const COLOR_SPACES: &[&str] = &[
 ];
 
 fn is_gprim(prim: &usd::Prim) -> bool {
-    prim.is_a("Gprim").unwrap_or(false)
+    crate::stage::is_a(prim, "Gprim")
 }
 
 /// The custom primvars of `prim`'s family: `(primvar, attribute)`.
 fn gprim_custom(prim: &usd::Prim) -> Vec<(&'static str, &'static str)> {
     GPRIM_CUSTOM
         .iter()
-        .filter(|(_, _, family)| prim.is_a(*family).unwrap_or(false))
+        .filter(|(_, _, family)| crate::stage::is_a(prim, family))
         .map(|(primvar, attribute, _)| (*primvar, *attribute))
         .collect()
 }
@@ -178,7 +178,7 @@ fn gprim_custom(prim: &usd::Prim) -> Vec<(&'static str, &'static str)> {
 /// when it has a non-empty value at the earliest time
 /// (`UsdGeomPointInstancer::UsesOrientationsf`), else `orientations`.
 fn instancer_custom(prim: &usd::Prim) -> Vec<(Token, usd::Attribute)> {
-    if !prim.is_a("PointInstancer").unwrap_or(false) {
+    if !crate::stage::is_a(prim, "PointInstancer") {
         return Vec::new();
     }
     let uses_orientationsf = prim
@@ -263,7 +263,7 @@ impl Adapter for PrimvarsAdapter {
                 locators.insert(Locator::new([t::PRIMVARS, primvar]));
             }
         }
-        if prim.is_a("PointInstancer").unwrap_or(false) {
+        if crate::stage::is_a(&prim, "PointInstancer") {
             for (primvar, attribute) in INSTANCER_CUSTOM {
                 if *attribute == name {
                     locators.insert(Locator::new([t::PRIMVARS, *primvar]));
@@ -414,7 +414,7 @@ impl PrimvarEntry {
         let instancer = || {
             self.ctx
                 .prim()
-                .is_some_and(|p| p.is_a("PointInstancer").unwrap_or(false))
+                .is_some_and(|p| crate::stage::is_a(&p, "PointInstancer"))
         };
         match &self.source {
             Source::Primvar(_) | Source::Relationship(_) if instancer() => {
