@@ -36,7 +36,7 @@
 //! dirties its read descendants for every flattened name, after the added
 //! entry.
 
-use std::cell::RefCell;
+use std::cell::{OnceCell, RefCell};
 use std::collections::{BTreeMap, HashSet};
 use std::rc::{Rc, Weak};
 
@@ -455,14 +455,12 @@ impl Flattened {
     /// Always a container, empty for a prim that has and inherits no
     /// primvar, as `HdFlattenedPrimvarsDataSourceProvider` gives it.
     fn primvars(&self) -> Option<DataSource> {
-        let parent = self
-            .parent()
-            .and_then(|p| member_container(&p, primvars::PRIMVARS));
         Some(DataSource::Container(Rc::new(FlattenedPrimvars {
             index: self.index.clone(),
             path: self.path.clone(),
-            local: member_container(&self.local, primvars::PRIMVARS),
-            parent,
+            prim: self.local.clone(),
+            local: OnceCell::new(),
+            parent: OnceCell::new(),
         })))
     }
 
@@ -667,11 +665,17 @@ impl Container for FlattenedGeomModel {
 }
 
 /// A prim's primvars plus its ancestors' constant primvars.
+///
+/// Its own primvars and its parent's flattened ones are found when first
+/// asked: a primvar the prim authors is answered without its ancestors, where
+/// finding the parent's builds every ancestor's primvars up to the root.
 struct FlattenedPrimvars {
     index: Weak<FlatteningSceneIndex>,
     path: sdf::Path,
-    local: Option<ContainerHandle>,
-    parent: Option<ContainerHandle>,
+    /// The prim's own data.
+    prim: ContainerHandle,
+    local: OnceCell<Option<ContainerHandle>>,
+    parent: OnceCell<Option<ContainerHandle>>,
 }
 
 fn constant(primvar: &DataSource) -> bool {
@@ -683,10 +687,26 @@ fn constant(primvar: &DataSource) -> bool {
 }
 
 impl FlattenedPrimvars {
-    fn inherited(&self) -> Vec<Token> {
-        let local: Vec<Token> = self.local.as_ref().map(|c| c.names()).unwrap_or_default();
-        self.parent
+    fn local(&self) -> Option<&ContainerHandle> {
+        self.local
+            .get_or_init(|| member_container(&self.prim, primvars::PRIMVARS))
             .as_ref()
+    }
+
+    fn parent(&self) -> Option<&ContainerHandle> {
+        self.parent
+            .get_or_init(|| {
+                self.index
+                    .upgrade()?
+                    .parent(&self.path)
+                    .and_then(|p| member_container(&p, primvars::PRIMVARS))
+            })
+            .as_ref()
+    }
+
+    fn inherited(&self) -> Vec<Token> {
+        let local: Vec<Token> = self.local().map(|c| c.names()).unwrap_or_default();
+        self.parent()
             .map(|p| {
                 p.names()
                     .into_iter()
@@ -699,7 +719,7 @@ impl FlattenedPrimvars {
 
 impl Container for FlattenedPrimvars {
     fn names(&self) -> Vec<Token> {
-        let mut names: Vec<Token> = self.local.as_ref().map(|c| c.names()).unwrap_or_default();
+        let mut names: Vec<Token> = self.local().map(|c| c.names()).unwrap_or_default();
         names.extend(self.inherited());
         names
     }
@@ -708,10 +728,10 @@ impl Container for FlattenedPrimvars {
         if let Some(index) = self.index.upgrade() {
             index.mark_primvar(&self.path, name);
         }
-        if let Some(local) = self.local.as_ref().and_then(|c| c.get(name)) {
+        if let Some(local) = self.local().and_then(|c| c.get(name)) {
             return Some(local);
         }
-        let inherited = self.parent.as_ref()?.get(name)?;
+        let inherited = self.parent()?.get(name)?;
         constant(&inherited).then_some(inherited)
     }
 }

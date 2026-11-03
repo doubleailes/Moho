@@ -257,6 +257,7 @@ impl Walk {
     fn node(&self, prim: usd::Prim) -> DataSource {
         DataSource::Container(Rc::new(ShadingNode {
             walk: self.clone(),
+            inputs: NodeInputs::new(prim.clone()),
             prim,
         }))
     }
@@ -511,6 +512,9 @@ impl Container for InterfaceParameters {
 struct ShadingNode {
     walk: Walk,
     prim: usd::Prim,
+    /// Its authored inputs and their producers, shared by its `parameters`
+    /// and `inputConnections`.
+    inputs: NodeInputs,
 }
 
 impl ShadingNode {
@@ -588,12 +592,14 @@ impl Container for ShadingNode {
                 let node = relative(self.walk.prefix.as_ref(), self.prim.path());
                 Some(DataSource::Container(Rc::new(Parameters {
                     node: self.prim.clone(),
+                    inputs: self.inputs.clone(),
                     ctx: self.walk.ctx.clone(),
                     locator: self.walk.nodes_locator.append(node).append(t::PARAMETERS),
                 })))
             }
             t::INPUT_CONNECTIONS => Some(DataSource::Container(Rc::new(InputConnections {
                 node: self.prim.clone(),
+                inputs: self.inputs.clone(),
                 prefix: self.walk.prefix.clone(),
             }))),
             _ => None,
@@ -606,10 +612,78 @@ fn producers(input: &Input, filter: ProducerFilter) -> Vec<ShadingAttribute> {
     input.value_producing_attributes(filter).unwrap_or_default()
 }
 
+/// A shading node's authored inputs, each with its producers under
+/// [`ProducerFilter::Any`], found once for the node's `parameters` and
+/// `inputConnections` together: a reader lists both and gets each entry,
+/// and every one of those answers walks the input's connections.
+///
+/// One walk serves both filters: the shader outputs an `Any` walk finds are
+/// exactly what a `ShaderOutputsOnly` walk finds, in the same order, since
+/// the filter only adds authored interface values beside them.
+#[derive(Clone)]
+struct NodeInputs {
+    node: usd::Prim,
+    found: Rc<std::cell::OnceCell<Vec<InputProducers>>>,
+}
+
+/// An authored input's name and its producers.
+type InputProducers = (Token, Vec<ShadingAttribute>);
+
+impl NodeInputs {
+    fn new(node: usd::Prim) -> Self {
+        Self {
+            node,
+            found: Rc::default(),
+        }
+    }
+
+    fn all(&self) -> &[InputProducers] {
+        self.found.get_or_init(|| {
+            authored_inputs(&self.node)
+                .iter()
+                .map(|input| {
+                    (
+                        Token::from(input.base_name()),
+                        producers(input, ProducerFilter::Any),
+                    )
+                })
+                .collect()
+        })
+    }
+
+    /// The names of the inputs with a producer `keep` accepts.
+    fn names(&self, keep: fn(&ShadingAttribute) -> bool) -> Vec<Token> {
+        self.all()
+            .iter()
+            .filter(|(_, producers)| producers.iter().any(keep))
+            .map(|(name, _)| name.clone())
+            .collect()
+    }
+
+    /// The producers of the authored input `name` under `filter`, `None`
+    /// when it is not an authored input.
+    fn producers(&self, name: &Token, filter: ProducerFilter) -> Option<Vec<ShadingAttribute>> {
+        let (_, all) = self.all().iter().find(|(n, _)| n == name)?;
+        Some(match filter {
+            ProducerFilter::Any => all.clone(),
+            ProducerFilter::ShaderOutputsOnly => all.iter().filter(|p| is_output(p)).cloned().collect(),
+        })
+    }
+}
+
+fn is_input(producer: &ShadingAttribute) -> bool {
+    matches!(producer, ShadingAttribute::Input(_))
+}
+
+fn is_output(producer: &ShadingAttribute) -> bool {
+    matches!(producer, ShadingAttribute::Output(_))
+}
+
 /// A node's parameters: the inputs whose value an input gives (their own,
 /// or an interface's) (`_UsdImagingDataSourceShadingNodeParameters`).
 struct Parameters {
     node: usd::Prim,
+    inputs: NodeInputs,
     /// The material (or light) prim, which time-varying values are flagged
     /// on.
     ctx: PrimContext,
@@ -619,15 +693,7 @@ struct Parameters {
 
 impl Container for Parameters {
     fn names(&self) -> Vec<Token> {
-        authored_inputs(&self.node)
-            .iter()
-            .filter(|input| {
-                producers(input, ProducerFilter::Any)
-                    .iter()
-                    .any(|p| matches!(p, ShadingAttribute::Input(_)))
-            })
-            .map(|input| Token::from(input.base_name()))
-            .collect()
+        self.inputs.names(is_input)
     }
 
     fn get(&self, name: &Token) -> Option<DataSource> {
@@ -636,7 +702,11 @@ impl Container for Parameters {
             return None;
         }
         let locator = self.locator.append(name.clone()).append(t::VALUE);
-        for producer in producers(&input, ProducerFilter::Any) {
+        let found = self
+            .inputs
+            .producers(name, ProducerFilter::Any)
+            .unwrap_or_else(|| producers(&input, ProducerFilter::Any));
+        for producer in found {
             let ShadingAttribute::Input(source) = producer else {
                 continue;
             };
@@ -690,20 +760,13 @@ fn color_space(attribute: &usd::Attribute) -> Token {
 /// input's value (`_UsdImagingDataSourceShadingNodeInputs`).
 struct InputConnections {
     node: usd::Prim,
+    inputs: NodeInputs,
     prefix: Option<sdf::Path>,
 }
 
 impl Container for InputConnections {
     fn names(&self) -> Vec<Token> {
-        authored_inputs(&self.node)
-            .iter()
-            .filter(|input| {
-                producers(input, ProducerFilter::Any)
-                    .iter()
-                    .any(|p| matches!(p, ShadingAttribute::Output(_)))
-            })
-            .map(|input| Token::from(input.base_name()))
-            .collect()
+        self.inputs.names(is_output)
     }
 
     fn get(&self, name: &Token) -> Option<DataSource> {
@@ -711,7 +774,10 @@ impl Container for InputConnections {
         if !input.attribute().is_defined().unwrap_or(false) {
             return None;
         }
-        let elements: Vec<DataSource> = producers(&input, ProducerFilter::ShaderOutputsOnly)
+        let elements: Vec<DataSource> = self
+            .inputs
+            .producers(name, ProducerFilter::ShaderOutputsOnly)
+            .unwrap_or_else(|| producers(&input, ProducerFilter::ShaderOutputsOnly))
             .iter()
             .map(|producer| {
                 let attribute = producer.attribute();

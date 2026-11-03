@@ -239,13 +239,15 @@ impl Adapter for PrimvarsAdapter {
         }
         let prim = ctx.prim()?;
         // UsdImaging answers nothing without authored primvars, unless the
-        // prim has custom primvars to overlay.
-        let any = !PrimvarsAPI::from_prim_unchecked(prim.clone())
-            .authored_primvars()
-            .unwrap_or_default()
-            .is_empty()
-            || !gprim_custom(&prim).is_empty()
-            || !instancer_custom(&prim).is_empty();
+        // prim has custom primvars to overlay. The custom ones are asked
+        // first: they are a type check, where listing the authored primvars
+        // composes every property of the prim, and every gprim has some.
+        let any = !gprim_custom(&prim).is_empty()
+            || !instancer_custom(&prim).is_empty()
+            || !PrimvarsAPI::from_prim_unchecked(prim.clone())
+                .authored_primvars()
+                .unwrap_or_default()
+                .is_empty();
         any.then(|| DataSource::Container(Rc::new(Primvars(ctx.clone()))))
     }
 
