@@ -77,9 +77,10 @@ cargo test --workspace        # everything
 
 - Pure-Rust USD (https://github.com/mxpv/openusd). **Its API is not stable.**
   It is pinned by git `rev` in the root `Cargo.toml`. `openusd` and
-  `openusd-schemas` must use the same rev. Until its reorder resync fix is
-  upstream, the pin is on doubleailes/openusd's `prim-children-resync`
-  (upstream plus that fix); move back to mxpv/openusd at its merge.
+  `openusd-schemas` must use the same rev. Until its reorder resync fix and
+  the asset path walk's plain data probe are upstream, the pin is on
+  doubleailes/openusd's `perf/walk-type-probe` (upstream plus both); move
+  back to mxpv/openusd at their merge.
 - **One rev across the stack, through Moho.** Mantle, crust-render and
   Obsidian take openusd only through `moho::openusd` and
   `moho::openusd_schemas`, never as a dependency of their own, so Moho's pin
