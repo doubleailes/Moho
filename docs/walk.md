@@ -154,6 +154,15 @@ With a renderer-side change beside them, the renderer's Moana import went from
 fat-LTO builds on the machine above, with identical images. The Moho changes
 alone took the traversal from 7:26 to 6:02 in sampled runs.
 
+A later sample (Moho `30ac38a`) put a quarter of the renderer's material
+reads in one answer it never used: a material network's `interface` built
+its consumers map (`ComputeInterfaceInputConsumersMap`, which walks every
+connection of the material) when the network was built, for each render
+context. `InterfaceParameters` now finds the map on its first read. With the
+renderer reading the interface only for the networks that use it, Moana's
+traversal went from 5:09–5:12 to 4:28–4:32, ALab's unchanged, with identical
+images.
+
 ## What remains
 
 - **openusd's prototype discovery.** After any structural edit, the next

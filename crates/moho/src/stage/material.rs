@@ -450,26 +450,35 @@ fn interface(material: &usd::Prim) -> DataSource {
 
 /// A material's interface inputs, each with what its connections feed
 /// (`_UsdImagingDataSourceInterfaceParameters`).
+///
+/// The consumers map walks every connection of the material, so it is found
+/// on the first read: a reader that never asks for the interface pays
+/// nothing.
 struct InterfaceParameters {
     material: usd::Prim,
-    consumers: InterfaceInputConsumersMap,
+    consumers: std::cell::OnceCell<InterfaceInputConsumersMap>,
 }
 
 impl InterfaceParameters {
     fn new(material: &usd::Prim) -> Self {
-        let consumers = Material::from_prim_unchecked(material.clone())
-            .interface_input_consumers(true)
-            .unwrap_or_default();
         Self {
             material: material.clone(),
-            consumers,
+            consumers: std::cell::OnceCell::new(),
         }
+    }
+
+    fn consumers(&self) -> &InterfaceInputConsumersMap {
+        self.consumers.get_or_init(|| {
+            Material::from_prim_unchecked(self.material.clone())
+                .interface_input_consumers(true)
+                .unwrap_or_default()
+        })
     }
 }
 
 impl Container for InterfaceParameters {
     fn names(&self) -> Vec<Token> {
-        self.consumers
+        self.consumers()
             .iter()
             .map(|(input, _)| Token::from(input.base_name()))
             .collect()
@@ -480,7 +489,7 @@ impl Container for InterfaceParameters {
         let attribute = input.attribute();
         let text = |v: Option<String>| value(Value::Token(Token::from(v.unwrap_or_default().as_str())));
         let mappings: Vec<DataSource> = self
-            .consumers
+            .consumers()
             .consumers(&input)
             .unwrap_or_default()
             .iter()
