@@ -6,8 +6,9 @@ use common::{p, stage};
 use moho::data_source::locate;
 use moho::locator::Locator;
 use moho::openusd::gf;
-use moho::openusd::sdf::{self, Value};
+use moho::openusd::sdf;
 use moho::openusd::usd::{SchemaBase, TimeCode};
+use moho::openusd::vt::Value;
 use moho::openusd_schemas::geom::{Imageable, ImageableExt, Visibility, XformCache};
 use moho::openusd_schemas::shade::MaterialBindingAPI;
 use moho::scene_index::SceneIndex;
@@ -158,7 +159,7 @@ fn values_through_the_chain_equal_openusd() {
     }
     for path in ["/world/geo", "/world/hair", "/world/ball"] {
         let bound = MaterialBindingAPI::from_prim_unchecked(stage.prim(path).unwrap())
-            .bound_material("")
+            .bound_material("", true)
             .unwrap()
             .map(|m| m.prim().path().clone());
         let got = match resolved(chain.as_ref(), path) {

@@ -30,10 +30,12 @@
 use std::collections::BTreeSet;
 use std::rc::Rc;
 
-use openusd::sdf::{self, Role, Value};
+use openusd::sdf::{self, Role};
+
 use openusd::tf::Token;
 use openusd::usd::{self, PrimPredicate};
 use openusd::usd::{Object as _, Property as _};
+use openusd::vt::Value;
 use openusd_schemas::lux::{LightAPI, LightFilter, LightFilterExt};
 use openusd_schemas::shade::{
     Connectable, ConnectableAPI, ImplementationSource, Input, InterfaceInputConsumersMap, Material,
@@ -775,7 +777,7 @@ impl Container for NodeTypeInfo {
         if name == t::SDR_METADATA {
             let metadata = match self.prim.metadata::<Value>(t::SDR_METADATA).ok().flatten() {
                 Some(Value::Dictionary(d)) => d,
-                _ => sdf::Dictionary::new(),
+                _ => openusd::vt::Dictionary::new(),
             };
             return Some(value(Value::Dictionary(metadata)));
         }

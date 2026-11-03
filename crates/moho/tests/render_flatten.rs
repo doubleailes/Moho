@@ -9,7 +9,7 @@ use moho::data_source::{ContainerHandle, locate};
 use moho::filter::{DependencyForwardingSceneIndex, RenderSettingsFlatteningSceneIndex};
 use moho::locator::{Locator, LocatorSet};
 use moho::openusd::gf;
-use moho::openusd::sdf::Value;
+use moho::openusd::vt::Value;
 use moho::scene_index::testing::{Notice, RecordingObserver};
 use moho::scene_index::{Dirtied, SceneIndex};
 use moho::stage::StageSceneIndex;

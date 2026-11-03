@@ -3,8 +3,8 @@
 //! every prim has (material bindings among them). The consumer gathers a
 //! mesh's subsets from its children; a subset edit does not dirty the mesh.
 
-use openusd::sdf::Value;
 use openusd::tf::Token;
+use openusd::vt::Value;
 
 use crate::data_source::DataSource;
 use crate::data_source::retained::container;

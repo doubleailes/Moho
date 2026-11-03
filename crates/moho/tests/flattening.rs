@@ -10,9 +10,9 @@ use moho::data_source::retained::{RetainedContainer, RetainedVector, container, 
 use moho::filter::FlatteningSceneIndex;
 use moho::locator::{Locator, LocatorSet};
 use moho::openusd::gf;
-use moho::openusd::sdf::Value;
 use moho::openusd::tf::Token;
 use moho::openusd::usd::TimeCode;
+use moho::openusd::vt::Value;
 use moho::scene_index::testing::{Notice, RecordingObserver};
 use moho::scene_index::{Prim, RetainedSceneIndex, SceneIndex};
 use moho::schema::{PrimvarsSchema, PurposeSchema, VisibilitySchema, XformSchema};

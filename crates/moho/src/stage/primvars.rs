@@ -21,10 +21,12 @@
 
 use std::rc::Rc;
 
-use openusd::sdf::{self, Role, Value};
+use openusd::sdf::{self, Role};
+
 use openusd::tf::Token;
 use openusd::usd;
 use openusd::usd::Object as _;
+use openusd::vt::Value;
 use openusd_schemas::geom::{Primvar, PrimvarsAPI};
 
 use crate::data_source::retained::value;

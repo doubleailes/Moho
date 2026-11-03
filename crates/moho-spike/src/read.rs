@@ -20,8 +20,11 @@
 use std::collections::{BTreeMap, HashMap};
 use std::hash::{DefaultHasher, Hash, Hasher};
 
-use openusd::sdf::{self, Value, ValueKind};
+use openusd::sdf;
+use openusd::vt::ValueKind;
+
 use openusd::usd::{Prim, PrimPredicate, Stage, TimeCode};
+use openusd::vt::Value;
 
 use crate::Result;
 

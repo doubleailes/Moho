@@ -36,8 +36,10 @@ use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
 use std::rc::{Rc, Weak};
 
-use openusd::sdf::{self, Value};
+use openusd::sdf;
+
 use openusd::tf::Token;
+use openusd::vt::Value;
 
 use crate::data_source::retained::{RetainedContainer, block, container, value};
 use crate::data_source::{Container, ContainerHandle, DataSource, Overlay, locate};

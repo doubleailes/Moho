@@ -30,8 +30,10 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::{Rc, Weak};
 
-use openusd::sdf::{self, Value};
+use openusd::sdf;
+
 use openusd::tf::Token;
+use openusd::vt::Value;
 
 use crate::collection::CollectionExpressionEvaluator;
 use crate::data_source::retained::{container, value};

@@ -375,7 +375,7 @@ def Xform "world"
         .unwrap()
         .set_metadata(
             "primOrder",
-            moho::openusd::sdf::Value::TokenVec(vec!["b".into(), "a".into()]),
+            moho::openusd::vt::Value::TokenVec(vec!["b".into(), "a".into()]),
         )
         .unwrap();
     index.apply_pending_updates();
@@ -412,7 +412,7 @@ def Xform "world"
             path: p("/world"),
             spec_type: moho::openusd::sdf::SpecType::Prim,
             field: "primChildren".into(),
-            value: moho::openusd::sdf::Value::TokenVec(vec!["b".into(), "a".into()]),
+            value: moho::openusd::vt::Value::TokenVec(vec!["b".into(), "a".into()]),
         }],
         mapping: None,
     };

@@ -6,8 +6,8 @@
 //! given when authored.
 
 use openusd::gf;
-use openusd::sdf::Value;
 use openusd::tf::Token;
+use openusd::vt::Value;
 
 use std::rc::Rc;
 

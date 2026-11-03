@@ -154,8 +154,8 @@ fn xform_vectors_and_names_as_usd_imaging() {
     use moho::data_source::locate;
     use moho::locator::Locator;
     use moho::openusd::gf;
-    use moho::openusd::sdf::Value;
     use moho::openusd::tf::Token;
+    use moho::openusd::vt::Value;
 
     let (_dir, usd) = common::stage(
         r#"#usda 1.0

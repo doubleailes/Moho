@@ -7,7 +7,7 @@
 //!
 //! # Path values
 //!
-//! openusd's `sdf::Value` has no single-path variant, only `PathVec`. A
+//! openusd's `vt::Value` has no single-path variant, only `PathVec`. A
 //! Hydra field typed as one `SdfPath` (`materialBindings/<purpose>/path`,
 //! `instance/instancer`, `__usdPrimInfo/niPrototypePath`,
 //! `sceneGlobals/activeRenderSettingsPrim`, ...) is therefore a
@@ -18,8 +18,8 @@
 
 use std::rc::Rc;
 
-use openusd::sdf::Value;
 use openusd::tf::Token;
+use openusd::vt::Value;
 
 use crate::locator::Locator;
 

@@ -23,9 +23,9 @@
 use std::rc::Rc;
 
 use openusd::gf;
-use openusd::sdf::Value;
 use openusd::tf::Token;
 use openusd::usd;
+use openusd::vt::Value;
 
 use crate::data_source::retained::value;
 use crate::data_source::{Container, DataSource};

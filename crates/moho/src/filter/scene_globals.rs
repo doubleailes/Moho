@@ -53,7 +53,8 @@
 //! use moho::data_source::locate;
 //! use moho::filter::SceneGlobalsSceneIndex;
 //! use moho::locator::Locator;
-//! use moho::openusd::sdf::{self, Value};
+//! use moho::openusd::sdf;
+//! use moho::openusd::vt::Value;
 //! use moho::openusd::usd::TimeCode;
 //! use moho::scene_index::SceneIndex;
 //! use moho::stage::{StageSceneIndex, stage_builder};
@@ -83,8 +84,10 @@
 use std::cell::RefCell;
 use std::rc::{Rc, Weak};
 
-use openusd::sdf::{self, Value};
+use openusd::sdf;
+
 use openusd::tf::Token;
+use openusd::vt::Value;
 
 use crate::data_source::retained::{RetainedContainer, value};
 use crate::data_source::{Container, ContainerHandle, DataSource, Overlay};

@@ -9,7 +9,8 @@ use moho::data_source::locate;
 use moho::filter::NativeInstancingSceneIndex;
 use moho::locator::Locator;
 use moho::openusd::gf;
-use moho::openusd::sdf::{self, Value};
+use moho::openusd::sdf;
+use moho::openusd::vt::Value;
 use moho::scene_index::SceneIndex;
 use moho::stage::StageSceneIndex;
 

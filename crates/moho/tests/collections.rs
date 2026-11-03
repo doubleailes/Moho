@@ -6,7 +6,7 @@ use common::{p, stage};
 use moho::collection::CollectionExpressionEvaluator;
 use moho::data_source::locate;
 use moho::locator::Locator;
-use moho::openusd::sdf::Value;
+use moho::openusd::vt::Value;
 use moho::scene_index::SceneIndex;
 use moho::scene_index::testing::{Notice, RecordingObserver};
 use moho::stage::StageSceneIndex;

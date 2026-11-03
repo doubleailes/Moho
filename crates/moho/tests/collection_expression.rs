@@ -4,8 +4,9 @@
 
 use moho::collection::{CollectionExpressionEvaluator, MatchKind};
 use moho::data_source::retained::{RetainedContainer, container, value};
-use moho::openusd::sdf::{self, PathExpression, Value};
+use moho::openusd::sdf::{self, PathExpression};
 use moho::openusd::tf::Token;
+use moho::openusd::vt::Value;
 use moho::scene_index::{Prim, RetainedSceneIndex};
 
 fn p(s: &str) -> sdf::Path {
