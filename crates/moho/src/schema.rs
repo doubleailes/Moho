@@ -6,8 +6,9 @@
 //! the member is absent.
 
 use openusd::gf;
-use openusd::sdf::{self, Value};
+use openusd::sdf;
 use openusd::tf::Token;
+use openusd::vt::Value;
 
 use crate::data_source::retained::{container, value};
 use crate::data_source::{ContainerHandle, DataSource, SampledHandle};
@@ -368,7 +369,7 @@ impl ExtentSchema {
 /// `Value::TokenVec`.
 ///
 /// Hydra types a locator-valued field (`HdDependencySchema`'s) as
-/// `HdTypedSampledDataSource<HdDataSourceLocator>`. openusd's `sdf::Value`
+/// `HdTypedSampledDataSource<HdDataSourceLocator>`. openusd's `vt::Value`
 /// has no locator variant, so Moho carries a locator as its elements, as it
 /// carries a single path as a one-element `PathVec`.
 pub fn locator_value(locator: &Locator) -> Value {

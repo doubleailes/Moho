@@ -10,9 +10,10 @@
 //! [`expression_from_rule_map`] ports it.
 
 use openusd::sdf::path_expr::{ExpressionReference, PathPattern, SetOp};
-use openusd::sdf::{Path, PathExpression, Value};
+use openusd::sdf::{Path, PathExpression};
 use openusd::tf::Token;
 use openusd::usd::{CollectionAPI, PathExpansionRuleMap, PathRule, complete_membership_expression};
+use openusd::vt::Value;
 
 use crate::data_source::DataSource;
 use crate::data_source::retained::{container, value};

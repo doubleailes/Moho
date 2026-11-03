@@ -33,14 +33,14 @@ SceneIndex: prim(path) -> Prim { ty, data: Option<Container> }, children(path),
             observers: added(path, ty) | removed(path) | dirtied(path, LocatorSet) | renamed
 Container:  names(), get(name) -> DataSource
 Vector:     len(), get(i) -> DataSource
-Sampled:    value(shutter_offset) -> sdf::Value, sample_times(interval) -> Vec<f32>
+Sampled:    value(shutter_offset) -> vt::Value, sample_times(interval) -> Vec<f32>
 Locator:    a path of tokens ("primvars/points/primvarValue")
 schemas:    typed accessors over containers (MeshSchema, XformSchema, ...)
 ```
 
 - **Lazy and thread-confined.** Data sources read the stage on demand and
   are thread-confined (`Rc`): a `usd::Stage` is `!Send`. A consumer pulls on
-  the thread that owns the index. Only values (`sdf::Value`, shared arrays)
+  the thread that owns the index. Only values (`vt::Value`, shared arrays)
   cross threads.
 - **The index owns the time.** A sampled data source is read relative to it.
   `value(0.0)` is the value at the index's time, and a shutter offset reads
@@ -48,7 +48,7 @@ schemas:    typed accessors over containers (MeshSchema, XformSchema, ...)
   whose data might vary over time. As `UsdImagingStageSceneIndex`'s, a new
   index is at time code 0 (not the stage's default time), and replacing a
   held stage resets it to `EarliestTime`.
-- **Paths are path arrays.** openusd's `sdf::Value` has no single-path
+- **Paths are path arrays.** openusd's `vt::Value` has no single-path
   variant, so a Hydra field typed as one `SdfPath` (a resolved binding's
   `path`, `instance/instancer`, `__usdPrimInfo/niPrototypePath`,
   `sceneGlobals/activeRenderSettingsPrim`, a dependency's

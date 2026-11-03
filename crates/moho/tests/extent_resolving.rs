@@ -11,7 +11,7 @@ use moho::filter::ExtentResolvingSceneIndex;
 use moho::filter::extent_resolving::STANDARD_PURPOSES;
 use moho::locator::Locator;
 use moho::openusd::gf;
-use moho::openusd::sdf::Value;
+use moho::openusd::vt::Value;
 use moho::scene_index::SceneIndex;
 use moho::scene_index::testing::{Notice, RecordingObserver};
 use moho::stage::StageSceneIndex;

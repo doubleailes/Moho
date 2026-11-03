@@ -15,8 +15,8 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use openusd::sdf::Value;
 use openusd::tf::Token;
+use openusd::vt::Value;
 use openusd_schemas::geom::{PointInstancer, PrimMetadata};
 
 use crate::data_source::DataSource;

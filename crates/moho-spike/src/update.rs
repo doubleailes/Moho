@@ -23,8 +23,9 @@ use std::time::{Duration, Instant};
 
 use moho::chain::{self, RendererFilter};
 use moho::filter::PrimTypeNoticeBatchingSceneIndex;
-use moho::openusd::sdf::{self, Value};
+use moho::openusd::sdf;
 use moho::openusd::usd::{InitialLoadSet, Stage};
+use moho::openusd::vt::Value;
 use moho::prim_managing::{ManagedPrim, PrimFactory, PrimManagingObserver};
 use moho::scene_index::{Added, Dirtied, Observer, Removed, Renamed, SceneIndex};
 use moho::stage::StageSceneIndex;

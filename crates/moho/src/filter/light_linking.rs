@@ -37,8 +37,9 @@ use std::collections::BTreeSet;
 use std::rc::{Rc, Weak};
 
 use openusd::sdf::path_expr::SetOp;
-use openusd::sdf::{self, PathExpression, Value};
+use openusd::sdf::{self, PathExpression};
 use openusd::tf::Token;
+use openusd::vt::Value;
 
 use crate::collection::{CollectionExpressionEvaluator, MatchKind};
 use crate::data_source::retained::{container, value};

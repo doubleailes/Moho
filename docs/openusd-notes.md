@@ -6,6 +6,18 @@ before every bump, and add any API Moho starts relying on. Sections written
 before the bump to `d7d2a29` (doubleailes/openusd, upstream `0a4bb1b` plus
 mxpv/openusd#175) were read at `68a867a`.
 
+## Bump to `689bfde`
+
+doubleailes/openusd's `prim-children-resync`: upstream `5b86332` (which holds
+mxpv/openusd#175) plus a resync for a prim whose children or properties a
+layer reorders.
+
+- The value types moved from `sdf` to `vt`: `vt::Value`, `vt::Dictionary`,
+  `vt::ValueKind`.
+- `shade::MaterialBindingAPI::bound_material(purpose, legacy)` takes C++
+  `supportLegacyBindings` per call; with `legacy` false it counts only prims
+  with `MaterialBindingAPI` applied.
+
 ## Bump to `d7d2a29`
 
 - `has_authored_metadata(key)` moved onto the `usd::Object` trait (with the
@@ -122,7 +134,7 @@ the root edit target (`crates/moho-spike/tests/probe.rs` asserts all of it):
   Result<Option<sdf::Path>>`. Prototype paths (`/__Prototype_N`) are numbered
   per composition, so they differ between stages and across load changes.
 - `Prim::type_name() -> Result<Option<Token>>`,
-  `Attribute::get_at::<sdf::Value>(time: impl Into<Option<TimeCode>>)` (the
+  `Attribute::get_at::<vt::Value>(time: impl Into<Option<TimeCode>>)` (the
   raw value), `Relationship::targets() -> Result<Vec<sdf::Path>>` (targets
   authored in a payload come back mapped to stage namespace).
 - `Stage::override_prim(path)`, `Stage::create_attribute(path, type_name)`
@@ -162,7 +174,7 @@ the root edit target (`crates/moho-spike/tests/probe.rs` asserts all of it):
   declared value, else 0.01 and `Y`); `render::Settings::stage_settings_path
   -> Result<Option<sdf::Path>>` (the `renderSettingsPrimPath` metadata, empty
   as `None`).
-- `sdf::Value` has no single-path variant; Moho holds one path as a
+- `vt::Value` has no single-path variant; Moho holds one path as a
   one-element `Value::PathVec`.
 
 ## Geometry schemas (S1)
@@ -240,7 +252,7 @@ the root edit target (`crates/moho-spike/tests/probe.rs` asserts all of it):
   instancing key).
 - Parity references (S1 chain tests): `geom::XformCache::new(time)` and
   `local_to_world_transform(&Prim)`, `ImageableExt::compute_visibility(time)
-  -> Visibility`, `shade::MaterialBindingAPI::bound_material(purpose)`.
+  -> Visibility`, `shade::MaterialBindingAPI::bound_material(purpose, legacy)`.
 - Point instancers: `geom::PointInstancer::get`, `mask_at(time, None)`
   (C++ `ComputeMaskAtTime`: inactive and invisible ids folded together,
   empty when nothing is masked), and `orientationsf` preferred over
@@ -266,7 +278,7 @@ the root edit target (`crates/moho-spike/tests/probe.rs` asserts all of it):
   session or root layer authors a pseudo-root metadata field (C++
   `UsdStage::HasAuthoredMetadata`); a block counts, a fallback does not.
   (It was behind `__usdStageMetadata`, removed by `hydra-parity-stage`.)
-- `Stage::stage_metadata(field) -> Result<Option<sdf::Value>>`: composed
+- `Stage::stage_metadata(field) -> Result<Option<vt::Value>>`: composed
   pseudo-root metadata, falling back to a registered field's default. Read
   for `renderSettingsPrimPath`.
 - `Stage::frames_per_second() -> f64`, beside `start_time_code`,
@@ -353,7 +365,7 @@ Read at `d7d2a29`.
   authored and schema-declared names, sorted, then `propertyOrder` applied
   (C++ `GetPropertyNames`); `nodeTypeInfo` scans it for `info:`.
 - `sdrMetadata`: the prim's raw metadata, `Prim::metadata::<Value>("sdrMetadata")`,
-  a `Value::Dictionary` (`sdf::Dictionary::new()` when absent, as C++ hands
+  a `Value::Dictionary` (`vt::Dictionary::new()` when absent, as C++ hands
   an empty `VtDictionary`). `Shader::sdr_metadata()` converts to a
   `HashMap<Token, String>`, which Hydra does not.
 - `config:*`: `Prim::attributes_in_namespace("config:")` (a trailing `:` is
@@ -513,7 +525,7 @@ Read at `d7d2a29`.
   to it. USD keeps the prototype. The stage index resyncs both when a
   populated prototype is resynced (`stage/mod.rs`). Prototypes are numbered
   from `__Prototype_0` (USD: `__Prototype_1`), in composition order.
-- `sdf::Value` has no single-path variant (C++ `VtValue` of `SdfPath`):
+- `vt::Value` has no single-path variant (C++ `VtValue` of `SdfPath`):
   Hydra's single `SdfPath` fields are one-element `Value::PathVec`s, absent
   when Hydra's path would be empty (`data_source.rs`).
 - No `UsdColorSpaceAPI::ComputeColorSpaceName` nor `GfColorSpace`: a colour

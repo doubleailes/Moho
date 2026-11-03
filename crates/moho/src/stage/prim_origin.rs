@@ -1,8 +1,10 @@
 //! `primOrigin`: the USD prim a Hydra prim comes from, as
 //! `UsdImagingDataSourcePrimOrigin` builds `HdPrimOriginSchema`.
 
-use openusd::sdf::{self, Value};
+use openusd::sdf;
+
 use openusd::tf::Token;
+use openusd::vt::Value;
 
 use crate::data_source::DataSource;
 use crate::data_source::retained::{container, value};

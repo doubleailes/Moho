@@ -5,9 +5,11 @@
 
 use std::rc::Rc;
 
-use openusd::sdf::{self, Value};
+use openusd::sdf;
+
 use openusd::tf::Token;
 use openusd::usd::{self, Object as _};
+use openusd::vt::Value;
 
 use crate::data_source::retained::{container, value};
 use crate::data_source::{Container, DataSource, Overlay};

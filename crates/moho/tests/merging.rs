@@ -9,8 +9,8 @@ use moho::data_source::locate;
 use moho::data_source::retained::{RetainedContainer, value};
 use moho::filter::MergingSceneIndex;
 use moho::locator::Locator;
-use moho::openusd::sdf::Value;
 use moho::openusd::tf::Token;
+use moho::openusd::vt::Value;
 use moho::scene_index::testing::{Notice, RecordingObserver};
 use moho::scene_index::{
     Added, Dirtied, Observer, Observers, Prim, Removed, Renamed, RetainedSceneIndex, SceneIndex,

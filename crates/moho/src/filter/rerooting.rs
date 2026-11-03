@@ -12,8 +12,10 @@
 
 use std::rc::{Rc, Weak};
 
-use openusd::sdf::{self, Value};
+use openusd::sdf;
+
 use openusd::tf::Token;
+use openusd::vt::Value;
 
 use crate::data_source::{
     Container, ContainerHandle, DataSource, Sampled, SampledHandle, Vector, VectorHandle,

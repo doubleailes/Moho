@@ -6,8 +6,10 @@
 
 use std::rc::Rc;
 
-use openusd::sdf::{self, Value};
+use openusd::sdf;
+
 use openusd::tf::Token;
+use openusd::vt::Value;
 use openusd_schemas::shade::{BindingStrength, MATERIAL_PURPOSES, MaterialBindingAPI};
 
 use crate::data_source::retained::{RetainedVector, container, value};

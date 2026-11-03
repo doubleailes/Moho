@@ -8,8 +8,9 @@ use common::{p, stage};
 use moho::data_source::locate;
 use moho::filter::{FlatteningSceneIndex, MaterialBindingResolvingSceneIndex};
 use moho::locator::Locator;
-use moho::openusd::sdf::{self, Value};
+use moho::openusd::sdf;
 use moho::openusd::usd::SchemaBase;
+use moho::openusd::vt::Value;
 use moho::openusd_schemas::shade::MaterialBindingAPI;
 use moho::scene_index::SceneIndex;
 use moho::scene_index::testing::{Notice, RecordingObserver};
@@ -278,7 +279,7 @@ fn equals_openusd_bound_material() {
         let api = MaterialBindingAPI::from_prim_unchecked(stage.prim(path).unwrap());
         for purpose in ["", "full"] {
             let expected = api
-                .bound_material(purpose)
+                .bound_material(purpose, true)
                 .unwrap()
                 .map(|m| m.prim().path().clone());
             // Hydra resolves each purpose alone; "full" falls back to the

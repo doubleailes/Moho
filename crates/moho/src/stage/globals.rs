@@ -12,8 +12,8 @@
 //! UsdImaging also gives `system/assetResolution/resolverContext`; openusd
 //! has no resolver context to give, so the root has no `system`.
 
-use openusd::sdf::Value;
 use openusd::tf::Token;
+use openusd::vt::Value;
 use openusd_schemas::geom::{StageMetadata, stage_up_axis, tokens as geom_tokens};
 use openusd_schemas::render::Settings;
 

@@ -26,8 +26,9 @@ use std::rc::Rc;
 
 use openusd::sdf::path_expr::PathExpressionEval;
 use openusd::sdf::path_expr::{FnArg, PredResult, PredicateArg, PredicateFn, PredicateLibrary};
-use openusd::sdf::{self, PathExpression, Value};
+use openusd::sdf::{self, PathExpression};
 use openusd::tf::Token;
+use openusd::vt::Value;
 
 use crate::data_source::locate;
 use crate::locator::Locator;

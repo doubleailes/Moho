@@ -4,9 +4,9 @@
 
 use std::rc::Rc;
 
-use openusd::sdf::Value;
 use openusd::tf::Token;
 use openusd::usd::TimeCode;
+use openusd::vt::Value;
 use openusd_schemas::geom::{RotationOrder, XformCommonAPI, XformQuery, Xformable};
 
 use crate::data_source::retained::{container, value};

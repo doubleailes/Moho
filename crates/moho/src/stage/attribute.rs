@@ -2,8 +2,8 @@
 
 use std::rc::Rc;
 
-use openusd::sdf::Value;
 use openusd::usd::{Attribute, TimeCode};
+use openusd::vt::Value;
 
 use crate::data_source::{DataSource, Sampled, bracketing_sample_times};
 use crate::locator::Locator;
