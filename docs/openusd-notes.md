@@ -6,6 +6,14 @@ before every bump, and add any API Moho starts relying on. Sections written
 before the bump to `d7d2a29` (doubleailes/openusd, upstream `0a4bb1b` plus
 mxpv/openusd#175) were read at `68a867a`.
 
+## Bump to `92b9066`
+
+doubleailes/openusd's `perf/walk-type-probe`: `689bfde` plus
+`AbstractData::holds_plain_data`, which the asset path walk
+(`usd_utils::all_dependencies`, `modify_asset_paths`, packaging) uses to
+skip a field holding plain data without decoding it; a crate layer answers
+from the value's type. No API Moho uses changed.
+
 ## Bump to `689bfde`
 
 doubleailes/openusd's `prim-children-resync`: upstream `5b86332` (which holds
