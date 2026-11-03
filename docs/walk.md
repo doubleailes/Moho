@@ -129,6 +129,31 @@ Population (`walk`): `set_stage` 17.99 → 12.83 s, standard chain 6.12 →
 41.2 s to 10.0 s; most of what remains is `set_stage`, openusd composing
 and traversing the stage.
 
+## Data source reads (2026-11-03)
+
+A walk reads no data source; a renderer's first load reads them all. Stack
+samples of a renderer importing the Moana island through the standard chain
+(Moho `ac356e8`) found three reads repeating work, each fixed with the
+answers unchanged (`39af78e`):
+
+- **A shading node's inputs.** A reader that lists a node's `parameters` and
+  `inputConnections` and gets each entry walked every input's connections
+  four times (`GetValueProducingAttributes`). The node now walks them once
+  for both containers (`NodeInputs`): the shader outputs an `Any` walk finds
+  are what a `ShaderOutputsOnly` walk finds.
+- **Whether a prim has primvars.** `PrimvarsAdapter::get` listed a prim's
+  authored primvars, which composes every property, before checking for the
+  custom primvars every gprim has. It now checks those first.
+- **Flattened primvars.** Each `primvars` read built the flattened primvars
+  of every ancestor up to the root, which asks each ancestor the question
+  above. It now builds its own primvars, and its parent's, when a lookup
+  needs them.
+
+With a renderer-side change beside them, the renderer's Moana import went from
+13:40–14:12 to 6:35–6:45 and ALab's from 1:45–2:04 to 1:35–1:36, alternating
+fat-LTO builds on the machine above, with identical images. The Moho changes
+alone took the traversal from 7:26 to 6:02 in sampled runs.
+
 ## What remains
 
 - **openusd's prototype discovery.** After any structural edit, the next
