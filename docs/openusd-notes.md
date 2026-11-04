@@ -6,6 +6,13 @@ before every bump, and add any API Moho starts relying on. Sections written
 before the bump to `d7d2a29` (doubleailes/openusd, upstream `0a4bb1b` plus
 mxpv/openusd#175) were read at `68a867a`.
 
+## Bump to `54db9fd`
+
+doubleailes/openusd's `perf/path-prim-len`: `92b9066` plus mxpv/openusd#186.
+A query below a prototype finds the enclosing `/__Prototype_N` with one
+lookup, and skips it when the stage mask includes everything, where it
+built every ancestor path. No API Moho uses changed.
+
 ## Bump to `92b9066`
 
 doubleailes/openusd's `perf/walk-type-probe`: `689bfde` plus

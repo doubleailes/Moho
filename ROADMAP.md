@@ -74,8 +74,9 @@ the steps that land in this repository or depend on it.
 
 - A resync for a prim whose children or properties a layer reorders, and
   the asset path walk's plain data probe (`AbstractData::holds_plain_data`).
-  Moho pins doubleailes/openusd at `92b9066` (`perf/walk-type-probe`:
-  upstream `5b86332` plus both) until they are upstream.
+  Moho pins doubleailes/openusd at `54db9fd` (`perf/path-prim-len`:
+  upstream `5b86332` plus both, and mxpv/openusd#186's one-lookup
+  prototype root) until they are upstream.
 
 - Splines (`Ts`): typed knots, evaluation, authoring, usdc encoding.
 - Child listing cost. `Prim::filtered_children` costs about 1 µs per child
