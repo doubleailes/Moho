@@ -22,8 +22,11 @@ shares openusd's license, edition and MSRV. What it still needs:
 
 1. **openusd changes merged.** Moho pins doubleailes/openusd's
    `perf/walk-type-probe` for the reorder resync and
-   `AbstractData::holds_plain_data`. Both have to land upstream, and the pin
-   move back to mxpv/openusd.
+   `AbstractData::holds_plain_data`. The type probe is upstream, where
+   `AbstractData::field_kind` replaced `holds_plain_data`; the reorder
+   resync is proposed from doubleailes/openusd's `fix/reorder-resync`. Once
+   it lands, the pin moves back to mxpv/openusd, with the walk read through
+   `field_kind`.
 2. **Ports moved into openusd.** openusd fixes a gap where the concept lives,
    so the workarounds Moho carries become small upstream changes, each
    deleting Moho's copy as it lands: the collection membership path
