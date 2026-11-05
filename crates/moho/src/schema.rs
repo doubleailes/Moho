@@ -647,6 +647,50 @@ impl UsdRenderSettingsSchema {
     }
 }
 
+/// `HdRendererCreateArgsSchema` (`pxr/imaging/hd/rendererCreateArgsSchema.h`):
+/// the arguments a host creates a renderer with, the container itself (not a
+/// member of a prim).
+///
+/// Only `gpuEnabled` is read. Hydra's `drivers` holds `HdDriver` objects (Hgi
+/// and the like), which a `vt::Value` cannot carry and openusd has no
+/// counterpart for: a renderer that needs a device takes it in its plugin's
+/// constructor.
+#[derive(Clone)]
+pub struct RendererCreateArgsSchema(ContainerHandle);
+
+impl RendererCreateArgsSchema {
+    /// The schema over `args`.
+    pub fn new(args: ContainerHandle) -> Self {
+        Self(args)
+    }
+
+    /// Create args with no data.
+    pub fn empty() -> Self {
+        Self(crate::data_source::retained::RetainedContainer::default().into_handle())
+    }
+
+    /// Create args with `gpuEnabled` set to `gpu_enabled`.
+    pub fn build(gpu_enabled: bool) -> Self {
+        Self(
+            crate::data_source::retained::RetainedContainer::new([(
+                tokens::renderer_create_args::GPU_ENABLED,
+                value(gpu_enabled),
+            )])
+            .into_handle(),
+        )
+    }
+
+    /// The container read.
+    pub fn container(&self) -> &ContainerHandle {
+        &self.0
+    }
+
+    /// Whether the host offers the renderer a GPU, `None` when unsaid.
+    pub fn gpu_enabled(&self) -> Option<bool> {
+        member_value(&self.0, tokens::renderer_create_args::GPU_ENABLED).and_then(as_bool)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -679,5 +723,23 @@ mod tests {
             entry.affected_data_source_locator(),
             Some(Locator::parse("renderSettings/camera"))
         );
+    }
+
+    #[test]
+    fn renderer_create_args_read_gpu_enabled() {
+        assert_eq!(RendererCreateArgsSchema::build(true).gpu_enabled(), Some(true));
+        assert_eq!(RendererCreateArgsSchema::build(false).gpu_enabled(), Some(false));
+        let authored = RetainedContainer::new([(tokens::renderer_create_args::GPU_ENABLED, value(true))]);
+        assert_eq!(
+            RendererCreateArgsSchema::new(authored.into_handle()).gpu_enabled(),
+            Some(true)
+        );
+    }
+
+    #[test]
+    fn empty_renderer_create_args_give_nothing() {
+        let args = RendererCreateArgsSchema::empty();
+        assert_eq!(args.gpu_enabled(), None);
+        assert!(args.container().names().is_empty());
     }
 }
