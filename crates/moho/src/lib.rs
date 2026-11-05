@@ -13,8 +13,9 @@
 //! included. Its one addition is the generic attribute data
 //! (`__usdAttributes`, `__usdRelationships`). A renderer adds its own scene
 //! index plugins as renderer filters (`chain::renderer_filters`) and
-//! consumes the terminal scene index as a Hydra 2.0 render delegate does
-//! (`chain`'s docs).
+//! consumes the terminal scene index through a renderer its plugin creates
+//! (`renderer`, `chain::create_renderer`), as `HdRendererPlugin` and
+//! `HdRenderer` do in Hydra 2.0 (`chain`'s docs).
 //!
 //! Moho depends on openusd alone, and knows nothing of what feeds the stage
 //! or of the renderers that consume the index.
@@ -30,6 +31,7 @@ pub mod data_source;
 pub mod filter;
 pub mod locator;
 pub mod prim_managing;
+pub mod renderer;
 pub mod scene_index;
 pub mod schema;
 pub mod stage;

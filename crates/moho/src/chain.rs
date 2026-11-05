@@ -11,12 +11,15 @@
 //!    the scene globals a host sets at phase 0
 //!    ([`RendererFilter::scene_globals`]), hdPrman and arnold-usd add light
 //!    linking at phase 4, arnold-usd dependency forwarding at phase 1000;
-//! 3. the render delegate receives the terminal scene index, batches its
-//!    notices by prim type
-//!    ([`PrimTypeNoticeBatchingSceneIndex`](crate::filter::PrimTypeNoticeBatchingSceneIndex))
-//!    and observes the batches with a prim factory
-//!    ([`PrimManagingObserver`](crate::prim_managing::PrimManagingObserver)),
-//!    flushing in its `Update`, as hdPrman's `renderDelegate.cpp` does.
+//! 3. the renderer plugin creates its renderer over the terminal scene index
+//!    ([`create_renderer`], `HdRendererPlugin::CreateRenderer`). A Hydra 2.0
+//!    renderer batches the terminal's notices by prim type and observes the
+//!    batches with a prim factory, flushing in its `Update`, as hdPrman's
+//!    `renderDelegate.cpp` does
+//!    ([`PrimManagingRenderer`](crate::renderer::PrimManagingRenderer)).
+//!
+//! [`create_renderer`] runs steps 2 and 3 in one call, with the host's
+//! filters and the plugin's, as `UsdImagingGLEngine` does.
 //!
 //! A renderer that needs a fix over Hydra's behaviour ships it as a renderer
 //! filter of its own; the standard chain keeps UsdImaging's, quirks
@@ -29,11 +32,13 @@
 //! use std::rc::Rc;
 //!
 //! use moho::chain::{self, RendererFilter};
-//! use moho::filter::{PrimTypeNoticeBatchingSceneIndex, PrimTypePriority};
+//! use moho::filter::PrimTypePriority;
 //! use moho::openusd::sdf;
 //! use moho::openusd::tf::Token;
 //! use moho::prim_managing::{ManagedPrim, PrimFactory, PrimManagingObserver};
-//! use moho::scene_index::{Added, Dirtied};
+//! use moho::renderer::{PrimManagingRenderer, Renderer, RendererPlugin, Unsupported};
+//! use moho::scene_index::{Added, Dirtied, SceneIndexHandle};
+//! use moho::schema::RendererCreateArgsSchema;
 //! use moho::stage::{StageSceneIndex, stage_builder};
 //!
 //! /// The renderer's priorities: materials before what binds them.
@@ -67,6 +72,30 @@
 //!     }
 //! }
 //!
+//! /// The renderer plugin: its scene index plugins and its renderer.
+//! struct Plugin(Rc<RefCell<Vec<String>>>);
+//!
+//! impl RendererPlugin for Plugin {
+//!     type Renderer = PrimManagingRenderer;
+//!
+//!     fn is_supported(&self, _: &RendererCreateArgsSchema) -> Result<(), Unsupported> {
+//!         Ok(())
+//!     }
+//!
+//!     fn renderer_filters(&self) -> Vec<RendererFilter> {
+//!         vec![RendererFilter::light_linking(), RendererFilter::dependency_forwarding()]
+//!     }
+//!
+//!     fn create_renderer(
+//!         &self,
+//!         terminal: SceneIndexHandle,
+//!         _: &RendererCreateArgsSchema,
+//!     ) -> Option<PrimManagingRenderer> {
+//!         let factory = Rc::new(Factory(self.0.clone()));
+//!         Some(PrimManagingRenderer::new(terminal, Some(Rc::new(Priorities)), factory))
+//!     }
+//! }
+//!
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let stage = stage_builder().in_memory("scene.usda")?;
 //! stage.define_typed_prim("/world/geo", "Mesh")?;
@@ -75,25 +104,25 @@
 //! let stage_index = StageSceneIndex::new();
 //! stage_index.set_stage(stage.clone());
 //! let chain = chain::standard(stage_index.clone());
-//! // 2. The renderer's scene index plugins.
-//! let terminal = chain::renderer_filters(
-//!     chain,
-//!     &[RendererFilter::light_linking(), RendererFilter::dependency_forwarding()],
-//! );
-//! // 3. The delegate: batched by prim type, observed with a prim factory.
-//! let batching = PrimTypeNoticeBatchingSceneIndex::new(terminal, Some(Rc::new(Priorities)));
+//! // 2. and 3. The host's filters and the plugin's, then the renderer.
 //! let log = Rc::new(RefCell::new(Vec::new()));
-//! let observer = PrimManagingObserver::new(batching.clone(), Some(Rc::new(Factory(log.clone()))));
+//! let created = chain::create_renderer(
+//!     chain,
+//!     &[RendererFilter::scene_globals(|_| {})],
+//!     &Plugin(log.clone()),
+//!     &RendererCreateArgsSchema::build(false),
+//! )?;
+//! let renderer = created.renderer;
 //!
-//! // The delegate's `Update`.
-//! batching.flush();
+//! // The renderer's update, before rendering.
+//! renderer.update();
 //! let geo = sdf::path("/world/geo")?;
-//! assert!(observer.prim(&geo).is_some());
+//! assert!(renderer.prim(&geo).is_some());
 //!
 //! // An edit reaches the mesh at the next update, at Hydra's locators.
 //! stage.attribute("/world/geo.doubleSided")?.set(true)?;
 //! stage_index.apply_pending_updates();
-//! batching.flush();
+//! renderer.update();
 //! assert!(log.borrow().iter().any(|l| l == "/world/geo mesh/doubleSided"));
 //! # Ok(())
 //! # }
@@ -107,7 +136,9 @@ use crate::filter::{
     MaterialBindingResolvingSceneIndex, NativeInstancingSceneIndex, PointInstancingSceneIndex,
     RenderSettingsFlatteningSceneIndex, SceneGlobalsSceneIndex,
 };
+use crate::renderer::{CreateRendererError, CreatedRenderer, RendererPlugin};
 use crate::scene_index::SceneIndexHandle;
+use crate::schema::RendererCreateArgsSchema;
 use crate::stage::StageSceneIndex;
 use crate::tokens::material_bindings;
 
@@ -224,9 +255,46 @@ impl RendererFilter {
 /// plugin id). Each filter wraps the result of the one before; the last is
 /// the terminal scene index.
 pub fn renderer_filters(input: SceneIndexHandle, filters: &[RendererFilter]) -> SceneIndexHandle {
-    let mut ordered: Vec<&RendererFilter> = filters.iter().collect();
+    apply_in_order(input, filters)
+}
+
+/// `filters` applied in renderer filter order, list position breaking ties.
+fn apply_in_order<'a>(
+    input: SceneIndexHandle,
+    filters: impl IntoIterator<Item = &'a RendererFilter>,
+) -> SceneIndexHandle {
+    let mut ordered: Vec<&RendererFilter> = filters.into_iter().collect();
     ordered.sort_by_key(|f| (f.phase, f.order));
     ordered
         .into_iter()
         .fold(input, |index, filter| (filter.build)(index))
+}
+
+/// A renderer created by `plugin` over `input`, as
+/// `UsdImagingGLEngine::_CreateSceneIndexChainAndRenderer`.
+///
+/// Support is checked first (`HdRendererPlugin::IsSupported`), before any
+/// filter is built. Then the host's filters and the plugin's
+/// ([`RendererPlugin::renderer_filters`]) are applied over `input` in one
+/// [`renderer_filters`] order, as `HdSceneIndexPluginRegistry` orders the
+/// plugins registered for every renderer with the renderer's own; at an
+/// equal phase and order, the host's come first. The plugin then creates its
+/// renderer over the result, which is returned with it as the terminal scene
+/// index.
+///
+/// `input` is the standard chain or a merge of several: the host keeps its
+/// stage index and drives its time and pending updates.
+pub fn create_renderer<P: RendererPlugin>(
+    input: SceneIndexHandle,
+    host_filters: &[RendererFilter],
+    plugin: &P,
+    args: &RendererCreateArgsSchema,
+) -> Result<CreatedRenderer<P::Renderer>, CreateRendererError> {
+    plugin.is_supported(args)?;
+    let plugin_filters = plugin.renderer_filters();
+    let terminal = apply_in_order(input, host_filters.iter().chain(&plugin_filters));
+    let renderer = plugin
+        .create_renderer(terminal.clone(), args)
+        .ok_or(CreateRendererError::Declined)?;
+    Ok(CreatedRenderer { terminal, renderer })
 }
