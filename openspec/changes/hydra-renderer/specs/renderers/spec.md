@@ -69,12 +69,17 @@ stay on the thread that owns its scene indices.
 A ready-made renderer SHALL observe its terminal index as hdPrman does. It
 SHALL batch notices by prim type under a consumer-given priority, and
 manage prims through a consumer-given factory. It SHALL hold every notice
-until its update, which flushes the batching. Before its first update it
-SHALL hold no managed prim.
+until its update, which flushes the batching. Before its first update its
+factory SHALL be asked for nothing but the absolute root, untyped, as
+hdPrman's observer walks the still empty batching index when it is made.
+
+#### Scenario: Only the untyped root before the first update
+- **WHEN** a prim-managing renderer is created over a non-empty terminal index with a factory that accepts every prim
+- **THEN** before its first update the factory has been asked for the absolute root alone, with no type, and the renderer manages the root alone; the first update makes the root again and every other prim
 
 #### Scenario: Materials before geometry at the first update
 - **WHEN** a prim-managing renderer is created over a terminal index holding a mesh and its material, with `material` ranked before `mesh`
-- **THEN** it holds no managed prim before its first update, and at that update its factory is asked for the material before the mesh
+- **THEN** with a factory that declines untyped prims it holds no managed prim before its first update, and at that update its factory is asked for the material before the mesh
 
 #### Scenario: A dirtied entry waits for the update
 - **WHEN** a mesh the renderer manages is dirtied at `mesh/doubleSided`

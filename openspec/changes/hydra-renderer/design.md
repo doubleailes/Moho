@@ -128,8 +128,12 @@ still owns the stage index and drives `set_time` and
 offers `new(terminal, priority, factory)`, `update` (flush), and
 `observer()` / `prim(path)`. The observer is made over the batching index,
 which is empty until flushed. As a result the first `update` populates
-every prim in priority order. Factories created before that update see
-nothing, which is the behaviour hdPrman relies on. A plugin's
+every prim in priority order. Before that update the factory is asked
+only for the absolute root, untyped: the observer's initial walk
+(`HdsiPrimManagingSceneIndexObserver`'s constructor) runs over the empty
+batching index. hdPrman behaves the same; its factory declines untyped
+prims. Moho keeps this for parity rather than adding an observer that
+skips its initial walk. A plugin's
 `create_renderer` typically returns `Some(PrimManagingRenderer::new(..))`
 or wraps it in its own type with render methods.
 
