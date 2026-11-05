@@ -67,8 +67,8 @@ The workspace forbids `unsafe_code`, and Moho depends on openusd alone
   CUDA) without a copy. GPU presentation goes through an Hgi texture the
   shim owns.
 - Supplying Moho's `__usdAttributes` and `__usdRelationships` under C++
-  Hydra. A delegate that wants both producers does not read them, as the
-  `hydra-parity-stage` audit already concluded.
+  Hydra. C++ Hydra has no such data, so a delegate that runs over both
+  producers does not read them.
 - Windows and macOS builds. Linux first, and the C++ is kept portable.
 
 ## Decisions

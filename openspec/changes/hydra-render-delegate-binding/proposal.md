@@ -1,8 +1,9 @@
 ## Why
 
-A render delegate written against Moho runs only where Moho builds the
-chain (crust-render, Obsidian). usdview, the reference viewer studios
-debug scenes in, runs OpenUSD's C++ Hydra 2.0. Moho already matches Hydra's
+A render delegate written in Rust against Moho's scene index contract runs
+only where Moho builds the chain. usdview, the reference viewer studios
+debug scenes in, runs OpenUSD's C++ Hydra 2.0, and has no way to load a
+Rust delegate. Moho already matches Hydra's
 paths, schemas, data layout and dirty locators at USD 26.08
 (`docs/hydra-parity-check.md`). A delegate reading `moho::SceneIndex`
 could therefore read C++ Hydra's terminal scene index unchanged, if
