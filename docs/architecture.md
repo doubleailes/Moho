@@ -9,7 +9,7 @@ delegate consumes Hydra's terminal scene index.
 ```
   stage (openusd) --> StageSceneIndex --> chain::standard --> renderer filters
                                                                      |
-            render delegate <-- managing observer <-- prim type batching
+  renderer (plugin) <-- managing observer <-- prim type batching
 ```
 
 This page records the decisions that bind Moho itself; provenance lives in
@@ -98,16 +98,36 @@ A Hydra 2.0 renderer consumes Hydra in three steps; Moho offers each.
    `sceneGlobals/currentFrame`; without light linking no prim has
    `categories`; without dependency forwarding nothing is dirtied through
    `__dependencies` (render settings, instance categories).
-3. **The delegate.** As hdPrman's `renderDelegate.cpp`, the delegate wraps
-   the terminal index in `PrimTypeNoticeBatchingSceneIndex`
+3. **The renderer.** A `moho::renderer::RendererPlugin` (`HdRendererPlugin`'s
+   Hydra 2.0 API) answers whether it is supported for the host's create
+   args (`RendererCreateArgsSchema`, `HdRendererCreateArgsSchema`'s
+   `gpuEnabled`; its `drivers` are left out, as openusd has no Hgi), gives
+   its renderer filters, and creates its `Renderer` (`HdRenderer`) over the
+   terminal index. A renderer has one method, `update`, the Hydra 2.0 hook
+   `HdRenderDelegate::Update`: `HdRenderer` itself is a stub at the
+   reference revision. `moho::chain::create_renderer` is
+   `UsdImagingGLEngine::_CreateSceneIndexChainAndRenderer`: it checks
+   support before building any filter, applies the host's filters and the
+   plugin's in one renderer filter order (the host's first at an equal phase
+   and order), and returns the terminal index with the renderer.
+   `moho::renderer::PrimManagingRenderer` is hdPrman's: it wraps the
+   terminal index in `PrimTypeNoticeBatchingSceneIndex`
    (`HdsiPrimTypeNoticeBatchingSceneIndex`: notices held until `flush`,
    consolidated, removals first, then added and dirtied entries by the
    priority a `PrimTypePriority` gives their prim types) and observes it
    with `moho::prim_managing::PrimManagingObserver`
    (`HdsiPrimManagingSceneIndexObserver`: a `PrimFactory` makes a managed
    prim per added prim, dirtied entries reach it with their locators,
-   removals release it). Its `Update` is `flush`. The chain module's docs
+   removals release it). Its `update` is `flush`. The chain module's docs
    run the three steps.
+
+   A plugin names its renderer's concrete type (an associated type), where
+   Hydra returns an `HdRenderer` pointer: Hydra loads plugins at run time
+   and reaches render control through `GetLegacyRenderControl`, while a
+   Moho consumer names its plugin and calls its renderer's own API
+   (rendering, outputs, settings) directly. Hydra's render control API is
+   not ported until Hydra settles the one replacing
+   `HdLegacyRenderControlInterface`. There is no plugin registry.
 
 Update latency ranks above first-load time: an edit dirties exactly what
 Hydra dirties (a camera edit its camera at `camera/<field>` or `xform`, a
