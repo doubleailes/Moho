@@ -288,6 +288,43 @@ fn materials_before_geometry_at_the_first_update() {
     assert!(renderer.prim(&p("/Looks/red")).is_some());
 }
 
+/// Accepts every prim, typed or not.
+struct AcceptAll(SharedLog);
+
+impl PrimFactory for AcceptAll {
+    fn create_prim(&self, entry: &Added, _: &PrimManagingObserver) -> Option<Rc<dyn ManagedPrim>> {
+        self.0
+            .borrow_mut()
+            .created
+            .push((entry.path.as_str().to_owned(), entry.ty.as_str().to_owned()));
+        Some(Rc::new(Managed(self.0.clone())))
+    }
+}
+
+#[test]
+fn only_the_untyped_root_before_the_first_update() {
+    let (_stage, _stage_index, chain) = scene();
+    let log = SharedLog::default();
+    let renderer = PrimManagingRenderer::new(chain, None, Rc::new(AcceptAll(log.clone())));
+
+    // hdPrman's observer walks the still empty batching index when made.
+    assert_eq!(log.borrow().created, [("/".to_owned(), String::new())]);
+    assert_eq!(renderer.observer().paths(), [p("/")]);
+    let before = renderer.prim(&p("/")).unwrap();
+
+    renderer.update();
+    let roots = log
+        .borrow()
+        .created
+        .iter()
+        .filter(|(path, _)| path == "/")
+        .count();
+    assert_eq!(roots, 2);
+    assert!(!Rc::ptr_eq(&before, &renderer.prim(&p("/")).unwrap()));
+    assert!(renderer.prim(&p("/world/geo")).is_some());
+    assert!(renderer.prim(&p("/Looks/red")).is_some());
+}
+
 #[test]
 fn a_dirtied_entry_waits_for_the_update() {
     let (stage, stage_index, chain) = scene();

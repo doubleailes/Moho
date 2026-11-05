@@ -137,9 +137,15 @@ impl std::error::Error for CreateRendererError {}
 ///
 /// Every notice is held until [`update`](Renderer::update), which flushes
 /// the batching (hdPrman's `Update`). The batching index is empty until its
-/// first flush, so the renderer manages no prim before its first update, and
-/// that update makes every prim in priority order (say, materials before
-/// the geometry bound to them).
+/// first flush, so that update makes every prim in priority order (say,
+/// materials before the geometry bound to them).
+///
+/// As in hdPrman, the observer walks the still empty batching index when it
+/// is made, so the factory is asked once, at creation, for the absolute root
+/// with no type, and for nothing else. A factory that declines untyped prims
+/// manages no prim before the first update; one that accepts the root makes
+/// it at creation, and the first update makes it again, replacing it (the
+/// root's added entry). This is Hydra's behaviour, kept for parity.
 ///
 /// A plugin returns one from
 /// [`create_renderer`](RendererPlugin::create_renderer), or wraps one in a
