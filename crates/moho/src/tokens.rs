@@ -80,6 +80,13 @@ pub mod scene_globals {
     pub const SCENE_STATE_ID: &str = "sceneStateId";
 }
 
+/// Renderer create args (`HdRendererCreateArgsSchema`), the container a
+/// host passes a renderer plugin
+/// ([`RendererCreateArgsSchema`](crate::schema::RendererCreateArgsSchema)).
+pub mod renderer_create_args {
+    pub const GPU_ENABLED: &str = "gpuEnabled";
+}
+
 /// `UsdImagingUsdUpAxisSchema` (`__usdUpAxis`), at the absolute root.
 pub mod usd_up_axis {
     pub const USD_UP_AXIS: &str = "__usdUpAxis";
