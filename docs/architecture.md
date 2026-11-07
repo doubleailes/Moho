@@ -174,7 +174,7 @@ observer (`docs/update-latency.md`), and its `walk` benchmark the cost of
   - Each prototype `P` an instancer targets is copied to
     `P/ForInstancer<hash>`, `<hash>` being `TfHash::Combine` of the
     instancer's path in the prototype's input namespace and the enclosing
-    copy root (`/` at the top level), printed `%zx` (a port of `TfHash`
+    copy root (`/` at the top level), printed `%zx` (openusd's `tf::HashState`
     gives Hydra's digits). The instancer's `instancerTopology/prototypes`
     names the copies, and the original prototype records them in
     `__usdPrimInfo/piPropagatedPrototypes/ForInstancer<hash>`.
