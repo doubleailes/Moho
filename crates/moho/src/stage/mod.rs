@@ -341,13 +341,17 @@ impl StageSceneIndex {
         }
         let mut roots = pending.resync_roots();
         // Workaround, an upstream candidate in `ROADMAP.md`: openusd's
-        // notice for a load (or an unload, a layer muted, a load retried)
-        // names the prototypes that were already composed, not those the
-        // recomposition composes; USD names every prototype. Each prototype
-        // the stage holds that the index has not populated is resynced
-        // here, so that it is added and the prototype pruning hides it.
+        // notice names the prototypes that were composed before the change,
+        // not those it composes; USD names every prototype. A prototype the
+        // index has not populated is resynced, so that it is added and the
+        // prototype pruning hides it: after a load (or an unload, a layer
+        // muted, a load retried), each one the stage holds, since a load
+        // can compose one that no prim instances (ALab); after any resync,
+        // below, the prototype of each instance it repopulates (a prim made
+        // the first instance of its prototype), which is one lookup per
+        // prim where the stage's list walks the stage after an edit.
         if pending.composition_changed {
-            for prototype in self.unpopulated_prototypes() {
+            for prototype in self.unpopulated_stage_prototypes() {
                 if !roots.iter().any(|r| prototype.has_prefix(r)) {
                     roots.push(prototype);
                 }
@@ -360,14 +364,18 @@ impl StageSceneIndex {
         // (below), as `UsdImagingStageSceneIndex::_ApplyPendingResyncs` does
         // for a `RepresentedByAncestor` prim. Any other prim under one is
         // repopulated, its subtree added though population never reached it.
-        let represented: Vec<Option<(usd::Prim, usd::Prim)>> = roots
+        let mut represented: Vec<Option<(usd::Prim, usd::Prim)>> = roots
             .iter()
             .map(|root| self.representing_ancestor(root))
             .collect();
-        for (root, represented) in roots.iter().zip(&represented) {
+        // A worklist: the prototypes the repopulated instances need join it.
+        let mut next = 0;
+        while let Some((root, represented_by)) = roots.get(next).cloned().zip(represented.get(next)) {
+            next += 1;
+            let root = &root;
             self.forget_under(root);
             self.globals.forget_under(root);
-            if represented.is_some() {
+            if represented_by.is_some() {
                 continue;
             }
             let before: Vec<sdf::Path> = {
@@ -387,6 +395,14 @@ impl StageSceneIndex {
                     .filter(|p| !again.contains(p))
                     .map(|path| Removed { path }),
             );
+            // The unpopulated prototypes of the instances repopulated (see
+            // above), whose own instances are seen in turn.
+            for prototype in self.unpopulated_prototypes(&now) {
+                if !roots.iter().any(|r| prototype.has_prefix(r)) {
+                    roots.push(prototype);
+                    represented.push(None);
+                }
+            }
             added.extend(now);
         }
         // A prim recomposed in place, with nothing beneath it implied (the
@@ -477,7 +493,7 @@ impl StageSceneIndex {
     }
 
     /// The USD prototypes the stage holds that the index has not populated.
-    fn unpopulated_prototypes(&self) -> Vec<sdf::Path> {
+    fn unpopulated_stage_prototypes(&self) -> Vec<sdf::Path> {
         let Some(stage) = self.stage() else {
             return Vec::new();
         };
@@ -486,6 +502,20 @@ impl StageSceneIndex {
             .prototypes()
             .unwrap_or_default()
             .into_iter()
+            .filter(|p| !populated.contains(p))
+            .collect()
+    }
+
+    /// The prototypes of the instances among `added` that the index has not
+    /// populated.
+    fn unpopulated_prototypes(&self, added: &[Added]) -> BTreeSet<sdf::Path> {
+        let Some(stage) = self.stage() else {
+            return BTreeSet::new();
+        };
+        let populated = self.populated.borrow();
+        added
+            .iter()
+            .filter_map(|a| stage.prim(&a.path).ok()?.prototype().ok()?)
             .filter(|p| !populated.contains(p))
             .collect()
     }
