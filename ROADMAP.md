@@ -147,7 +147,3 @@ the steps that land in this repository or depend on it.
   `id` mode resolves a node identifier from its source asset or code as
   UsdImaging's material data source does. Moho leaves it empty meanwhile
   (`crates/moho/src/stage/material.rs`).
-- Authored properties in C++'s order: `authored_attributes_in_namespace`
-  keeps composed order where `UsdPrim::GetAuthoredPropertiesInNamespace`
-  sorts into dictionary order first. Moho sorts material inputs and outputs
-  itself (`crates/moho/src/stage/material.rs`).

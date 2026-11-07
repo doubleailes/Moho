@@ -146,28 +146,11 @@ impl Container for Networks {
 }
 
 /// The attributes layers author on `prim` under `namespace`, in C++
-/// `UsdPrim::GetAuthoredPropertiesInNamespace`'s order: dictionary order,
-/// then the prim's `propertyOrder`. openusd keeps the composed order.
+/// `UsdPrim::GetAuthoredPropertiesInNamespace`'s order (dictionary order,
+/// then the prim's `propertyOrder`), as openusd lists them.
 fn authored_in_namespace(prim: &usd::Prim, namespace: &str) -> Vec<usd::Attribute> {
-    let mut attributes = prim
-        .authored_attributes_in_namespace(namespace)
-        .unwrap_or_default();
-    attributes.sort_by(|a, b| sdf::element_cmp(a.name(), b.name()));
-    let order = prim
-        .metadata::<Value>("propertyOrder")
-        .ok()
-        .flatten()
-        .and_then(Value::try_as_token_vec)
-        .unwrap_or_default();
-    if !order.is_empty() {
-        let mut names: Vec<Token> = attributes.iter().map(|a| Token::from(a.name())).collect();
-        sdf::apply_ordering(&mut names, &order);
-        attributes = names
-            .iter()
-            .filter_map(|n| attributes.iter().find(|a| a.name() == n.as_str()).cloned())
-            .collect();
-    }
-    attributes
+    prim.authored_attributes_in_namespace(namespace)
+        .unwrap_or_default()
 }
 
 /// The authored outputs of `prim`, as attributes (C++ `GetOutputs`).
