@@ -745,7 +745,7 @@ fn color_space(attribute: &usd::Attribute) -> Token {
     {
         return source;
     }
-    compute_color_space_name(attribute.stage(), prim.path(), attribute).unwrap_or_default()
+    compute_color_space_name(attribute).unwrap_or_default()
 }
 
 /// A node's input connections, each to the shader outputs that produce the

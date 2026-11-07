@@ -26,6 +26,14 @@ parity changes of mxpv/openusd#195 (#187 to #194).
   each recomposed prim again alone (Hydra's resync of one prim), or removes
   its subtree when the stage no longer exposes it (`stage/pending.rs`,
   `apply_pending_updates`).
+- `usd::ColorSpaceAPI::compute_attribute_name(&Attribute, Option<&mut
+  ColorSpaceCache>) -> Result<Option<Token>>` (C++
+  `UsdColorSpaceAPI::ComputeColorSpaceName`, mxpv/openusd#192) and
+  `gf::ColorSpace`: a colour primvar's or a material parameter's
+  `colorSpace` (`stage/primvars.rs`). Names a `ColorSpaceDefinitionAPI`
+  defines are valid now; the attribute's declared `colorSpace` wins over
+  the prims' as in C++, where Moho tried it after them. Moho passes no
+  cache, which nothing would evict on an edit.
 - `tf::HashState` (C++ `Tf_HashState`, mxpv/openusd#190): `append(bytes)`
   and `code()`. Moho's `TfHash::Combine` names (`ForInstancer%zx`,
   `Primvars%zx`) use it in place of its own SpookyHash port (`tf_hash.rs`).
@@ -559,10 +567,6 @@ Read at `d7d2a29`.
 - `vt::Value` has no single-path variant (C++ `VtValue` of `SdfPath`):
   Hydra's single `SdfPath` fields are one-element `Value::PathVec`s, absent
   when Hydra's path would be empty (`data_source.rs`).
-- No `UsdColorSpaceAPI::ComputeColorSpaceName` nor `GfColorSpace`: a colour
-  primvar's `colorSpace` walks `ColorSpaceAPI` prims itself and checks the
-  name against `GfColorSpace`'s built-in names; colour spaces a
-  `ColorSpaceDefinitionAPI` defines are not recognised (`stage/primvars.rs`).
 - No `SdfPath::MakeRelativePath`: the prim origin's prototype-relative scene
   path (`stage/prim_origin.rs`) is built from the path's text, parsed back
   with `sdf::Path::new`, which accepts relative paths and `.`.
