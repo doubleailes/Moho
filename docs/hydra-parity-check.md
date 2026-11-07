@@ -301,7 +301,12 @@ comparison with Hydra:
 
 Entries, Hydra against Moho (`main`, PR, and the PR with recomposed prims
 ignored), prototype names normalized. "=" is an identical edit, `H/M` the
-two counts otherwise.
+two counts otherwise. The PR columns include the fix for prototypes a load
+composes (under "Fixed"); without it ALab's first load sent 738 entries
+and `load root` 41 651, light linking dirtying prototype prims the index
+showed. isCoral's `load isCoral` now differs only in prototype numbers
+(29 `ForInstancer<hash>` names on each side, hashing `/__Prototype_N`
+paths numbered in another order after the earlier loads).
 
 | Scene, step | Hydra | main | PR | PR, recomposed ignored |
 |---|---|---|---|---|
@@ -321,13 +326,13 @@ two counts otherwise.
 | isCoral: load `isCoral5`, `isCoral4` | 9 291 | 9 292 | 9 292 | = |
 | isCoral: load `isCoral5` (loaded), unload `isCoral4` | 10 043 | 9 858 | 5 288 | 5 288 |
 | isCoral: unload `isCoral` | 5 429 | 5 285 | 5 285 | 5 284 |
-| isCoral: load `isCoral` | 27 891 | 27 894 | 27 894 | 27 894 |
-| ALab: load a cinder block | 728 | 729 (grouping) | 738 | 738 |
+| isCoral: load `isCoral` | 27 891 | 27 894 | 27 909 | 27 909 |
+| ALab: load a cinder block | 728 | 729 (grouping) | = | = |
 | ALab: unload it | 23 | 759 | 370 | 370 |
-| ALab: load it and its sibling | 17 | 733 | 741 | 741 |
+| ALab: load it and its sibling | 17 | 733 | 731 | 731 |
 | ALab: load it (loaded), unload the sibling | 31 | 408 | 29 | 29 |
 | ALab: unload `root` | 387 | 759 | 370 | 370 |
-| ALab: load `root` | 36 367 | 36 643 | 41 651 | 41 651 |
+| ALab: load `root` | 36 367 | 36 643 | 35 212 | 35 212 |
 
 The stage notices behind them (`flat`; USD's `ObjectsChanged` resynced
 paths, openusd's `Resynced` subtrees and recomposed prims):
@@ -486,7 +491,8 @@ data as the only addition; listed here pending that decision.
 
 ### (c) Real divergences
 
-Introduced by PR #39, not fixed in it:
+Introduced by PR #39, not fixed in it (the second one it introduced is
+under "Fixed"):
 
 - **A prim recomposed in place is added again.** openusd reports the
   ancestor of a loaded or unloaded payload that has no payload of its own
@@ -505,29 +511,6 @@ Introduced by PR #39, not fixed in it:
   `settle`) goes, and `tests/stage.rs`'s
   `loading_one_payload_leaves_its_siblings` expects `/world/a` and
   `/world/a/geo` only.
-- **A prototype a load composes is not added, and its prims show at the
-  root.** openusd's load notice names the prototypes that existed
-  (ALab: `/__Prototype_1` to `381`) but not those the load composes
-  (`382`, `383`); USD names every prototype. The stage index lists
-  `stage.prototypes()` among the root's children but adds only what is
-  notified, so the prototype pruning, which learns prototypes from `ADDED`
-  as `UsdImaging_NiPrototypePruningSceneIndex` does, never hides them:
-  after one load on ALab the index holds 372 prims where Hydra holds 362,
-  the 10 extra under `/__Prototype_382` and `383`, and light linking
-  dirties their `categories` on every later load or unload (6 462 extra
-  entries on ALab's sequence, 781 on `main`). `main`'s stage index added fresh
-  prototypes itself (`repointed_prototypes`, removed with the
-  re-pointed prototype resync in `5689ee3` as upstream since #194, which
-  covers edits but not loads). The same leak was already on `main` for
-  isCoral opened `LoadNone` (66 prims under 4 prototypes after one load,
-  4 695 prims where Hydra holds 4 629), where no prototype had been
-  populated before the load. Fix: upstream, openusd's
-  `load_rules_changed` names the prototypes a load composes; until then,
-  in `StageSceneIndex::apply_pending_updates` (`stage/mod.rs`), after a
-  load rules notice, populate the prototypes `stage.prototypes()` holds
-  that the index has not populated (`populated_prototypes` of `5689ee3`),
-  with a comment and an upstream candidate in `ROADMAP.md`.
-
 Left unchanged by the PR (also on `main`):
 
 - **A resynced subtree's descendants are not dirtied when nothing was
@@ -571,6 +554,22 @@ Each with a test, one concern per commit:
   primvar), and a prim added again dirties its read descendants for every
   flattened name (the second open gap).
 - `Points` read `widths` as a custom primvar.
+- A prototype a load composes is added, and pruned. openusd's load notice
+  names the prototypes composed before the load (ALab: `/__Prototype_1` to
+  `381`), not those it composes (`382`, `383`); USD names every prototype.
+  The stage index lists `stage.prototypes()` among the root's children but
+  adds only what is notified, so the prototype pruning, which learns
+  prototypes from `ADDED` as `UsdImaging_NiPrototypePruningSceneIndex`
+  does, never hid them: after one load ALab's index held 372 prims where
+  Hydra holds 362 (10 under `/__Prototype_382` and `383`), and light
+  linking dirtied their `categories` on every later load (6 462 extra
+  entries on ALab's sequence). PR #39 introduced it on ALab by removing
+  the re-pointed prototype resync (`5689ee3`: #194 covers edits, not
+  loads); isCoral opened `LoadNone` already had it on `main` (66 prims).
+  After a load, unload, layer muting or retried load notice the stage
+  index now resyncs each prototype it has not populated (a workaround, an
+  upstream candidate): after one load ALab, isCoral and both minimal
+  fixtures hold Hydra's prims, and no generated or hand edit changed.
 
 The fourth open gap, the stage-level `includeRoot` edit's two entries, is
 openusd's authoring (see "A new spec is one resync"): with USD's two
