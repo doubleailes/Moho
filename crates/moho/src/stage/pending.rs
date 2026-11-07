@@ -3,7 +3,7 @@
 
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
-use std::rc::Rc;
+use std::rc::Weak;
 
 use openusd::sdf;
 use openusd::usd::{CommittedChange, Resynced, Stage, StageSink};
@@ -92,29 +92,40 @@ impl Pending {
     }
 }
 
-/// The stage sink that records into a [`Pending`].
-pub struct Recorder(pub Rc<RefCell<Pending>>);
+/// The stage sink that records into a [`Pending`]. It holds the queue
+/// weakly: a sink a busy stage refused to remove (`Stage::remove_sink`)
+/// records nothing once the index has dropped the queue.
+pub struct Recorder(pub Weak<RefCell<Pending>>);
+
+impl Recorder {
+    fn record(&self, f: impl FnOnce(&mut Pending)) {
+        if let Some(pending) = self.0.upgrade() {
+            f(&mut pending.borrow_mut());
+        }
+    }
+}
 
 impl StageSink for Recorder {
     fn after_commit(&self, _stage: &Stage, change: &CommittedChange<'_>) {
-        let mut pending = self.0.borrow_mut();
-        pending.record(change.resynced, change.changed_info_only);
-        pending.recomposed.extend(change.recomposed.iter().cloned());
+        self.record(|pending| {
+            pending.record(change.resynced, change.changed_info_only);
+            pending.recomposed.extend(change.recomposed.iter().cloned());
+        });
     }
 
     fn load_rules_changed(&self, _stage: &Stage, resynced: Resynced<'_>) {
-        self.0.borrow_mut().record_resynced(resynced);
+        self.record(|pending| pending.record_resynced(resynced));
     }
 
     fn layer_muting_changed(&self, _stage: &Stage, _layer: &str, _muted: bool, resynced: Resynced<'_>) {
-        self.0.borrow_mut().record_resynced(resynced);
+        self.record(|pending| pending.record_resynced(resynced));
     }
 
     fn loads_retried(&self, _stage: &Stage, resynced: Resynced<'_>) {
-        self.0.borrow_mut().record_resynced(resynced);
+        self.record(|pending| pending.record_resynced(resynced));
     }
 
     fn recomposed(&self, _stage: &Stage, resynced: Resynced<'_>) {
-        self.0.borrow_mut().record_resynced(resynced);
+        self.record(|pending| pending.record_resynced(resynced));
     }
 }

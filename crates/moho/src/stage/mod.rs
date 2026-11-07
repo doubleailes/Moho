@@ -139,8 +139,8 @@ impl Container for PrimContainer {
 
 struct Current {
     stage: Stage,
-    /// The sink recording the stage's changes, `None` when the stage refused
-    /// it (`Stage::add_sink` fails while an edit of its layers is pending).
+    /// The sink recording the stage's changes, `None` while the stage refuses
+    /// it (`Stage::add_sink` fails inside an edit of its layers).
     sink: Option<StageSinkId>,
     pending: Rc<RefCell<Pending>>,
 }
@@ -211,15 +211,18 @@ impl StageSceneIndex {
     /// absolute root) and the time is reset to `TimeCode::EARLIEST` (as
     /// `_StageGlobals::Clear`), then every prim of `stage` the default
     /// traversal reaches is added. Edits made to `stage` from now on are queued until
-    /// [`apply_pending_updates`](Self::apply_pending_updates).
+    /// [`apply_pending_updates`](Self::apply_pending_updates). Inside an edit of
+    /// the stage's layers, where the stage refuses the index's sink (and is not
+    /// read), the next `apply_pending_updates` installs it and adds every prim
+    /// again.
     pub fn set_stage(&self, stage: Stage) {
         let previous = self.current.borrow_mut().take();
         let had_stage = previous.is_some();
         if let Some(previous) = previous
             && let Some(sink) = previous.sink
         {
-            // A stage busy with an edit keeps the sink, which records into a
-            // queue nothing reads any more.
+            // A stage busy with an edit keeps the sink, which holds the
+            // queue dropped here weakly and so records nothing.
             let _ = previous.stage.remove_sink(sink);
         }
         self.cache.borrow_mut().clear();
@@ -237,10 +240,36 @@ impl StageSceneIndex {
             self.globals.time.set(TimeCode::EARLIEST);
         }
         let pending = Rc::new(RefCell::new(Pending::default()));
-        let sink = stage.add_sink(Recorder(pending.clone())).ok();
+        // A busy stage refuses the sink: `apply_pending_updates` installs it
+        // again, then repopulates every prim.
+        let sink = stage.add_sink(Recorder(Rc::downgrade(&pending))).ok();
         *self.current.borrow_mut() = Some(Current { stage, sink, pending });
         let added = self.populate(&sdf::Path::abs_root());
         self.observers.send_added(self, &added);
+    }
+
+    /// Installs the sink a busy stage refused at [`set_stage`](Self::set_stage),
+    /// and since the edits made without it are unknown, queues a resync of
+    /// the absolute root. Left for a later call while the stage is busy.
+    fn install_sink(&self) {
+        let Some((stage, pending)) = self
+            .current
+            .borrow()
+            .as_ref()
+            .filter(|c| c.sink.is_none())
+            .map(|c| (c.stage.clone(), c.pending.clone()))
+        else {
+            return;
+        };
+        // No borrow is held: installing delivers what is pending to the
+        // other sinks first, which may read this index.
+        let Ok(sink) = stage.add_sink(Recorder(Rc::downgrade(&pending))) else {
+            return;
+        };
+        pending.borrow_mut().resynced.insert(sdf::Path::abs_root());
+        if let Some(current) = self.current.borrow_mut().as_mut() {
+            current.sink = Some(sink);
+        }
     }
 
     /// Forgets the prims and children held at and under `root`, and the
@@ -321,6 +350,7 @@ impl StageSceneIndex {
     /// adapters map them to. Property changes under a resynced prim are
     /// folded into its resync.
     pub fn apply_pending_updates(&self) {
+        self.install_sink();
         let Some(mut pending) = self
             .current
             .borrow()

@@ -73,6 +73,59 @@ fn replacing_the_stage_removes_first() {
 }
 
 #[test]
+fn a_stage_set_inside_an_edit_is_watched_from_the_next_update() {
+    let (_dir, usd) = stage(SCENE);
+    let index = StageSceneIndex::new();
+    let recorder = RecordingObserver::on(index.as_ref());
+    // Inside an edit of its layers the stage refuses the index's sink, and
+    // reads nothing.
+    usd.root_layer()
+        .edit(|_| {
+            index.set_stage(usd.clone());
+            Ok(())
+        })
+        .unwrap();
+    assert_eq!(recorder.take(), [added("/", "")]);
+    usd.remove_prim("/world/cam").unwrap();
+    index.apply_pending_updates();
+    // The edits made without the sink are unknown: every prim is added again.
+    assert_eq!(
+        recorder.take(),
+        [added("/", ""), added("/world", ""), added("/world/geo", "mesh")]
+    );
+    assert_eq!(index.children(&p("/world")), [p("/world/geo")]);
+    usd.remove_prim("/world/geo").unwrap();
+    index.apply_pending_updates();
+    assert_eq!(
+        recorder.take(),
+        [Notice::Removed(Removed {
+            path: p("/world/geo")
+        })]
+    );
+}
+
+#[test]
+fn a_stage_replaced_inside_its_own_edit_notifies_nothing_more() {
+    let (_a, first) = stage(SCENE);
+    let (_b, second) = stage("#usda 1.0\ndef Mesh \"other\"\n{\n}\n");
+    let index = StageSceneIndex::new();
+    index.set_stage(first.clone());
+    // Inside an edit of its layers the first stage keeps the index's sink.
+    first
+        .root_layer()
+        .edit(|_| {
+            index.set_stage(second.clone());
+            Ok(())
+        })
+        .unwrap();
+    let recorder = RecordingObserver::on(index.as_ref());
+    first.remove_prim("/world/cam").unwrap();
+    index.apply_pending_updates();
+    assert_eq!(recorder.take(), []);
+    assert_eq!(index.children(&sdf::Path::abs_root()), [p("/other")]);
+}
+
+#[test]
 fn a_masked_stage_holds_only_the_mask() {
     let dir = TempDir::new().unwrap();
     let root = dir.write(
