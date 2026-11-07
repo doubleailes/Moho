@@ -97,12 +97,13 @@ the steps that land in this repository or depend on it.
   resyncs the unpopulated prototype of each instance it repopulates, and
   after a load every prototype it has not populated
   (`crates/moho/src/stage/mod.rs`, `apply_pending_updates`).
+  [mxpv/openusd#201](https://github.com/mxpv/openusd/issues/201).
 - Prototypes of instances a load does not touch. Loading one payload on
   ALab moves an unloaded instance elsewhere
   (`decor_sheets_projector01_0001`) to a new prototype and retires two,
   where C++ `Usd_InstanceCache` keeps every other instance's prototype;
   the stage index's stage-wide prototype check after a load is there for
-  it.
+  it. [mxpv/openusd#202](https://github.com/mxpv/openusd/issues/202).
 - Unloading a payload does not free what composing it took (no layer
   eviction). On Moana, RSS under one stage only grew across 22 load/unload
   rounds. This is what rules out single-stage streaming (S0).
@@ -128,8 +129,10 @@ the steps that land in this repository or depend on it.
   write of the value already held notifies nothing where USD notifies; and
   the `over` specs created to author through a reference are resynced where
   USD reports them info-only, so the stage index re-adds that subtree.
+  [mxpv/openusd#203](https://github.com/mxpv/openusd/issues/203).
 - openusd-schemas' UsdGeom schema predates `model:cardVisibility` (fallback
   `inherited`), so `geomModel/cardVisibility` has no fallback.
+  [mxpv/openusd#203](https://github.com/mxpv/openusd/issues/203).
 - A value read as another type than authored. C++ `UsdAttribute::Get<T>`
   fails when the authored value type is not `T`, and UsdImaging answers its
   default: `GetXformVectors` reads a `float3` translate or a `double3`
@@ -137,9 +140,10 @@ the steps that land in this repository or depend on it.
   authored `vector3d[]` (ALab) gives no hint and an empty extent. openusd
   lets a schema's declared type win and casts the value
   (`XformCommonAPI::xform_vectors`, `Attribute::type_name`), so Moho
-  answers the values.
+  answers the values. [mxpv/openusd#203](https://github.com/mxpv/openusd/issues/203).
 - `SdfPath::MakeRelativePath`. Moho builds a prototype-relative prim origin
   from the path's text meanwhile (`crates/moho/src/stage/prim_origin.rs`).
+  [mxpv/openusd#203](https://github.com/mxpv/openusd/issues/203).
 - A shader registry (Sdr, C++ `SdrRegistry`), so that a shader outside
   `id` mode resolves a node identifier from its source asset or code as
   UsdImaging's material data source does. Moho leaves it empty meanwhile
