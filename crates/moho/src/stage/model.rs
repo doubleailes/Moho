@@ -120,7 +120,7 @@ impl Container for Model {
 
     fn get(&self, name: &Token) -> Option<DataSource> {
         match name.as_str() {
-            t::MODEL_PATH => Some(value(Value::PathVec(vec![self.path.clone()]))),
+            t::MODEL_PATH => Some(value(Value::Path(self.path.clone()))),
             t::ASSET_IDENTIFIER => match self.asset_info("identifier")? {
                 v @ Value::AssetPath(_) => Some(value(v)),
                 _ => None,

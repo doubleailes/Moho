@@ -54,7 +54,7 @@ fn render_prims_equal_openusd() {
     }
     assert_eq!(
         read(&index, "/Render/settings", "__usdRenderSettings/camera"),
-        Some(Value::PathVec(vec![p("/cam")]))
+        Some(Value::Path(p("/cam")))
     );
     assert_eq!(
         read(&index, "/Render/settings", "__usdRenderSettings/products"),
@@ -62,7 +62,7 @@ fn render_prims_equal_openusd() {
     );
     assert_eq!(
         read(&index, "/Render/pass", "renderPass/renderSource"),
-        Some(Value::PathVec(vec![p("/Render/settings")]))
+        Some(Value::Path(p("/Render/settings")))
     );
 }
 

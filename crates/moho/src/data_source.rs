@@ -7,14 +7,14 @@
 //!
 //! # Path values
 //!
-//! openusd's `vt::Value` has no single-path variant, only `PathVec`. A
-//! Hydra field typed as one `SdfPath` (`materialBindings/<purpose>/path`,
+//! A Hydra field typed as one `SdfPath` (`materialBindings/<purpose>/path`,
 //! `instance/instancer`, `__usdPrimInfo/niPrototypePath`,
-//! `sceneGlobals/activeRenderSettingsPrim`, ...) is therefore a
-//! one-element `Value::PathVec`, and the field is absent where Hydra's path
-//! would be empty. A field Hydra types as a path array is a `PathVec` of any
-//! length. Workaround, an upstream candidate in `ROADMAP.md`: a
-//! `Value::Path` in openusd would let the two be told apart.
+//! `sceneGlobals/activeRenderSettingsPrim`, ...) is a `Value::Path`, the
+//! field absent where Hydra's path would be empty unless Hydra reads the
+//! empty path (`sceneGlobals`); a field
+//! Hydra types as a path array (`VtArray<SdfPath>`) is a `Value::PathVec` of
+//! any length. A `Value::Path` is in memory only: openusd's writers refuse
+//! it.
 
 use std::rc::Rc;
 
@@ -417,7 +417,7 @@ mod tests {
             container([
                 (
                     "niPrototypePath",
-                    value(Value::PathVec(vec![openusd::sdf::Path::abs_root()])),
+                    value(Value::Path(openusd::sdf::Path::abs_root())),
                 ),
                 ("kind", value(Token::from("component"))),
             ]),

@@ -114,7 +114,7 @@ impl MaterialBindingResolvingSceneIndex {
 
 fn single_path(value: Value) -> Option<sdf::Path> {
     match value {
-        Value::PathVec(mut v) if v.len() == 1 => v.pop(),
+        Value::Path(path) => Some(path),
         _ => None,
     }
 }
@@ -204,7 +204,7 @@ impl Container for Resolved {
 
     fn get(&self, purpose: &Token) -> Option<DataSource> {
         let material = self.resolve(&self.opinions.get(purpose)?)?;
-        Some(container([(t::PATH, value(Value::PathVec(vec![material])))]))
+        Some(container([(t::PATH, value(Value::Path(material)))]))
     }
 }
 

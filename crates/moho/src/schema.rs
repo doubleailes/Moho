@@ -370,8 +370,7 @@ impl ExtentSchema {
 ///
 /// Hydra types a locator-valued field (`HdDependencySchema`'s) as
 /// `HdTypedSampledDataSource<HdDataSourceLocator>`. openusd's `vt::Value`
-/// has no locator variant, so Moho carries a locator as its elements, as it
-/// carries a single path as a one-element `PathVec`.
+/// has no locator variant, so Moho carries a locator as its elements.
 pub fn locator_value(locator: &Locator) -> Value {
     Value::TokenVec(locator.elements().to_vec())
 }
@@ -402,7 +401,7 @@ impl DependencySchema {
         if let Some(path) = depended_on_prim_path {
             entries.push((
                 tokens::dependencies::DEPENDED_ON_PRIM_PATH,
-                value(Value::PathVec(vec![path.clone()])),
+                value(Value::Path(path.clone())),
             ));
         }
         entries.push((
@@ -419,7 +418,7 @@ impl DependencySchema {
     /// The depended-on prim, `None` for the declaring prim itself.
     pub fn depended_on_prim_path(&self) -> Option<sdf::Path> {
         match member_value(&self.0, tokens::dependencies::DEPENDED_ON_PRIM_PATH)? {
-            Value::PathVec(paths) => paths.into_iter().next(),
+            Value::Path(path) => Some(path),
             _ => None,
         }
     }
@@ -459,10 +458,10 @@ impl DependenciesSchema {
     }
 }
 
-/// The first path of a path array: how Moho holds a Hydra `SdfPath` field.
+/// The path a Hydra `SdfPath` field holds.
 fn as_path(value: Value) -> Option<sdf::Path> {
     match value {
-        Value::PathVec(v) => v.into_iter().next(),
+        Value::Path(path) => Some(path),
         _ => None,
     }
 }

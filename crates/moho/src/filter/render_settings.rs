@@ -265,7 +265,7 @@ impl Flattened {
     fn var(&self, path: &sdf::Path) -> Option<DataSource> {
         let var = member_container(&self.input.prim(path).data?, t::USD_RENDER_VAR)?;
         let mut entries: Vec<(Token, DataSource)> =
-            vec![(Token::from(t::PATH), value(Value::PathVec(vec![path.clone()])))];
+            vec![(Token::from(t::PATH), value(Value::Path(path.clone())))];
         for name in [
             t::DATA_TYPE,
             t::SOURCE_NAME,
@@ -296,10 +296,7 @@ impl Flattened {
             .filter_map(|v| self.var(v))
             .collect();
         let mut entries: Vec<(Token, Option<DataSource>)> = vec![
-            (
-                Token::from(t::PATH),
-                Some(value(Value::PathVec(vec![path.clone()]))),
-            ),
+            (Token::from(t::PATH), Some(value(Value::Path(path.clone())))),
             (Token::from(t::TYPE), product.get(&Token::from(t::PRODUCT_TYPE))),
             (Token::from(t::NAME), product.get(&Token::from(t::PRODUCT_NAME))),
             (

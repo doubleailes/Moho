@@ -38,6 +38,9 @@ parity changes of mxpv/openusd#195 (#187 to #194).
   from `/__Prototype_1`, and kept, resynced, when the instance they were
   composed from goes or their source changes. The stage index no longer
   resyncs fresh prototypes and their re-pointed instances itself.
+- `vt::Value::Path(sdf::Path)` (mxpv/openusd#191), in memory only: Hydra's
+  single `SdfPath` fields are a `Value::Path` (they were one-element
+  `Value::PathVec`s), so a single path and a path array are told apart.
 - `tf::HashState` (C++ `Tf_HashState`, mxpv/openusd#190): `append(bytes)`
   and `code()`. Moho's `TfHash::Combine` names (`ForInstancer%zx`,
   `Primvars%zx`) use it in place of its own SpookyHash port (`tf_hash.rs`).
@@ -141,7 +144,7 @@ layer reorders.
   globals filter's `set_current_frame`.
 - `sdf::Path::default()` is the empty path (`SdfPath()`), which
   `Path::new` refuses to parse; `Path::is_empty` tests for it. The scene
-  globals filter reads a set empty path as an empty `PathVec`.
+  globals filter reads a set empty path as `Value::Path` of it.
 - `Stage::start_time_code`, `end_time_code` and
   `has_authored_time_code_range` read the root and session layers only, as in
   USD.
@@ -235,8 +238,8 @@ the root edit target (`crates/moho-spike/tests/probe.rs` asserts all of it):
   declared value, else 0.01 and `Y`); `render::Settings::stage_settings_path
   -> Result<Option<sdf::Path>>` (the `renderSettingsPrimPath` metadata, empty
   as `None`).
-- `vt::Value` has no single-path variant; Moho holds one path as a
-  one-element `Value::PathVec`.
+- `vt::Value::Path` holds one path (C++ `VtValue` of `SdfPath`,
+  mxpv/openusd#191); writers refuse it.
 
 ## Geometry schemas (S1)
 
@@ -561,9 +564,6 @@ Read at `d7d2a29`.
   `kind`, ...), and Moho ignores every other prim-level info-only change,
   so a plugin field's resync (a `renderSettingsPrimPath` edit, chiefly) is
   missed (`stage/pending.rs`).
-- `vt::Value` has no single-path variant (C++ `VtValue` of `SdfPath`):
-  Hydra's single `SdfPath` fields are one-element `Value::PathVec`s, absent
-  when Hydra's path would be empty (`data_source.rs`).
 - No `SdfPath::MakeRelativePath`: the prim origin's prototype-relative scene
   path (`stage/prim_origin.rs`) is built from the path's text, parsed back
   with `sdf::Path::new`, which accepts relative paths and `.`.

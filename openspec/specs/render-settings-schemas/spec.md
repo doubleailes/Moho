@@ -140,5 +140,5 @@ member as the first element of its path array.
 - **THEN** `RenderSettingsSchema` and `UsdRenderSettingsSchema` answer `None` for the camera
 
 #### Scenario: A camera path
-- **WHEN** the settings' camera is the one-element path array `[/cam]`
+- **WHEN** the settings' camera is the single path value `/cam`
 - **THEN** `RenderSettingsSchema` gives the camera `/cam`

@@ -22,7 +22,8 @@ notices, the divergences fixed, and what remains classified.
   then apply the same edits and print the added, removed and dirtied
   entries.
 - **What the comparison normalizes.** Container name order; numbers to
-  1e-5; a single `SdfPath` against Moho's one-element path array; USD
+  1e-5; a single `SdfPath` against Moho's one-element path array (before
+  openusd `26c81d8`; Moho now holds a `Value::Path`); USD
   prototypes named by their smallest instance location (USD and openusd
   number them differently) and prototype groups by the prototypes they
   hold (the binding hash digits are Moho's own); Moho's `__usdAttributes`

@@ -313,7 +313,7 @@ impl Container for PropagatedPrototypes {
 
     fn get(&self, name: &Token) -> Option<DataSource> {
         let path = self.0.borrow().get(name.as_str())?.clone();
-        Some(value(Value::PathVec(vec![path])))
+        Some(value(Value::Path(path)))
     }
 }
 

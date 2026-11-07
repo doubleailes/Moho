@@ -61,9 +61,6 @@ impl Adapter for PrimOriginAdapter {
         {
             return None;
         }
-        Some(container([(
-            t::SCENE_PATH,
-            value(Value::PathVec(vec![scene_path(ctx)])),
-        )]))
+        Some(container([(t::SCENE_PATH, value(Value::Path(scene_path(ctx))))]))
     }
 }
