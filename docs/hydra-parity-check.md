@@ -582,8 +582,9 @@ Each with a test, one concern per commit:
   now also resyncs, after any resync, the unpopulated prototype of each
   instance it repopulates, one lookup per prim (`Stage::prototypes()`
   walks the stage after an edit); the stage-wide check stays for loads,
-  which can compose a prototype no prim instances (ALab's
-  `/__Prototype_382`). The five toggles now leave Hydra's prims; the edits
+  where openusd also moves an unloaded instance outside the payload to a
+  new prototype (ALab's projector sheets to `/__Prototype_382`; USD keeps
+  its prototype). The five toggles now leave Hydra's prims; the edits
   that make an instance non-instanceable still
   differ by known entries (Hydra's `REMOVED /__Prototype_N/...`, and
   openusd's resync of every instance); no generated, hand or load step

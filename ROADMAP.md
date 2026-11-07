@@ -97,6 +97,12 @@ the steps that land in this repository or depend on it.
   resyncs the unpopulated prototype of each instance it repopulates, and
   after a load every prototype it has not populated
   (`crates/moho/src/stage/mod.rs`, `apply_pending_updates`).
+- Prototypes of instances a load does not touch. Loading one payload on
+  ALab moves an unloaded instance elsewhere
+  (`decor_sheets_projector01_0001`) to a new prototype and retires two,
+  where C++ `Usd_InstanceCache` keeps every other instance's prototype;
+  the stage index's stage-wide prototype check after a load is there for
+  it.
 - Unloading a payload does not free what composing it took (no layer
   eviction). On Moana, RSS under one stage only grew across 22 load/unload
   rounds. This is what rules out single-stage streaming (S0).

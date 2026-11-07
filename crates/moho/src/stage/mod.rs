@@ -345,8 +345,9 @@ impl StageSceneIndex {
         // not those it composes; USD names every prototype. A prototype the
         // index has not populated is resynced, so that it is added and the
         // prototype pruning hides it: after a load (or an unload, a layer
-        // muted, a load retried), each one the stage holds, since a load
-        // can compose one that no prim instances (ALab); after any resync,
+        // muted, a load retried), each one the stage holds, since openusd's
+        // load can also give an unloaded instance outside the payload a new
+        // prototype (ALab, another upstream candidate); after any resync,
         // below, the prototype of each instance it repopulates (a prim made
         // the first instance of its prototype), which is one lookup per
         // prim where the stage's list walks the stage after an edit.
