@@ -37,9 +37,9 @@ parity changes of mxpv/openusd#195 (#187 to #194).
 - Prototypes follow C++ `Usd_InstanceCache` (mxpv/openusd#194): numbered
   from `/__Prototype_1`, and kept, resynced, when the instance they were
   composed from goes or their source changes. The stage index no longer
-  resyncs fresh prototypes and their re-pointed instances after an edit.
-  A load's notice still leaves out the prototypes the load composes (see
-  "Gaps"), which the stage index adds itself.
+  resyncs re-pointed instances after an edit. A notice still leaves out
+  the prototypes the change composes (see "Gaps"), which the stage index
+  adds itself.
 - `vt::Value::Path(sdf::Path)` (mxpv/openusd#191), in memory only: Hydra's
   single `SdfPath` fields are a `Value::Path` (they were one-element
   `Value::PathVec`s), so a single path and a path array are told apart.
@@ -337,9 +337,8 @@ the root edit target (`crates/moho-spike/tests/probe.rs` asserts all of it):
   prototypes when it authors `inactiveIds`, as UsdImaging reads
   `GetTargets` there and `GetForwardedTargets` otherwise.
 - `Stage::prototypes() -> Result<Vec<sdf::Path>>` (the stage's
-  `/__Prototype_N` prims), which the stage index compares with what it
-  populated to resync re-pointed prototypes; `Stage::remove_prim(path)` in
-  tests.
+  `/__Prototype_N` prims), which the stage index lists among the absolute
+  root's children; `Stage::remove_prim(path)` in tests.
 
 ## Scene index gaps (`scene-index-gaps`)
 
@@ -578,14 +577,21 @@ Read at `d7d2a29`.
   a spec is one resync (USD: resync, then info change); a write of the
   value already held notifies nothing; `over` specs created to author
   through a reference are resynced (USD: info-only).
-- A load's notice (`StageSink::load_rules_changed`, and the other
-  `Resynced` notices) names the prototypes that were composed before it,
-  not those the load composes: loading a payload whose instances need a new
-  prototype reports the payload but not `/__Prototype_N`. C++ `UsdStage`
-  resyncs every prototype. The stage index resyncs, after such a notice,
-  each prototype `Stage::prototypes()` holds that it has not populated
-  (`StageSceneIndex::apply_pending_updates`), so that it is added and the
-  prototype pruning hides it.
+- A notice (`StageSink::after_commit`, `load_rules_changed` and the other
+  `Resynced` notices) names the prototypes that were composed before the
+  change, not those it composes: making a prim the first instance of its
+  prototype reports the prim, and loading a payload whose instances need a
+  new prototype the payload, but neither `/__Prototype_N`. C++ `UsdStage`
+  resyncs every prototype. The stage index resyncs, for each instance it
+  repopulates, the instance's prototype (`Prim::prototype`) when it has
+  not populated it (`StageSceneIndex::apply_pending_updates`), so that it
+  is added and the prototype pruning hides it: a lookup per repopulated
+  prim, where `Stage::prototypes()` would walk the stage after the edit.
+  After a load (or an unload, a layer muted, a load retried) it also
+  resyncs each prototype `Stage::prototypes()` holds that it has not
+  populated: a load can compose a prototype no prim instances (ALab's
+  first cinder block load composes `/__Prototype_382` beside the block's
+  `383`), which the absolute root lists all the same.
 - openusd-schemas' UsdGeom schema lacks `model:cardVisibility`.
 - A value authored with another type than the one read is cast: a schema's
   declared type wins (`Attribute::type_name`), and

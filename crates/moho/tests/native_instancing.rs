@@ -928,3 +928,67 @@ def Xform "world"
     );
     assert_eq!(shown, Vec::<sdf::Path>::new());
 }
+
+/// The `/__Prototype_N` prims the chain shows once `instance` of a stage
+/// where `/W/A` and `/W/B` reference `/Lib/P` is made instanceable.
+fn prototypes_shown_after_made_instanceable(b_instanceable: bool, instance: &str) -> Vec<sdf::Path> {
+    let (_dir, usd) = common::stage(&format!(
+        r#"#usda 1.0
+class "Lib"
+{{
+    def Xform "P"
+    {{
+        def Mesh "Body"
+        {{
+        }}
+    }}
+}}
+over "W"
+{{
+    def Xform "A" (
+        instanceable = false
+        references = </Lib/P>
+    )
+    {{
+    }}
+    def Xform "B" (
+        instanceable = {b_instanceable}
+        references = </Lib/P>
+    )
+    {{
+    }}
+}}
+"#
+    ));
+    let stage_index = StageSceneIndex::new();
+    stage_index.set_stage(usd.clone());
+    let chain = moho::chain::standard(stage_index.clone());
+    walk(chain.as_ref(), &sdf::Path::abs_root());
+    usd.prim(instance).unwrap().set_instanceable(true).unwrap();
+    stage_index.apply_pending_updates();
+    walk(chain.as_ref(), &sdf::Path::abs_root())
+        .into_iter()
+        .filter(|path| {
+            path.root_prim_name()
+                .is_some_and(|name| name.starts_with("__Prototype_"))
+        })
+        .collect()
+}
+
+#[test]
+fn the_first_prototype_an_edit_composes_stays_hidden() {
+    // USD's notice names `/__Prototype_1` beside `/W/A`; openusd's only
+    // `/W/A`. Hydra then shows no prototype at the root.
+    assert_eq!(
+        prototypes_shown_after_made_instanceable(false, "/W/A"),
+        Vec::<sdf::Path>::new()
+    );
+}
+
+#[test]
+fn an_instance_made_of_a_known_prototype_shows_no_prototype() {
+    assert_eq!(
+        prototypes_shown_after_made_instanceable(true, "/W/A"),
+        Vec::<sdf::Path>::new()
+    );
+}
