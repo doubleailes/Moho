@@ -51,11 +51,11 @@ fn volumes_and_fields() {
     assert_eq!(index.prim(&p("/world/smoke")).ty, "volume");
     assert_eq!(
         read(&index, "/world/smoke", "volumeFieldBinding/density"),
-        Some(Value::PathVec(vec![p("/world/smoke/density")]))
+        Some(Value::Path(p("/world/smoke/density")))
     );
     assert_eq!(
         read(&index, "/world/smoke", "volumeFieldBinding/temperature"),
-        Some(Value::PathVec(vec![p("/world/smoke/temperature")]))
+        Some(Value::Path(p("/world/smoke/temperature")))
     );
     assert_eq!(index.prim(&p("/world/smoke/density")).ty, "openvdbAsset");
     assert_eq!(index.prim(&p("/world/smoke/temperature")).ty, "field3dAsset");

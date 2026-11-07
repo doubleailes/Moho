@@ -271,7 +271,7 @@ fn native_instances_get_instance_categories() {
     )
     .and_then(|d| d.value())
     {
-        Some(Value::PathVec(mut v)) => v.pop().unwrap(),
+        Some(Value::Path(path)) => path,
         other => panic!("{other:?}"),
     };
     let data = index.prim(&instancer).data.unwrap();
@@ -293,7 +293,7 @@ fn native_instances_get_instance_categories() {
     let dep = dep.as_container().unwrap();
     assert_eq!(
         dep.get(&"dependedOnPrimPath".into()).and_then(|d| d.value()),
-        Some(Value::PathVec(vec![p("/world/i1")]))
+        Some(Value::Path(p("/world/i1")))
     );
     assert_eq!(
         dep.get(&"affectedDataSourceLocator".into())

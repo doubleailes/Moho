@@ -48,13 +48,13 @@ schemas:    typed accessors over containers (MeshSchema, XformSchema, ...)
   whose data might vary over time. As `UsdImagingStageSceneIndex`'s, a new
   index is at time code 0 (not the stage's default time), and replacing a
   held stage resets it to `EarliestTime`.
-- **Paths are path arrays.** openusd's `vt::Value` has no single-path
-  variant, so a Hydra field typed as one `SdfPath` (a resolved binding's
+- **Paths.** A Hydra field typed as one `SdfPath` (a resolved binding's
   `path`, `instance/instancer`, `__usdPrimInfo/niPrototypePath`,
   `sceneGlobals/activeRenderSettingsPrim`, a dependency's
-  `dependedOnPrimPath`) is a one-element `Value::PathVec`, absent where
-  Hydra's path would be empty. A field Hydra types as a path array is a
-  `PathVec` of any length.
+  `dependedOnPrimPath`) is a `Value::Path`, absent where Hydra's path would
+  be empty (the scene globals filter holds a set empty path, which hides
+  the input's). A field Hydra types as a path array is a `Value::PathVec`
+  of any length.
 - **Locators are token arrays.** A field Hydra types as a data source
   locator (`__dependencies`' locators) is a `Value::TokenVec` of its
   elements (`schema::locator_value`).
@@ -174,7 +174,7 @@ observer (`docs/update-latency.md`), and its `walk` benchmark the cost of
   - Each prototype `P` an instancer targets is copied to
     `P/ForInstancer<hash>`, `<hash>` being `TfHash::Combine` of the
     instancer's path in the prototype's input namespace and the enclosing
-    copy root (`/` at the top level), printed `%zx` (a port of `TfHash`
+    copy root (`/` at the top level), printed `%zx` (openusd's `tf::HashState`
     gives Hydra's digits). The instancer's `instancerTopology/prototypes`
     names the copies, and the original prototype records them in
     `__usdPrimInfo/piPropagatedPrototypes/ForInstancer<hash>`.

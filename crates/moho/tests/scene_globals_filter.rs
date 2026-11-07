@@ -65,7 +65,7 @@ fn unset_fields_read_the_input_or_nothing() {
     );
     assert_eq!(
         read(globals.as_ref(), "sceneGlobals/activeRenderSettingsPrim"),
-        Some(Value::PathVec(vec![p("/Render/a")]))
+        Some(Value::Path(p("/Render/a")))
     );
     // Every field is named, set or not, with the stage's own.
     let root = globals.prim(&sdf::Path::abs_root()).data.unwrap();
@@ -126,7 +126,7 @@ fn a_set_field_hides_the_inputs() {
     globals.set_time_codes_per_second(48.0);
     assert_eq!(
         read(globals.as_ref(), "sceneGlobals/activeRenderSettingsPrim"),
-        Some(Value::PathVec(vec![p("/Render/b")]))
+        Some(Value::Path(p("/Render/b")))
     );
     assert_eq!(
         read(globals.as_ref(), "sceneGlobals/timeCodesPerSecond"),
@@ -140,7 +140,7 @@ fn an_empty_path_still_hides_the_inputs() {
     globals.set_active_render_settings_prim_path(sdf::Path::default());
     assert_eq!(
         read(globals.as_ref(), "sceneGlobals/activeRenderSettingsPrim"),
-        Some(Value::PathVec(Vec::new()))
+        Some(Value::Path(sdf::Path::default()))
     );
 }
 
@@ -155,11 +155,11 @@ fn values_and_reads_are_live() {
     let at = |l: &str| locate(&root, &Locator::parse(l)).and_then(|d| d.value());
     assert_eq!(
         at("sceneGlobals/activeRenderPassPrim"),
-        Some(Value::PathVec(vec![p("/Render/pass")]))
+        Some(Value::Path(p("/Render/pass")))
     );
     assert_eq!(
         at("sceneGlobals/primaryCameraPrim"),
-        Some(Value::PathVec(vec![p("/world/cam")]))
+        Some(Value::Path(p("/world/cam")))
     );
     assert_eq!(at("sceneGlobals/currentFrame"), Some(Value::Double(12.5)));
     assert_eq!(at("sceneGlobals/sceneStateId"), Some(Value::Int(7)));

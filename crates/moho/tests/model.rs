@@ -59,7 +59,7 @@ fn an_asset_has_model_data() {
     let (_dir, index) = index();
     assert_eq!(
         read(&index, "/set/chair", "model/modelPath"),
-        Some(Value::PathVec(vec![p("/set/chair")]))
+        Some(Value::Path(p("/set/chair")))
     );
     assert_eq!(
         read(&index, "/set/chair", "model/assetName"),

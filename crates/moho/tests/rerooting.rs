@@ -79,7 +79,7 @@ fn bound(index: &dyn SceneIndex, path: &sdf::Path) -> Option<sdf::Path> {
     )?
     .value()?
     {
-        Value::PathVec(mut v) => v.pop(),
+        Value::Path(path) => Some(path),
         _ => None,
     }
 }
@@ -143,6 +143,6 @@ fn a_binding_inside_a_point_instancer_prototype_names_the_copy() {
             &Locator::parse("primOrigin/scenePath")
         )
         .and_then(|d| d.value()),
-        Some(Value::PathVec(vec![p("/world/scatter/protos/round/geo")]))
+        Some(Value::Path(p("/world/scatter/protos/round/geo")))
     );
 }

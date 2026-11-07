@@ -65,7 +65,7 @@ fn prototype_path(index: &dyn SceneIndex, instance: &ContainerHandle) -> Option<
         _ => return None,
     };
     let instancer = match instance.get(&Token::from(t::INSTANCER))?.value()? {
-        Value::PathVec(v) => v.into_iter().next()?,
+        Value::Path(path) => path,
         _ => return None,
     };
     let prototype_index = match instance.get(&Token::from(t::PROTOTYPE_INDEX))?.value()? {
@@ -172,6 +172,12 @@ struct TranslatedSampled {
 impl Sampled for TranslatedSampled {
     fn value(&self, offset: f32) -> Option<Value> {
         match self.inner.value(offset)? {
+            Value::Path(path) => {
+                let Some(input) = self.input.upgrade() else {
+                    return Some(Value::Path(path));
+                };
+                Some(Value::Path(translate(&path, input.as_ref())))
+            }
             Value::PathVec(paths) => {
                 let Some(input) = self.input.upgrade() else {
                     return Some(Value::PathVec(paths));

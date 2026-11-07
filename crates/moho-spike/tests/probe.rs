@@ -1,6 +1,6 @@
 #![allow(clippy::unwrap_used)]
 
-//! The notice probe's observed behavior at openusd `68a867a`, recorded in
+//! The notice probe's observed behavior at openusd `26c81d8`, recorded in
 //! `docs/openusd-notes.md` ("Notices across loading"). A bump that changes
 //! it fails here.
 
@@ -14,9 +14,10 @@ fn commit(resynced: &[&str], changed_info_only: &[&str]) -> Notice {
     }
 }
 
-fn load_rules(resynced: &[&str]) -> Notice {
+fn load_rules(subtrees: &[&str], prims: &[&str]) -> Notice {
     Notice::LoadRules {
-        resynced: resynced.iter().map(|s| s.to_string()).collect(),
+        subtrees: subtrees.iter().map(|s| s.to_string()).collect(),
+        prims: prims.iter().map(|s| s.to_string()).collect(),
     }
 }
 
@@ -55,12 +56,14 @@ fn notices_across_loading() {
     assert_eq!(steps[1].attribute, Some(1.0));
 
     // Loading and unloading notify only through `load_rules_changed`, never
-    // as `after_commit`, so an index can tell them from edits. The path is
-    // the nearest ancestor whose load rule changes resolution (`/world`
-    // under `LoadNone`), not the loaded prim: read literally, as a subtree
-    // resync, it covers every sibling chunk.
-    assert_eq!(steps[2].notices, [load_rules(&["/world"])]);
-    assert_eq!(steps[4].notices, [load_rules(&["/world"])]);
+    // as `after_commit`, so an index can tell them from edits. The loaded
+    // prim is the subtree resync, and its ancestor whose loaded state
+    // flipped with no payload of its own (`/world` under `LoadNone`) a prim
+    // recomposed in place, so sibling chunks are not covered
+    // (mxpv/openusd#174).
+    let element = fixture::element_path(0);
+    assert_eq!(steps[2].notices, [load_rules(&[&element], &["/world"])]);
+    assert_eq!(steps[4].notices, [load_rules(&[&element], &["/world"])]);
 
     // Edits while loaded, and after unloading again, are info-only.
     assert_eq!(steps[3].notices, [commit(&[], &[&attribute])]);

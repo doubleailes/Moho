@@ -17,10 +17,9 @@
 //! - the input root's other data, and its `startTimeCode` and
 //!   `endTimeCode` (which this filter never sets, as Hydra's), are kept.
 //!
-//! A prim path reads as a one-element `Value::PathVec` (Moho's
-//! convention for a single `SdfPath`). Hydra's empty `SdfPath` still hides
-//! the input's value, so an empty path (`sdf::Path::default()`) reads as an
-//! empty `PathVec`. `currentFrame` and `timeCodesPerSecond` are
+//! A prim path reads as a `Value::Path`. Hydra's empty `SdfPath` still
+//! hides the input's value, so an empty path (`sdf::Path::default()`) is
+//! held as one. `currentFrame` and `timeCodesPerSecond` are
 //! `Value::Double`, `sceneStateId` a `Value::Int`.
 //!
 //! Each setter, when its value differs from the one held, stores it and
@@ -119,15 +118,10 @@ const NAMES: [&str; 6] = [
     t::SCENE_STATE_ID,
 ];
 
-/// A path as Moho's single-path value: one element, none for the empty
-/// path (which, unlike an absent field, still hides the input's).
+/// A path's value; the empty path, unlike an absent field, still hides the
+/// input's.
 fn path_value(path: &sdf::Path) -> DataSource {
-    let paths = if path.is_empty() {
-        Vec::new()
-    } else {
-        vec![path.clone()]
-    };
-    value(Value::PathVec(paths))
+    value(Value::Path(path.clone()))
 }
 
 /// The root's `sceneGlobals`, read live from the index's fields

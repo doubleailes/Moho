@@ -90,7 +90,7 @@ impl Container for FieldBindings {
         let prim = self.0.prim()?;
         let relationship = prim.relationship(format!("{FIELD_PREFIX}{name}").as_str());
         let path = field_path(&relationship)?;
-        Some(value(Value::PathVec(vec![path])))
+        Some(value(Value::Path(path)))
     }
 }
 

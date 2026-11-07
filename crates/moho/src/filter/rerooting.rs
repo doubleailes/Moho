@@ -82,6 +82,7 @@ fn reroot_path(path: sdf::Path, map: &Map) -> sdf::Path {
 
 fn reroot_value(value: Value, map: &Map) -> Value {
     match value {
+        Value::Path(path) => Value::Path(reroot_path(path, map)),
         Value::PathVec(paths) => Value::PathVec(paths.into_iter().map(|p| reroot_path(p, map)).collect()),
         other => other,
     }
@@ -311,7 +312,7 @@ mod tests {
                 ),
                 (
                     prim_origin::PRIM_ORIGIN,
-                    container([(prim_origin::SCENE_PATH, value(Value::PathVec(vec![p("/P/geo")])))]),
+                    container([(prim_origin::SCENE_PATH, value(Value::Path(p("/P/geo"))))]),
                 ),
             ])
             .into_handle(),
@@ -341,7 +342,7 @@ mod tests {
         );
         assert_eq!(
             locate(&data, &Locator::parse("primOrigin/scenePath")).and_then(|d| d.value()),
-            Some(Value::PathVec(vec![p("/P/geo")])),
+            Some(Value::Path(p("/P/geo"))),
             "the prim origin names the USD prim"
         );
         assert!(

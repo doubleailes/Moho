@@ -103,8 +103,8 @@ fn metadata_only_when_authored() {
     let (_dir, index) = index();
     assert_eq!(
         attr(&index, "/world/geo", "primvars:displayColor", "colorSpace"),
-        // Raw, as openusd stores the metadata.
-        Some(Value::String("lin_rec709".into()))
+        // A token, as USD types the `colorSpace` field.
+        Some(Value::Token(Token::from("lin_rec709")))
     );
     assert_eq!(
         attr(&index, "/world/geo", "primvars:displayColor", "interpolation"),

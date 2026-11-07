@@ -47,9 +47,10 @@ the steps that land in this repository or depend on it.
   chunks. The cost of `prim()` and `children()` alone was profiled and cut
   in issue #27 (`docs/walk.md`).
 - Offering Moho upstream as an `openusd-imaging` crate in openusd's
-  workspace. The `moho::openusd` and `moho::openusd_schemas` re-exports
-  and feature forwarding are a downstream policy (one openusd pin for the
-  stack) and would move to a thin downstream crate then.
+  workspace, which holds a placeholder for it since `26c81d8`; the steps
+  left are in `README.md`. The `moho::openusd` and `moho::openusd_schemas`
+  re-exports and feature forwarding are a downstream policy (one openusd
+  pin for the stack) and would move to a thin downstream crate then.
 - Draw mode (`UsdImagingDrawModeSceneIndex`), through native instancer
   propagation's append callback (`hydra-parity-instancing`, design D7).
 - `HdsiLocatorCachingSceneIndex` on `material`, which UsdImaging's chain
@@ -76,21 +77,11 @@ the steps that land in this repository or depend on it.
 
 ## Upstream candidates (openusd)
 
-- A resync for a prim whose children or properties a layer reorders, and
-  the asset path walk's plain data probe (`AbstractData::holds_plain_data`).
-  Moho pins doubleailes/openusd at `54db9fd` (`perf/path-prim-len`:
-  upstream `5b86332` plus both, and mxpv/openusd#186's one-lookup
-  prototype root) until they are upstream.
-
 - Splines (`Ts`): typed knots, evaluation, authoring, usdc encoding.
 - Child listing cost. `Prim::filtered_children` costs about 1 µs per child
   (10 ms for 10 000 siblings), and about twice that on the first listing
   after an edit. The stage index now holds each prim's children until a
   resync reaches them (`crates/moho/src/stage/mod.rs`).
-- `SchemaRegistry::is_a` walks the base graph with a fresh hash set on
-  every call (openusd's own `TODO(perf)`: a transitive closure computed at
-  `build`). It was most of the stage index's `prim()` and `children()`
-  cost; Moho memoizes it per registry (`crates/moho/src/stage/mod.rs`).
 - Incremental prototype discovery. After any structural edit, the next
   `Stage::prototypes()` walks the whole populated namespace again (its
   `TODO(perf)` in `usd/stage.rs`); C++ updates `Usd_InstanceCache` from the
@@ -98,56 +89,50 @@ the steps that land in this repository or depend on it.
   UsdImaging, so every invalidation that walks from the root pays it: about
   20 ms of a linked light's 25 ms on the 10 000 mesh fixture
   (`docs/update-latency.md`).
+- Prototypes a change composes, in its notice. `after_commit` (a prim made
+  the first instance of its prototype) and `load_rules_changed` (a payload
+  loaded whose instances need a new prototype), like the other `Resynced`
+  notices, name the prototypes composed before the change, not the new
+  ones, where C++ `UsdStage` resyncs every prototype; the stage index
+  resyncs the unpopulated prototype of each instance it repopulates, and
+  after a load every prototype it has not populated
+  (`crates/moho/src/stage/mod.rs`, `apply_pending_updates`).
+  [mxpv/openusd#201](https://github.com/mxpv/openusd/issues/201).
+- Prototypes of instances a load does not touch. Loading one payload on
+  ALab moves an unloaded instance elsewhere
+  (`decor_sheets_projector01_0001`) to a new prototype and retires two,
+  where C++ `Usd_InstanceCache` keeps every other instance's prototype;
+  the stage index's stage-wide prototype check after a load is there for
+  it. [mxpv/openusd#202](https://github.com/mxpv/openusd/issues/202).
 - Unloading a payload does not free what composing it took (no layer
   eviction). On Moana, RSS under one stage only grew across 22 load/unload
   rounds. This is what rules out single-stage streaming (S0).
   [mxpv/openusd#173](https://github.com/mxpv/openusd/issues/173).
-- `StageSink::load_rules_changed` reports the nearest ancestor whose load
-  rule changes resolution (e.g. `/world`) rather than the loaded or unloaded
-  path, so taken as a subtree resync it covers every sibling subtree.
-  [mxpv/openusd#174](https://github.com/mxpv/openusd/issues/174).
-- A rule-based collection's membership as one path expression (C++
-  `UsdComputePathExpressionFromCollectionMembershipQueryRuleMap`). Moho ports
-  it (`crates/moho/src/stage/collection.rs`) until openusd has it.
 - Resolved-asset-path resyncs in `StageSink::after_commit` (C++
   `UsdNotice::ObjectsChanged::GetResolvedAssetPathsResyncedPaths`), so an
   index can re-read asset-path-dependent data when resolution changes, as
-  UsdImaging does.
+  UsdImaging does. openusd has them since `26c81d8`
+  (`CommittedChange::asset_paths_resynced`); Moho does not read them yet.
 - A stage's resolver context (C++ `UsdStage::GetPathResolverContext`), for
   the absolute root's `system/assetResolution` (`crates/moho/src/stage/globals.rs`).
 - The changed fields of an info-only path in `StageSink::after_commit` (C++
   `UsdNotice::ObjectsChanged::GetChangedFields`). UsdImaging resyncs a prim
   whose changed metadata includes a plugin field (such as the stage's
-  `renderSettingsPrimPath`) and ignores built-in fields (`kind`, time
-  codes). Moho reads them (`CommittedChange::changed_fields`, at `d7d2a29`)
-  only for `typeName` (below), so it ignores every other prim-level
-  info-only change, and misses the plugin-field resyncs
+  `renderSettingsPrimPath`) and ignores built-in fields (time codes).
+  openusd reports the fields C++ `UsdStage` resyncs for (`typeName`,
+  `apiSchemas`, `kind`, ...) as resyncs; Moho ignores every other
+  prim-level info-only change, and misses the plugin-field resyncs
   (`crates/moho/src/stage/pending.rs`).
-- A prim's `typeName` edit reported as a resync. openusd reports it as
-  info-only (`pcp/change.rs`: "`typeName` restructures nothing"); USD
-  composes the new prim type info and notifies the prim as resynced
-  (`stage.cpp`, `_ProcessPendingChanges`), so UsdImaging repopulates it.
-  Moho promotes a `typeName` info change to a resync
-  (`crates/moho/src/stage/pending.rs`).
-- Prototypes kept when their source instance goes: removing the instance a
-  prototype was composed from makes openusd compose the others under a new
-  `/__Prototype_N`, and its commit notice names neither the new prototype
-  nor the instances re-pointed to it (USD keeps the prototype). The stage
-  index resyncs both itself meanwhile (`crates/moho/src/stage/mod.rs`).
-  Also, openusd numbers prototypes from `__Prototype_0` where USD numbers
-  from `__Prototype_1`, so propagated prototype paths differ from
-  UsdImaging's by that number.
-  The same happens on any edit that changes the prototype's source: a prim
-  added or removed under the referenced prim, or the source instance made
-  non-instanceable (found by `docs/hydra-parity-check.md`).
 - Authoring notices as USD's (found by `docs/hydra-parity-check.md`).
   Setting a value on an attribute without a spec is one resync where USD
   sends a resync then an info change (UsdImaging dirties the prim twice); a
   write of the value already held notifies nothing where USD notifies; and
   the `over` specs created to author through a reference are resynced where
   USD reports them info-only, so the stage index re-adds that subtree.
+  [mxpv/openusd#203](https://github.com/mxpv/openusd/issues/203).
 - openusd-schemas' UsdGeom schema predates `model:cardVisibility` (fallback
   `inherited`), so `geomModel/cardVisibility` has no fallback.
+  [mxpv/openusd#203](https://github.com/mxpv/openusd/issues/203).
 - A value read as another type than authored. C++ `UsdAttribute::Get<T>`
   fails when the authored value type is not `T`, and UsdImaging answers its
   default: `GetXformVectors` reads a `float3` translate or a `double3`
@@ -155,22 +140,11 @@ the steps that land in this repository or depend on it.
   authored `vector3d[]` (ALab) gives no hint and an empty extent. openusd
   lets a schema's declared type win and casts the value
   (`XformCommonAPI::xform_vectors`, `Attribute::type_name`), so Moho
-  answers the values.
-- A single-path value (`Value::Path`, C++ `VtValue` holding an `SdfPath`).
-  Hydra types many fields as one `SdfPath`; Moho holds each as a
-  one-element `Value::PathVec` meanwhile (`crates/moho/src/data_source.rs`),
-  so a single path and a path array cannot be told apart.
-- `UsdColorSpaceAPI::ComputeColorSpaceName` and `GfColorSpace` (its
-  `IsValid` names, `ColorSpaceDefinitionAPI` lookups). Moho walks
-  `ColorSpaceAPI` and checks names against `GfColorSpace`'s table meanwhile
-  (`crates/moho/src/stage/primvars.rs`), without user-defined colour spaces.
+  answers the values. [mxpv/openusd#203](https://github.com/mxpv/openusd/issues/203).
 - `SdfPath::MakeRelativePath`. Moho builds a prototype-relative prim origin
   from the path's text meanwhile (`crates/moho/src/stage/prim_origin.rs`).
+  [mxpv/openusd#203](https://github.com/mxpv/openusd/issues/203).
 - A shader registry (Sdr, C++ `SdrRegistry`), so that a shader outside
   `id` mode resolves a node identifier from its source asset or code as
   UsdImaging's material data source does. Moho leaves it empty meanwhile
   (`crates/moho/src/stage/material.rs`).
-- Authored properties in C++'s order: `authored_attributes_in_namespace`
-  keeps composed order where `UsdPrim::GetAuthoredPropertiesInNamespace`
-  sorts into dictionary order first. Moho sorts material inputs and outputs
-  itself (`crates/moho/src/stage/material.rs`).

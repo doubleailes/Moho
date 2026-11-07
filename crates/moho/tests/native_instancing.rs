@@ -120,7 +120,7 @@ fn read(index: &dyn SceneIndex, path: &sdf::Path, locator: &str) -> Option<Value
 
 fn instancer_of(index: &dyn SceneIndex, instance: &str) -> sdf::Path {
     match read(index, &p(instance), "instance/instancer") {
-        Some(Value::PathVec(mut v)) => v.pop().unwrap(),
+        Some(Value::Path(path)) => path,
         other => panic!("{instance}: {other:?}"),
     }
 }
@@ -324,7 +324,7 @@ impl moho::data_source::Container for Switchable {
         }
         Some(container([(
             "niPrototypePath",
-            value(Value::PathVec(vec![p("/__Prototype_1")])),
+            value(Value::Path(p("/__Prototype_1"))),
         )]))
     }
 }
@@ -399,7 +399,7 @@ fn prototype_prims_keep_their_origin() {
     let f = fixture();
     let index = f.index.as_ref();
     let origin = |path: &sdf::Path| read(index, path, "primOrigin/scenePath");
-    assert_eq!(origin(&p("/world/a")), Some(Value::PathVec(vec![p("/world/a")])));
+    assert_eq!(origin(&p("/world/a")), Some(Value::Path(p("/world/a"))));
     let instancer = instancer_of(index, "/world/a");
     let Some(Value::PathVec(prototypes)) = read(index, &instancer, "instancerTopology/prototypes") else {
         panic!()
@@ -407,12 +407,12 @@ fn prototype_prims_keep_their_origin() {
     let geo = prototypes[0].append_path("geo").unwrap();
     assert_eq!(
         origin(&geo),
-        Some(Value::PathVec(vec![sdf::Path::new("geo").unwrap()])),
+        Some(Value::Path(sdf::Path::new("geo").unwrap())),
         "relative to the USD prototype's root"
     );
     assert_eq!(
         origin(&prototypes[0]),
-        Some(Value::PathVec(vec![sdf::Path::new(".").unwrap()])),
+        Some(Value::Path(sdf::Path::new(".").unwrap())),
         "the prototype root itself"
     );
 }
@@ -446,7 +446,7 @@ mod through_the_chain {
         )?
         .value()?
         {
-            Value::PathVec(mut v) => v.pop(),
+            Value::Path(path) => Some(path),
             _ => None,
         }
     }
@@ -684,9 +684,7 @@ def Scope "Looks"
         assert!(scope.name().unwrap().contains("_model"), "{scope}");
         assert_eq!(
             read(chain.as_ref(), &scope, "model/modelPath"),
-            Some(Value::PathVec(vec![
-                instancer.append_path("UsdNiPrototype").unwrap()
-            ]))
+            Some(Value::Path(instancer.append_path("UsdNiPrototype").unwrap()))
         );
     }
 
@@ -780,7 +778,8 @@ def Xform "world"
     stage_index.stage().unwrap().remove_prim("/world/a").unwrap();
     stage_index.apply_pending_updates();
     let notices = recorder.take();
-    // openusd composes /world/b under a new prototype: it is resynced.
+    // openusd keeps the prototype, as C++ `Usd_InstanceCache` does, and
+    // resyncs it: /world/b is added again.
     assert!(
         notices
             .iter()
@@ -817,5 +816,179 @@ def Xform "world"
             .all(|c| !c.name().unwrap_or_default().starts_with("__Prototype_")),
         "{:?}",
         chain.children(&sdf::Path::abs_root())
+    );
+}
+
+/// A payload holding two instances of `rock`, a prototype of its own.
+const ROCKS: &str = r#"#usda 1.0
+(
+    defaultPrim = "asset"
+)
+def Xform "asset"
+{
+    def Xform "i0" (
+        instanceable = true
+        references = </rock>
+    )
+    {
+    }
+    def Xform "i1" (
+        instanceable = true
+        references = </rock>
+    )
+    {
+    }
+}
+def Xform "rock"
+{
+    def Mesh "geo"
+    {
+    }
+}
+"#;
+
+/// Opens `root` with no payload loaded, under the standard chain, then loads
+/// `/world/a`. Returns the prims of the chain whose root prim is a USD
+/// prototype (`/__Prototype_N`), which the chain must never show.
+fn prototypes_shown_after_a_load(root: &str) -> Vec<sdf::Path> {
+    let dir = TempDir::new().unwrap();
+    dir.write("rocks.usda", ROCKS);
+    let root = dir.write("root.usda", root);
+    let usd = moho::stage::stage_builder()
+        .load(moho::openusd::usd::InitialLoadSet::LoadNone)
+        .open(root.to_str().unwrap())
+        .unwrap();
+    let stage_index = StageSceneIndex::new();
+    stage_index.set_stage(usd.clone());
+    let chain = moho::chain::standard(stage_index.clone());
+    usd.load("/world/a", moho::openusd::usd::LoadPolicy::WithDescendants)
+        .unwrap();
+    stage_index.apply_pending_updates();
+    walk(chain.as_ref(), &sdf::Path::abs_root())
+        .into_iter()
+        .filter(|path| {
+            path.root_prim_name()
+                .is_some_and(|name| name.starts_with("__Prototype_"))
+        })
+        .collect()
+}
+
+#[test]
+fn a_prototype_a_load_composes_stays_hidden() {
+    // No prototype before the load: the one the load composes is pruned, as
+    // UsdImaging's, which USD's load notice tells of it.
+    let shown = prototypes_shown_after_a_load(
+        r#"#usda 1.0
+def Xform "world"
+{
+    def Xform "a" (
+        payload = @./rocks.usda@
+    )
+    {
+    }
+}
+"#,
+    );
+    assert_eq!(shown, Vec::<sdf::Path>::new());
+}
+
+#[test]
+fn a_prototype_a_load_composes_beside_known_ones_stays_hidden() {
+    // A prototype populated before the load (`tree`), and a new one the load
+    // composes (`rock`): the new one is pruned too.
+    let shown = prototypes_shown_after_a_load(
+        r#"#usda 1.0
+def Xform "tree"
+{
+    def Mesh "geo"
+    {
+    }
+}
+def Xform "world"
+{
+    def Xform "t0" (
+        instanceable = true
+        references = </tree>
+    )
+    {
+    }
+    def Xform "t1" (
+        instanceable = true
+        references = </tree>
+    )
+    {
+    }
+    def Xform "a" (
+        payload = @./rocks.usda@
+    )
+    {
+    }
+}
+"#,
+    );
+    assert_eq!(shown, Vec::<sdf::Path>::new());
+}
+
+/// The `/__Prototype_N` prims the chain shows once `instance` of a stage
+/// where `/W/A` and `/W/B` reference `/Lib/P` is made instanceable.
+fn prototypes_shown_after_made_instanceable(b_instanceable: bool, instance: &str) -> Vec<sdf::Path> {
+    let (_dir, usd) = common::stage(&format!(
+        r#"#usda 1.0
+class "Lib"
+{{
+    def Xform "P"
+    {{
+        def Mesh "Body"
+        {{
+        }}
+    }}
+}}
+over "W"
+{{
+    def Xform "A" (
+        instanceable = false
+        references = </Lib/P>
+    )
+    {{
+    }}
+    def Xform "B" (
+        instanceable = {b_instanceable}
+        references = </Lib/P>
+    )
+    {{
+    }}
+}}
+"#
+    ));
+    let stage_index = StageSceneIndex::new();
+    stage_index.set_stage(usd.clone());
+    let chain = moho::chain::standard(stage_index.clone());
+    walk(chain.as_ref(), &sdf::Path::abs_root());
+    usd.prim(instance).unwrap().set_instanceable(true).unwrap();
+    stage_index.apply_pending_updates();
+    walk(chain.as_ref(), &sdf::Path::abs_root())
+        .into_iter()
+        .filter(|path| {
+            path.root_prim_name()
+                .is_some_and(|name| name.starts_with("__Prototype_"))
+        })
+        .collect()
+}
+
+#[test]
+fn the_first_prototype_an_edit_composes_stays_hidden() {
+    // USD's notice names `/__Prototype_1` beside `/W/A`; openusd's only
+    // `/W/A`. Hydra then shows no prototype at the root.
+    assert_eq!(
+        prototypes_shown_after_made_instanceable(false, "/W/A"),
+        Vec::<sdf::Path>::new()
+    );
+}
+
+#[test]
+fn an_instance_made_of_a_known_prototype_shows_no_prototype() {
+    assert_eq!(
+        prototypes_shown_after_made_instanceable(true, "/W/A"),
+        Vec::<sdf::Path>::new()
     );
 }

@@ -103,12 +103,13 @@ fn read(data: &ContainerHandle, locator: &[&str]) -> Option<Value> {
 
 /// The USD prototype an instance's data names (`niPrototypePath`), if any.
 fn usd_prototype(data: &ContainerHandle) -> Option<sdf::Path> {
-    path_vec(read(
+    match read(
         data,
         &[usd_prim_info::USD_PRIM_INFO, usd_prim_info::NI_PROTOTYPE_PATH],
-    ))
-    .into_iter()
-    .next()
+    ) {
+        Some(Value::Path(path)) => Some(path),
+        _ => None,
+    }
     .filter(|p| !p.is_empty())
 }
 
@@ -862,7 +863,7 @@ impl InstanceAggregationSceneIndex {
         let index = self.instance_index(&info, path);
         Some(
             RetainedContainer::new([
-                (t::INSTANCER, value(Value::PathVec(vec![info.instancer_path()]))),
+                (t::INSTANCER, value(Value::Path(info.instancer_path()))),
                 (t::PROTOTYPE_INDEX, value(0i32)),
                 (t::INSTANCE_INDEX, value(index)),
             ])

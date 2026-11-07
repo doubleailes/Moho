@@ -32,7 +32,7 @@ fn scene() -> std::rc::Rc<RetainedSceneIndex> {
             "materialBindings",
             container([(
                 "",
-                container([("path", value(Value::PathVec(vec![p("/looks/GlossyMat")])))]),
+                container([("path", value(Value::Path(p("/looks/GlossyMat"))))]),
             )]),
         ),
     ]);

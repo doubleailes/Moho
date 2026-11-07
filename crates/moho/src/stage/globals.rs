@@ -86,7 +86,7 @@ impl Adapter for SceneGlobalsAdapter {
         let mut entries = Vec::new();
         // Only when the stage authors a non-empty `renderSettingsPrimPath`.
         if let Ok(Some(path)) = Settings::stage_settings_path(stage) {
-            entries.push((t::ACTIVE_RENDER_SETTINGS_PRIM, value(Value::PathVec(vec![path]))));
+            entries.push((t::ACTIVE_RENDER_SETTINGS_PRIM, value(Value::Path(path))));
         }
         entries.extend([
             (t::START_TIME_CODE, value(stage.start_time_code())),

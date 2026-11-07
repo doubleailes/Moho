@@ -123,7 +123,7 @@ fn bound(chain: &Chain, path: &str, purpose: &str) -> Option<sdf::Path> {
     let data = chain.resolved.prim(&p(path)).data?;
     let value = locate(&data, &Locator::new(["materialBindings", purpose, "path"]))?.value()?;
     match value {
-        Value::PathVec(mut v) => v.pop(),
+        Value::Path(path) => Some(path),
         _ => None,
     }
 }

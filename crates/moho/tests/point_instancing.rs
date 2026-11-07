@@ -214,7 +214,7 @@ def Xform "world"
             .collect()
     };
     let native_instancer = match read(linking.as_ref(), &p("/world/a"), "instance/instancer") {
-        Some(Value::PathVec(mut v)) => v.pop().unwrap(),
+        Some(Value::Path(path)) => path,
         other => panic!("{other:?}"),
     };
     assert_eq!(
@@ -252,7 +252,7 @@ fn prototype_copies_keep_their_origin() {
     let geo = copies[0].append_path("geo").unwrap();
     assert_eq!(
         read(index.as_ref(), &geo, "primOrigin/scenePath"),
-        Some(Value::PathVec(vec![p("/world/scatter/protos/round/geo")])),
+        Some(Value::Path(p("/world/scatter/protos/round/geo"))),
         "the original prototype prim"
     );
 }
@@ -327,9 +327,7 @@ fn a_nested_instancer_is_reinstanced_in_every_copy() {
     assert_eq!(index.prim(&p("/world/outer/protos/tree/leaves")).ty, "");
     assert_eq!(
         read(index.as_ref(), &leaf, "primOrigin/scenePath"),
-        Some(Value::PathVec(vec![p(
-            "/world/outer/protos/tree/leaves/protos/leaf"
-        )]))
+        Some(Value::Path(p("/world/outer/protos/tree/leaves/protos/leaf")))
     );
 }
 
@@ -584,7 +582,7 @@ fn a_prototype_records_its_copies() {
             &round,
             &format!("__usdPrimInfo/piPropagatedPrototypes/{hash}")
         ),
-        Some(Value::PathVec(vec![round.append_path(hash).unwrap()]))
+        Some(Value::Path(round.append_path(hash).unwrap()))
     );
     assert_eq!(
         read(index.as_ref(), &round, "__usdPrimInfo/specifier"),

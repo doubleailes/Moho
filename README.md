@@ -20,26 +20,20 @@ already fits on the boundary: it depends on `openusd` and `openusd-schemas`
 only, names no consumer, follows Hydra and UsdImaging quirk for quirk, and
 shares openusd's license, edition and MSRV. What it still needs:
 
-1. **openusd changes merged.** Moho pins doubleailes/openusd's
-   `perf/walk-type-probe` for the reorder resync and
-   `AbstractData::holds_plain_data`. The type probe is upstream, where
-   `AbstractData::field_kind` replaced `holds_plain_data`; the reorder
-   resync is proposed from doubleailes/openusd's `fix/reorder-resync`. Once
-   it lands, the pin moves back to mxpv/openusd, with the walk read through
-   `field_kind`.
-2. **Ports moved into openusd.** openusd fixes a gap where the concept lives,
-   so the workarounds Moho carries become small upstream changes, each
-   deleting Moho's copy as it lands: the collection membership path
-   expression (`stage/collection.rs`), `SdfPath::MakeRelativePath`
-   (`stage/prim_origin.rs`), `ColorSpaceAPI` and `GfColorSpace`
-   (`stage/primvars.rs`), `TfHash::Combine` (`tf_hash.rs`), the memoized
-   `is_a`, the `typeName` resync and prototype resyncs (`stage/pending.rs`,
-   `stage/mod.rs`), sorted authored properties, and a single-path
-   `Value::Path`. The full list is under "Upstream candidates" in
-   `ROADMAP.md`.
-3. **A scope discussion.** openusd's README and roadmap do not cover imaging.
-   Open an issue with the design, the proposed layout and the parity results
-   before any large pull request.
+1. **openusd changes merged. Done.** Moho pins mxpv/openusd's main at the
+   `openusd-imaging` placeholder (`26c81d8`), which holds the reorder
+   resync, the asset path walk's plain data probe and the one-lookup
+   prototype root Moho's fork pin carried.
+2. **Ports moved into openusd. Done for mxpv/openusd#195.** Its eight pull
+   requests (#187 to #194) deleted Moho's copies: the memoized `is_a`,
+   sorted authored properties, the collection membership path expression,
+   `TfHash::Combine`'s hashing, a single-path `Value::Path`, `ColorSpaceAPI`
+   and `GfColorSpace`, the `typeName` resync, and the prototype resyncs.
+   What remains (`SdfPath::MakeRelativePath` in `stage/prim_origin.rs`,
+   among others) is under "Upstream candidates" in `ROADMAP.md`.
+3. **A scope discussion.** openusd now carries an `openusd-imaging`
+   placeholder crate. Agree the design, the layout and the parity results
+   with its maintainer before any large pull request.
 4. **A C++ layout.** Split Moho the way the C++ libraries are split: Hd
    (`scene_index`, `data_source`, `locator`, `schema`, `tokens`), Hdsi
    (`filter`) and UsdImaging (`stage`, `chain::standard`), as modules or

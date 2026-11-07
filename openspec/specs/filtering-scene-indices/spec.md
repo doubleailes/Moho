@@ -215,8 +215,8 @@ SHALL name `activeRenderPassPrim`, `activeRenderSettingsPrim`,
 `primaryCameraPrim`, `currentFrame`, `timeCodesPerSecond` and
 `sceneStateId`, whether set or not. A field the host has set SHALL read the
 value set, read live (a container obtained before a later set reads the new
-value), a prim path as a one-element path array (an empty path as an empty
-array); a field never set SHALL read what the input's `sceneGlobals` gives
+value), a prim path as a single path value (an empty path as the empty
+path); a field never set SHALL read what the input's `sceneGlobals` gives
 there, or nothing. The input root's other data and its other `sceneGlobals`
 fields (`startTimeCode`, `endTimeCode`) SHALL be kept. When the input has
 no root data, the root's data SHALL be the `sceneGlobals` container alone.
