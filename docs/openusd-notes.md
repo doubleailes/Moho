@@ -258,7 +258,10 @@ the root edit target (`crates/moho-spike/tests/probe.rs` asserts all of it):
   ExpandPrimsAndProperties, Exclude). `complete_membership_expression` resolves
   only an authored `membershipExpression` (as C++
   `ResolveCompleteMembershipExpression`): it is empty for an includes/excludes
-  collection.
+  collection. `rule_map_expression(&PathExpansionRuleMap) -> PathExpression`
+  (C++ `UsdComputePathExpressionFromCollectionMembershipQueryRuleMap`,
+  mxpv/openusd#189, since `26c81d8`) converts such a collection's rule map;
+  Moho ported it before.
 - Material networks (superseded in part by `hydra-parity-materials`
   below): `shade::Material::get(&Stage, path)`; `Connectable::outputs()`
   lists declared outputs too; `Shader::get`, `Connectable::authored_inputs()`;
@@ -527,10 +530,6 @@ Read at `d7d2a29`.
   one `LoadNone` stage only grew across Moana's 22 load/unload rounds
   (0.73 to 4.81 GiB), and the final unload freed nothing measurable
   (mxpv/openusd#173).
-- No counterpart of C++ `UsdComputePathExpressionFromCollectionMembershipQueryRuleMap`
-  (a rule-based collection as one path expression, which UsdImaging's
-  collection adapter uses). Moho ports it in `stage/collection.rs`, checked
-  against `MembershipQuery::is_included`.
 
 - `CollectionEvaluator::build` is `pub(super)`. No longer a gap for Moho:
   since `hydra-parity-chain` nothing reads USD collection membership
