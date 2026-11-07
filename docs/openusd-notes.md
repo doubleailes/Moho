@@ -26,6 +26,9 @@ parity changes of mxpv/openusd#195 (#187 to #194).
   each recomposed prim again alone (Hydra's resync of one prim), or removes
   its subtree when the stage no longer exposes it (`stage/pending.rs`,
   `apply_pending_updates`).
+- `tf::HashState` (C++ `Tf_HashState`, mxpv/openusd#190): `append(bytes)`
+  and `code()`. Moho's `TfHash::Combine` names (`ForInstancer%zx`,
+  `Primvars%zx`) use it in place of its own SpookyHash port (`tf_hash.rs`).
 - `SpecSite.layer` is an `sdf::LayerHandle`; its identifier is
   `layer.identifier()`.
 - Core metadata fields are typed: an attribute's `colorSpace` reads as a
