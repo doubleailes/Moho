@@ -303,8 +303,8 @@ comparison with Hydra:
 
 ### Loading and unloading
 
-Entries, Hydra against Moho (`main`, PR, and the PR with recomposed prims
-ignored), prototype names normalized. "=" is an identical edit, `H/M` the
+Entries, Hydra against Moho (`main`, the PR while it re-added recomposed
+prims, and the PR), prototype names normalized. "=" is an identical edit, `H/M` the
 two counts otherwise. The PR columns include the fix for prototypes a load
 composes (under "Fixed"); without it ALab's first load sent 738 entries
 and `load root` 41 651, light linking dirtying prototype prims the index
@@ -312,7 +312,7 @@ showed. isCoral's `load isCoral` now differs only in prototype numbers
 (29 `ForInstancer<hash>` names on each side, hashing `/__Prototype_N`
 paths numbered in another order after the earlier loads).
 
-| Scene, step | Hydra | main | PR | PR, recomposed ignored |
+| Scene, step | Hydra | main | PR, re-adding | PR |
 |---|---|---|---|---|
 | `flat`: load `a` | 2 | 3 | 3 | = |
 | `flat`: unload `a` | 2 | 3 | 3 | = |
@@ -353,12 +353,13 @@ paths, openusd's `Resynced` subtrees and recomposed prims):
 `/world` has no payload: it is loaded in USD before, between and after
 every step, and its data never changes, in Moho either. UsdImaging resyncs
 what USD names, so for a load or an unload below it Hydra sends nothing
-for `/world`; Moho adds it again. In `nested` (`/world` with a payload)
+for `/world`; Moho added it again until it stopped re-adding recomposed
+prims (under "Fixed"). In `nested` (`/world` with a payload)
 and on ALab (`/root` with one) openusd names the ancestor as a subtree and
 Moho matches Hydra wherever the stage does. Run again with unloaded prims
-included (`flat`, `nested`), the same three steps are identical once the
-recomposed prims are ignored, and `unload world` misses `/world` and
-`/world/b` (with the re-add, `/world/b` only).
+included (`flat`, `nested`), the same three steps are identical without
+the re-add, and `unload world` misses `/world` and `/world/b` (with the
+re-add, `/world/b` only).
 
 ## Remaining differences
 
@@ -447,8 +448,9 @@ Notices (all openusd's authoring, not the index; upstream candidates):
   `main`.
 - **An unload above the payloads** (`Unload("/world")`, `/world` without a
   payload) is reported as the payloads unloaded and `/world` recomposed
-  in place; USD resyncs `/world`, which Hydra adds again. Moho adds it
-  again only through the re-add of recomposed prims (see (c)).
+  in place; USD resyncs `/world`, which Hydra adds again. Moho, which
+  reads a recomposed prim again without a notice, sends no entry for it
+  (`flat`: 2 of Hydra's 3).
 
 Hydra artifacts, exempted (deterministic in Hydra, not reproduced;
 decided after a targeted check, `isCoral` and two minimal fixtures):
@@ -495,26 +497,8 @@ data as the only addition; listed here pending that decision.
 
 ### (c) Real divergences
 
-Introduced by PR #39, not fixed in it (the second one it introduced is
-under "Fixed"):
+Introduced by PR #39: none left open (both are under "Fixed").
 
-- **A prim recomposed in place is added again.** openusd reports the
-  ancestor of a loaded or unloaded payload that has no payload of its own
-  as recomposed in place (`Resynced::prims`, `CommittedChange::recomposed`);
-  USD names no such path, and Hydra sends nothing for it. Moho adds the
-  prim again alone (`StageSceneIndex::apply_pending_updates`), an extra
-  `ADDED` on each load, unload or `LoadAndUnload` below it (`flat`: 3 of
-  6 steps; isCoral: 3 of 6). With recomposed prims ignored, every
-  generated and hand edit is unchanged, and the load steps go from 2 to 4
-  identical of 6 on `flat` and from 0 to 2 on isCoral; one step loses an
-  entry Hydra sends (`flat` and isCoral, an unload of the payloads'
-  parent: the openusd notice above). Fix: in `stage/pending.rs`,
-  `Recorder::after_commit` and `Pending::record_resynced` stop recording
-  `CommittedChange::recomposed` and `Resynced::prims`; the recomposed
-  block of `apply_pending_updates` (`stage/mod.rs`, `Pending::recomposed`,
-  `settle`) goes, and `tests/stage.rs`'s
-  `loading_one_payload_leaves_its_siblings` expects `/world/a` and
-  `/world/a/geo` only.
 Left unchanged by the PR (also on `main`):
 
 - **A resynced subtree's descendants are not dirtied when nothing was
@@ -589,6 +573,19 @@ Each with a test, one concern per commit:
   differ by known entries (Hydra's `REMOVED /__Prototype_N/...`, and
   openusd's resync of every instance); no generated, hand or load step
   changed.
+- A prim recomposed in place is no longer added again. openusd reports
+  the ancestor of a loaded or unloaded payload that has no payload of its
+  own as recomposed in place (`Resynced::prims`,
+  `CommittedChange::recomposed`); USD names no such path, and Hydra sends
+  nothing for it, where Moho added the prim again alone, an extra `ADDED`
+  on each load, unload or `LoadAndUnload` below it. The stage index now
+  reads what it held for the prim again without a notice (openusd says its
+  own composition may have changed), and still removes its subtree when
+  the stage no longer exposes it. The load steps went from 2 to 4
+  identical of 6 on `flat` and from 0 to 2 on isCoral; an unload of the
+  payloads' parent now misses Hydra's `ADDED` for it (openusd reports it
+  recomposed where USD resyncs it, mxpv/openusd#203); no generated or
+  hand edit changed.
 
 The fourth open gap, the stage-level `includeRoot` edit's two entries, is
 openusd's authoring (see "A new spec is one resync"): with USD's two
