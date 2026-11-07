@@ -150,3 +150,35 @@ fn unloaded_prims_included() {
     assert!(!with_unloaded.prim(&p("/world/elem/geo")).is_defined());
     assert!(with_unloaded.children(&p("/world/elem")).is_empty());
 }
+
+#[test]
+fn loading_one_payload_leaves_its_siblings() {
+    let dir = TempDir::new().unwrap();
+    dir.write("element.usda", "#usda 1.0\n(\n    defaultPrim = \"element\"\n)\ndef Xform \"element\"\n{\n    def Mesh \"geo\"\n    {\n    }\n}\n");
+    let root = dir.write(
+        "root.usda",
+        "#usda 1.0\ndef Xform \"world\"\n{\n    def Xform \"a\" (\n        payload = @./element.usda@\n    )\n    {\n    }\n    def Xform \"b\" (\n        payload = @./element.usda@\n    )\n    {\n    }\n}\n",
+    );
+    let usd = moho::stage::stage_builder()
+        .load(moho::openusd::usd::InitialLoadSet::LoadNone)
+        .open(root.to_str().unwrap())
+        .unwrap();
+    let index = StageSceneIndex::new();
+    index.set_include_unloaded_prims(true);
+    index.set_stage(usd.clone());
+    let recorder = RecordingObserver::on(index.as_ref());
+    usd.load("/world/a", moho::openusd::usd::LoadPolicy::WithDescendants)
+        .unwrap();
+    index.apply_pending_updates();
+    // The loaded prim is resynced with its subtree; `/world`, whose loaded
+    // state flipped with no payload of its own, is added again alone, and
+    // `/world/b` is not notified.
+    assert_eq!(
+        recorder.take(),
+        [
+            added("/world/a", ""),
+            added("/world/a/geo", "mesh"),
+            added("/world", ""),
+        ]
+    );
+}

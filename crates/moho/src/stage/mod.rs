@@ -140,7 +140,9 @@ impl Container for PrimContainer {
 
 struct Current {
     stage: Stage,
-    sink: StageSinkId,
+    /// The sink recording the stage's changes, `None` when the stage refused
+    /// it (`Stage::add_sink` fails while an edit of its layers is pending).
+    sink: Option<StageSinkId>,
     pending: Rc<RefCell<Pending>>,
 }
 
@@ -214,8 +216,12 @@ impl StageSceneIndex {
     pub fn set_stage(&self, stage: Stage) {
         let previous = self.current.borrow_mut().take();
         let had_stage = previous.is_some();
-        if let Some(previous) = previous {
-            previous.stage.remove_sink(previous.sink);
+        if let Some(previous) = previous
+            && let Some(sink) = previous.sink
+        {
+            // A stage busy with an edit keeps the sink, which records into a
+            // queue nothing reads any more.
+            let _ = previous.stage.remove_sink(sink);
         }
         self.cache.borrow_mut().clear();
         self.children.borrow_mut().clear();
@@ -232,7 +238,7 @@ impl StageSceneIndex {
             self.globals.time.set(TimeCode::EARLIEST);
         }
         let pending = Rc::new(RefCell::new(Pending::default()));
-        let sink = stage.add_sink(Recorder(pending.clone()));
+        let sink = stage.add_sink(Recorder(pending.clone())).ok();
         *self.current.borrow_mut() = Some(Current { stage, sink, pending });
         let added = self.populate(&sdf::Path::abs_root());
         self.observers.send_added(self, &added);
@@ -316,7 +322,7 @@ impl StageSceneIndex {
     /// adapters map them to. Property changes under a resynced prim are
     /// folded into its resync.
     pub fn apply_pending_updates(&self) {
-        let Some(pending) = self
+        let Some(mut pending) = self
             .current
             .borrow()
             .as_ref()
@@ -324,6 +330,7 @@ impl StageSceneIndex {
         else {
             return;
         };
+        pending.settle();
         // A prim's own field may reorder its children (`primOrder`): the
         // children held for it are read again, without a notice, as they
         // were on every call before they were held.
@@ -382,6 +389,39 @@ impl StageSceneIndex {
                     .map(|path| Removed { path }),
             );
             added.extend(now);
+        }
+        // A prim recomposed in place, with nothing beneath it implied (the
+        // ancestor whose loaded state a load flips): added again alone,
+        // Hydra's resync of one prim, or removed with its subtree when the
+        // stage no longer exposes it.
+        if !pending.recomposed.is_empty()
+            && let Some(stage) = self.stage()
+        {
+            for path in &pending.recomposed {
+                self.cache.borrow_mut().remove(path);
+                let held = self.populated.borrow().contains(path);
+                if Self::exposes(&stage, path, self.predicate()) {
+                    self.children.borrow_mut().remove(path);
+                    if held {
+                        let ty = self.prim(path).ty;
+                        added.push(Added {
+                            path: path.clone(),
+                            ty,
+                        });
+                    }
+                } else if held {
+                    self.forget_under(path);
+                    self.globals.forget_under(path);
+                    let mut populated = self.populated.borrow_mut();
+                    removed.extend(
+                        populated
+                            .iter()
+                            .filter(|p| p.has_prefix(path))
+                            .map(|p| Removed { path: p.clone() }),
+                    );
+                    populated.retain(|p| !p.has_prefix(path));
+                }
+            }
         }
         // Workaround, an upstream candidate in `ROADMAP.md`: when an edit
         // retires a prototype (its source instance went), openusd composes

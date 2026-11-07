@@ -6,13 +6,17 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
 
 use openusd::sdf;
-use openusd::usd::{CommittedChange, Stage, StageSink};
+use openusd::usd::{CommittedChange, Resynced, Stage, StageSink};
 
 /// What changed on the stage since updates were last applied.
 #[derive(Default)]
 pub struct Pending {
     /// Prims whose subtree must be repopulated.
     pub resynced: BTreeSet<sdf::Path>,
+    /// Prims recomposed in place (openusd's `recomposed` and `Resynced::prims`),
+    /// none of them at or under a resynced prim once
+    /// [`settle`](Self::settle)d: each is added again alone.
+    pub recomposed: BTreeSet<sdf::Path>,
     /// Per prim, the properties whose spec appeared or vanished.
     pub resynced_properties: BTreeMap<sdf::Path, BTreeSet<String>>,
     /// Per prim, the properties whose value or metadata changed.
@@ -57,6 +61,19 @@ impl Pending {
         }
     }
 
+    /// A notice's subtree resyncs and the prims it recomposed in place.
+    fn record_resynced(&mut self, resynced: Resynced<'_>) {
+        self.record(resynced.subtrees, &[]);
+        self.recomposed.extend(resynced.prims.iter().cloned());
+    }
+
+    /// Drops the recomposed prims a resync covers, which repopulating it
+    /// adds again: notices from separate commits may overlap.
+    pub fn settle(&mut self) {
+        let roots = self.resync_roots();
+        self.recomposed.retain(|p| !roots.iter().any(|r| p.has_prefix(r)));
+    }
+
     /// The resynced prims, minimal in ancestors.
     pub fn resync_roots(&self) -> Vec<sdf::Path> {
         let mut roots: Vec<sdf::Path> = Vec::new();
@@ -88,14 +105,23 @@ impl StageSink for Recorder {
             .collect();
         let mut pending = self.0.borrow_mut();
         pending.record(change.resynced, change.changed_info_only);
+        pending.recomposed.extend(change.recomposed.iter().cloned());
         pending.record(&retyped, &[]);
     }
 
-    fn load_rules_changed(&self, _stage: &Stage, resynced: &[sdf::Path]) {
-        self.0.borrow_mut().record(resynced, &[]);
+    fn load_rules_changed(&self, _stage: &Stage, resynced: Resynced<'_>) {
+        self.0.borrow_mut().record_resynced(resynced);
     }
 
-    fn layer_muting_changed(&self, _stage: &Stage, _layer: &str, _muted: bool, resynced: &[sdf::Path]) {
-        self.0.borrow_mut().record(resynced, &[]);
+    fn layer_muting_changed(&self, _stage: &Stage, _layer: &str, _muted: bool, resynced: Resynced<'_>) {
+        self.0.borrow_mut().record_resynced(resynced);
+    }
+
+    fn loads_retried(&self, _stage: &Stage, resynced: Resynced<'_>) {
+        self.0.borrow_mut().record_resynced(resynced);
+    }
+
+    fn recomposed(&self, _stage: &Stage, resynced: Resynced<'_>) {
+        self.0.borrow_mut().record_resynced(resynced);
     }
 }
