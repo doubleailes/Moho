@@ -34,9 +34,8 @@ pub mod volume;
 pub mod xform;
 
 use std::cell::{Cell, RefCell};
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet};
 use std::rc::{Rc, Weak};
-use std::sync::Arc;
 
 use openusd::sdf;
 use openusd::tf::Token;
@@ -687,32 +686,9 @@ impl StageSceneIndex {
 }
 
 /// Whether `prim`'s schema type is `schema` or derives from it (C++
-/// `UsdPrim::IsA`), as `usd::Prim::is_a` answers, remembered per schema
-/// registry, schema type and `schema`.
-///
-/// Workaround, an upstream candidate in `ROADMAP.md`: openusd's
-/// `SchemaRegistry::is_a` walks the base graph with a fresh hash set on
-/// every call, which made it most of the cost of `prim()` and `children()`.
-/// The base graph is fixed once a registry is built, so the answer is too.
+/// `UsdPrim::IsA`); `false` when the prim cannot be read.
 pub(crate) fn is_a(prim: &usd::Prim, schema: &'static str) -> bool {
-    type Answers = HashMap<(Token, &'static str), bool>;
-    thread_local! {
-        static ANSWERS: RefCell<Option<(Arc<usd::SchemaRegistry>, Answers)>> = const { RefCell::new(None) };
-    }
-    let Ok(info) = prim.prim_type_info() else {
-        return false;
-    };
-    let registry = prim.stage().schema_registry();
-    ANSWERS.with_borrow_mut(|answers| {
-        // Holding the registry keeps its address from being reused.
-        let (_, answers) = match answers {
-            Some(held) if Arc::ptr_eq(&held.0, registry) => held,
-            _ => answers.insert((registry.clone(), HashMap::new())),
-        };
-        *answers
-            .entry((info.schema_type_name().clone(), schema))
-            .or_insert_with(|| registry.is_a(info.schema_type_name(), &Token::from(schema)))
-    })
+    prim.is_a(schema).unwrap_or(false)
 }
 
 /// Whether `prim` is a `Material`.
