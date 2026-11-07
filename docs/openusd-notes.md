@@ -91,7 +91,7 @@ layer reorders.
   them implied.
 - `CommittedChange::changed_fields(&self, path: &sdf::Path) -> impl
   Iterator<Item = &tf::Token>`: the fields authored at a stage path by the
-  edit (C++ `GetChangedFields`); Moho reads `typeName` from it.
+  edit (C++ `GetChangedFields`).
 - `Stage::apply_diff(&self, diff: &Diff, mode: ApplyMode<'_>) ->
   Result<(), StageAuthoringError>` (`diff.rs`). `ApplyMode::ExactLayer(identifier)`
   replays onto the named layer of the stage.
@@ -550,15 +550,12 @@ Read at `d7d2a29`.
   UsdImaging re-reads the asset-path-dependent data under those paths; Moho
   cannot learn of them.
 - `CommittedChange::changed_info_only` names the paths; their fields come
-  from `CommittedChange::changed_fields` (C++ `GetChangedFields`), which
-  Moho reads only for `typeName`. UsdImaging resyncs a prim for a plugin
-  field and ignores built-in ones; Moho ignores every other prim-level
-  info-only change, so a plugin field's resync (a `renderSettingsPrimPath`
-  edit, chiefly) is missed (`stage/pending.rs`).
-- A `typeName` edit is info-only in openusd (`pcp/change.rs`), a resync in
-  USD (`stage.cpp`: prim type info changes are "treated as recomposed as
-  far as notification is concerned"). Moho promotes it to a resync
-  (`stage/pending.rs`).
+  from `CommittedChange::changed_fields` (C++ `GetChangedFields`).
+  UsdImaging resyncs a prim for a plugin field and ignores built-in ones;
+  openusd already resyncs for the fields `UsdStage` does (`typeName`,
+  `kind`, ...), and Moho ignores every other prim-level info-only change,
+  so a plugin field's resync (a `renderSettingsPrimPath` edit, chiefly) is
+  missed (`stage/pending.rs`).
 - Removing the instance a prototype was composed from retires the
   prototype: openusd composes the remaining instances under a new
   `/__Prototype_N` and reports only the retired one (and the removed
