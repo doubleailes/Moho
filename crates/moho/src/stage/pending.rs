@@ -15,7 +15,8 @@ pub struct Pending {
     pub resynced: BTreeSet<sdf::Path>,
     /// Prims recomposed in place (openusd's `recomposed` and `Resynced::prims`),
     /// none of them at or under a resynced prim once
-    /// [`settle`](Self::settle)d: each is added again alone.
+    /// [`settle`](Self::settle)d: what is held for each is read again,
+    /// without a notice.
     pub recomposed: BTreeSet<sdf::Path>,
     /// Per prim, the properties whose spec appeared or vanished.
     pub resynced_properties: BTreeMap<sdf::Path, BTreeSet<String>>,

@@ -170,15 +170,12 @@ fn loading_one_payload_leaves_its_siblings() {
     usd.load("/world/a", moho::openusd::usd::LoadPolicy::WithDescendants)
         .unwrap();
     index.apply_pending_updates();
-    // The loaded prim is resynced with its subtree; `/world`, whose loaded
-    // state flipped with no payload of its own, is added again alone, and
-    // `/world/b` is not notified.
+    // The loaded prim is resynced with its subtree, as USD names it alone.
+    // `/world`, which openusd reports recomposed in place (its loaded state
+    // flipped, with no payload of its own), is not notified, nor is
+    // `/world/b`.
     assert_eq!(
         recorder.take(),
-        [
-            added("/world/a", ""),
-            added("/world/a/geo", "mesh"),
-            added("/world", ""),
-        ]
+        [added("/world/a", ""), added("/world/a/geo", "mesh")]
     );
 }
