@@ -63,7 +63,7 @@ fn value(index: &dyn SceneIndex, path: &str, locator: Locator) -> Option<Value> 
 
 fn single(value: Option<Value>) -> Option<sdf::Path> {
     match value? {
-        Value::PathVec(mut v) => v.pop(),
+        Value::Path(path) => Some(path),
         _ => None,
     }
 }
@@ -122,12 +122,12 @@ fn other_paths_and_data_are_left_alone() {
         "a path naming a prim of the index"
     );
     assert_eq!(
-        single(value(
+        value(
             chain.as_ref(),
             "/world/mesh",
             Locator::parse("__usdRelationships/myRenderer:target/targets")
-        )),
-        Some(p("/world/inst/Looks/red")),
+        ),
+        Some(Value::PathVec(vec![p("/world/inst/Looks/red")])),
         "only usdMaterialBindings is translated"
     );
 }

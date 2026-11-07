@@ -52,7 +52,7 @@ fn authored_globals() {
     assert_eq!(up_axis(AUTHORED), Some(Value::Token(Token::from("Z"))));
     assert_eq!(
         globals(AUTHORED, "activeRenderSettingsPrim"),
-        Some(Value::PathVec(vec![p("/Render/final")]))
+        Some(Value::Path(p("/Render/final")))
     );
 }
 

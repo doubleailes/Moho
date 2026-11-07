@@ -73,7 +73,7 @@ fn a_direct_binding() {
     let all = element(&data, "");
     assert_eq!(
         read(&all, "directMaterialBinding/materialPath").unwrap().value(),
-        Some(Value::PathVec(vec![p("/Looks/red")]))
+        Some(Value::Path(p("/Looks/red")))
     );
     assert_eq!(
         read(&all, "directMaterialBinding/bindingStrength")
@@ -86,7 +86,7 @@ fn a_direct_binding() {
         read(&preview, "directMaterialBinding/materialPath")
             .unwrap()
             .value(),
-        Some(Value::PathVec(vec![p("/Looks/blue")]))
+        Some(Value::Path(p("/Looks/blue")))
     );
     let purposes = read(&data, "usdMaterialBindings")
         .unwrap()
@@ -121,7 +121,7 @@ fn a_collection_binding() {
     let binding = binding.as_container().unwrap();
     assert_eq!(
         read(binding, "collectionPrimPath").unwrap().value(),
-        Some(Value::PathVec(vec![p("/world")]))
+        Some(Value::Path(p("/world")))
     );
     assert_eq!(
         read(binding, "collectionName").unwrap().value(),
@@ -129,7 +129,7 @@ fn a_collection_binding() {
     );
     assert_eq!(
         read(binding, "materialPath").unwrap().value(),
-        Some(Value::PathVec(vec![p("/Looks/chrome")]))
+        Some(Value::Path(p("/Looks/chrome")))
     );
     assert_eq!(
         read(binding, "bindingStrength").unwrap().value(),

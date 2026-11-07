@@ -75,7 +75,7 @@ fn read(container: &ContainerHandle, locator: &str) -> Option<Value> {
 fn settings_with_products() {
     let (_dir, _stage, flat) = setup();
     let s = settings(flat.as_ref());
-    assert_eq!(read(&s, "camera"), Some(Value::PathVec(vec![p("/cam")])));
+    assert_eq!(read(&s, "camera"), Some(Value::Path(p("/cam"))));
     assert_eq!(
         read(&s, "resolution"),
         None,
@@ -111,13 +111,10 @@ fn settings_with_products() {
     );
 
     let beauty = element(&s, "renderProducts", 0);
-    assert_eq!(
-        read(&beauty, "path"),
-        Some(Value::PathVec(vec![p("/Render/beauty")]))
-    );
+    assert_eq!(read(&beauty, "path"), Some(Value::Path(p("/Render/beauty"))));
     assert_eq!(
         read(&beauty, "cameraPrim"),
-        Some(Value::PathVec(vec![p("/cam")])),
+        Some(Value::Path(p("/cam"))),
         "the settings' camera"
     );
     assert_eq!(
@@ -136,7 +133,7 @@ fn settings_with_products() {
 fn a_product_overrides_the_camera_and_resolution() {
     let (_dir, _stage, flat) = setup();
     let aovs = element(&settings(flat.as_ref()), "renderProducts", 1);
-    assert_eq!(read(&aovs, "cameraPrim"), Some(Value::PathVec(vec![p("/cam2")])));
+    assert_eq!(read(&aovs, "cameraPrim"), Some(Value::Path(p("/cam2"))));
     assert_eq!(
         read(&aovs, "resolution"),
         Some(Value::Vec2i(gf::Vec2i { x: 960, y: 540 }))
@@ -152,10 +149,7 @@ fn vars_in_order() {
     assert_eq!(read(&color, "sourceName"), Some(Value::Token("Ci".into())));
     assert_eq!(read(&color, "dataType"), Some(Value::Token("color3f".into())));
     assert_eq!(read(&depth, "sourceName"), Some(Value::Token("z".into())));
-    assert_eq!(
-        read(&color, "path"),
-        Some(Value::PathVec(vec![p("/Render/color")]))
-    );
+    assert_eq!(read(&color, "path"), Some(Value::Path(p("/Render/color"))));
 }
 
 #[test]
@@ -250,7 +244,7 @@ fn the_settings_declare_their_dependencies() {
     let camera = camera.as_container().unwrap();
     assert_eq!(
         read(camera, "dependedOnPrimPath"),
-        Some(Value::PathVec(vec![p("/Render/settings")]))
+        Some(Value::Path(p("/Render/settings")))
     );
     assert_eq!(
         read(camera, "dependedOnDataSourceLocator"),
@@ -303,7 +297,7 @@ fn a_pass_and_its_source() {
     let data = flat.prim(&p("/Render/pass")).data.unwrap();
     assert_eq!(
         read(&data, "renderPass/renderSource"),
-        Some(Value::PathVec(vec![p("/Render/settings")]))
+        Some(Value::Path(p("/Render/settings")))
     );
 }
 

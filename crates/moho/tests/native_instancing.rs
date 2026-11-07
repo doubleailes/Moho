@@ -120,7 +120,7 @@ fn read(index: &dyn SceneIndex, path: &sdf::Path, locator: &str) -> Option<Value
 
 fn instancer_of(index: &dyn SceneIndex, instance: &str) -> sdf::Path {
     match read(index, &p(instance), "instance/instancer") {
-        Some(Value::PathVec(mut v)) => v.pop().unwrap(),
+        Some(Value::Path(path)) => path,
         other => panic!("{instance}: {other:?}"),
     }
 }
@@ -324,7 +324,7 @@ impl moho::data_source::Container for Switchable {
         }
         Some(container([(
             "niPrototypePath",
-            value(Value::PathVec(vec![p("/__Prototype_1")])),
+            value(Value::Path(p("/__Prototype_1"))),
         )]))
     }
 }
@@ -399,7 +399,7 @@ fn prototype_prims_keep_their_origin() {
     let f = fixture();
     let index = f.index.as_ref();
     let origin = |path: &sdf::Path| read(index, path, "primOrigin/scenePath");
-    assert_eq!(origin(&p("/world/a")), Some(Value::PathVec(vec![p("/world/a")])));
+    assert_eq!(origin(&p("/world/a")), Some(Value::Path(p("/world/a"))));
     let instancer = instancer_of(index, "/world/a");
     let Some(Value::PathVec(prototypes)) = read(index, &instancer, "instancerTopology/prototypes") else {
         panic!()
@@ -407,12 +407,12 @@ fn prototype_prims_keep_their_origin() {
     let geo = prototypes[0].append_path("geo").unwrap();
     assert_eq!(
         origin(&geo),
-        Some(Value::PathVec(vec![sdf::Path::new("geo").unwrap()])),
+        Some(Value::Path(sdf::Path::new("geo").unwrap())),
         "relative to the USD prototype's root"
     );
     assert_eq!(
         origin(&prototypes[0]),
-        Some(Value::PathVec(vec![sdf::Path::new(".").unwrap()])),
+        Some(Value::Path(sdf::Path::new(".").unwrap())),
         "the prototype root itself"
     );
 }
@@ -446,7 +446,7 @@ mod through_the_chain {
         )?
         .value()?
         {
-            Value::PathVec(mut v) => v.pop(),
+            Value::Path(path) => Some(path),
             _ => None,
         }
     }
@@ -684,9 +684,7 @@ def Scope "Looks"
         assert!(scope.name().unwrap().contains("_model"), "{scope}");
         assert_eq!(
             read(chain.as_ref(), &scope, "model/modelPath"),
-            Some(Value::PathVec(vec![
-                instancer.append_path("UsdNiPrototype").unwrap()
-            ]))
+            Some(Value::Path(instancer.append_path("UsdNiPrototype").unwrap()))
         );
     }
 

@@ -85,7 +85,7 @@ impl PrimInfo {
                     return None;
                 }
                 let prototype = prim.prototype().ok()??;
-                Some(value(Value::PathVec(vec![prototype])))
+                Some(value(Value::Path(prototype)))
             }
             t::IS_NI_PROTOTYPE => {
                 (prim.is_prototype().unwrap_or(false) && self.ctx.path.is_root_prim()).then(|| value(true))

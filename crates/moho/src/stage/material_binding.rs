@@ -31,7 +31,7 @@ fn strength(strength: BindingStrength) -> DataSource {
 }
 
 fn path(path: &sdf::Path) -> DataSource {
-    value(Value::PathVec(vec![path.clone()]))
+    value(Value::Path(path.clone()))
 }
 
 /// One purpose's opinions on this prim, one level naming both kinds of

@@ -163,7 +163,7 @@ fn first_target(prim: &usd::Prim, name: &str) -> Option<DataSource> {
         .ok()?
         .into_iter()
         .next()?;
-    Some(value(Value::PathVec(vec![target])))
+    Some(value(Value::Path(target)))
 }
 
 /// Every forwarded target of a relationship, as a path array.

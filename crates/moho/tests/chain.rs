@@ -163,7 +163,7 @@ fn values_through_the_chain_equal_openusd() {
             .unwrap()
             .map(|m| m.prim().path().clone());
         let got = match resolved(chain.as_ref(), path) {
-            Some(Value::PathVec(mut v)) => v.pop(),
+            Some(Value::Path(path)) => Some(path),
             _ => None,
         };
         assert_eq!(got, bound, "{path}");
@@ -193,7 +193,7 @@ fn values_through_the_chain_equal_openusd() {
     );
     assert_eq!(
         read(chain.as_ref(), "/world/smoke", "volumeFieldBinding/density"),
-        Some(Value::PathVec(vec![p("/world/smoke/density")]))
+        Some(Value::Path(p("/world/smoke/density")))
     );
     let settings = chain.prim(&p("/Render/settings")).data.unwrap();
     let products = locate(&settings, &Locator::parse("renderSettings/renderProducts")).unwrap();
@@ -306,7 +306,7 @@ fn each_family_edit_dirties_its_locators() {
     );
     assert_eq!(
         resolved(chain.as_ref(), "/world/geo"),
-        Some(Value::PathVec(vec![p("/Looks/blue")]))
+        Some(Value::Path(p("/Looks/blue")))
     );
 }
 
@@ -423,7 +423,7 @@ fn the_standard_chain_composes_and_links_no_lights() {
     };
     let instance = copy.append_path("inst").unwrap();
     let instancer = match read(chain.as_ref(), instance.as_str(), "instance/instancer") {
-        Some(Value::PathVec(mut v)) => v.pop().unwrap(),
+        Some(Value::Path(path)) => path,
         other => panic!("{other:?}"),
     };
     assert_eq!(
@@ -432,7 +432,7 @@ fn the_standard_chain_composes_and_links_no_lights() {
     );
     // A binding on an instance reaches its prototype's mesh.
     let instancer = match read(chain.as_ref(), "/world/a", "instance/instancer") {
-        Some(Value::PathVec(mut v)) => v.pop().unwrap(),
+        Some(Value::Path(path)) => path,
         other => panic!("{other:?}"),
     };
     let prototype = match read(chain.as_ref(), instancer.as_str(), "instancerTopology/prototypes") {
@@ -442,7 +442,7 @@ fn the_standard_chain_composes_and_links_no_lights() {
     let geo = prototype.append_path("geo").unwrap();
     assert_eq!(
         resolved(chain.as_ref(), geo.as_str()),
-        Some(Value::PathVec(vec![p("/Looks/red")]))
+        Some(Value::Path(p("/Looks/red")))
     );
     // Render settings are flattened.
     let settings = chain.prim(&p("/Render/settings")).data.unwrap();

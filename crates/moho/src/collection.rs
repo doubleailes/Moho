@@ -246,7 +246,7 @@ fn has_material_binding(prim: &Prim, material: &str) -> bool {
         .and_then(|binding| binding.as_container()?.get(&Token::from(material_bindings::PATH)))
         .and_then(|path| path.value());
     match path {
-        Some(Value::PathVec(paths)) => paths.first().is_some_and(|p| p.as_str().contains(material)),
+        Some(Value::Path(path)) => path.as_str().contains(material),
         _ => false,
     }
 }

@@ -163,14 +163,10 @@ fn a_native_instance_names_its_prototype_only() {
     let (_dir, usd) = stage(VARIANTS);
     let index = StageSceneIndex::new();
     index.set_stage(usd);
-    let Some(Value::PathVec(prototype)) = info(&index, "/instance", "niPrototypePath") else {
+    let Some(Value::Path(prototype)) = info(&index, "/instance", "niPrototypePath") else {
         panic!()
     };
-    assert_eq!(prototype.len(), 1);
-    assert!(
-        prototype[0].as_str().starts_with("/__Prototype_"),
-        "{prototype:?}"
-    );
+    assert!(prototype.as_str().starts_with("/__Prototype_"), "{prototype:?}");
     let names = index
         .prim(&p("/instance"))
         .data
@@ -192,7 +188,7 @@ fn a_native_instance_names_its_prototype_only() {
     ];
     assert!(names.iter().all(|n| schema.contains(&n.as_str())), "{names:?}");
     assert_eq!(
-        info(&index, prototype[0].as_str(), "isNiPrototype"),
+        info(&index, prototype.as_str(), "isNiPrototype"),
         Some(Value::Bool(true))
     );
 }
