@@ -102,7 +102,11 @@ removed, and a prim added and removed under the referenced asset
 instances are USD's: `/world/b`, `/world/a`, `Hook_3`). And on a stage
 opened `LoadNone` (ALab, isCoral, `flat`, `nested`): load one payload,
 unload it, `LoadAndUnload` two siblings, load one already loaded while
-unloading the other, unload the payloads' parent, load it.
+unloading the other, unload the payloads' parent, load it. Afterwards,
+from Rekall's IPR (which rebuilt its index after any `instanceable` edit
+to avoid a prototype left at the root): a class referenced by two prims,
+each of the five `instanceable` toggles between them, the index compared
+after the edit with Hydra's.
 
 ## Results per scene
 
@@ -570,6 +574,20 @@ Each with a test, one concern per commit:
   index now resyncs each prototype it has not populated (a workaround, an
   upstream candidate): after one load ALab, isCoral and both minimal
   fixtures hold Hydra's prims, and no generated or hand edit changed.
+- A prototype an edit composes is added, and pruned. The same openusd
+  gap for edits, which no generated edit makes (they make instances
+  non-instanceable): a prim made the first instance of its prototype is
+  reported alone, where USD's notice also names `/__Prototype_1`, so the
+  root showed the prototype and its prims (on `main` too). The stage index
+  now also resyncs, after any resync, the unpopulated prototype of each
+  instance it repopulates, one lookup per prim (`Stage::prototypes()`
+  walks the stage after an edit); the stage-wide check stays for loads,
+  which can compose a prototype no prim instances (ALab's
+  `/__Prototype_382`). The five toggles now leave Hydra's prims; the edits
+  that make an instance non-instanceable still
+  differ by known entries (Hydra's `REMOVED /__Prototype_N/...`, and
+  openusd's resync of every instance); no generated, hand or load step
+  changed.
 
 The fourth open gap, the stage-level `includeRoot` edit's two entries, is
 openusd's authoring (see "A new spec is one resync"): with USD's two
