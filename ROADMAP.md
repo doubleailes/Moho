@@ -47,9 +47,10 @@ the steps that land in this repository or depend on it.
   chunks. The cost of `prim()` and `children()` alone was profiled and cut
   in issue #27 (`docs/walk.md`).
 - Offering Moho upstream as an `openusd-imaging` crate in openusd's
-  workspace. The `moho::openusd` and `moho::openusd_schemas` re-exports
-  and feature forwarding are a downstream policy (one openusd pin for the
-  stack) and would move to a thin downstream crate then.
+  workspace, which holds a placeholder for it since `26c81d8`; the steps
+  left are in `README.md`. The `moho::openusd` and `moho::openusd_schemas`
+  re-exports and feature forwarding are a downstream policy (one openusd
+  pin for the stack) and would move to a thin downstream crate then.
 - Draw mode (`UsdImagingDrawModeSceneIndex`), through native instancer
   propagation's append callback (`hydra-parity-instancing`, design D7).
 - `HdsiLocatorCachingSceneIndex` on `material`, which UsdImaging's chain
@@ -95,7 +96,8 @@ the steps that land in this repository or depend on it.
 - Resolved-asset-path resyncs in `StageSink::after_commit` (C++
   `UsdNotice::ObjectsChanged::GetResolvedAssetPathsResyncedPaths`), so an
   index can re-read asset-path-dependent data when resolution changes, as
-  UsdImaging does.
+  UsdImaging does. openusd has them since `26c81d8`
+  (`CommittedChange::asset_paths_resynced`); Moho does not read them yet.
 - A stage's resolver context (C++ `UsdStage::GetPathResolverContext`), for
   the absolute root's `system/assetResolution` (`crates/moho/src/stage/globals.rs`).
 - The changed fields of an info-only path in `StageSink::after_commit` (C++
