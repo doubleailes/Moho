@@ -421,11 +421,9 @@ Read at `d7d2a29`.
   accepted) and `Attribute::get_at::<Value>(None)`, the default time, as
   C++ `attr.Get(&value)`.
 - Authored inputs and outputs: `Prim::authored_attributes_in_namespace(ns)`
-  keeps composed order, where C++ `GetAuthoredPropertiesInNamespace` sorts
-  into dictionary order before applying `propertyOrder`. Moho sorts with
-  `sdf::element_cmp` and reapplies `propertyOrder` (`sdf::apply_ordering`)
-  in `stage/material.rs`. The `propertyOrder` itself:
-  `Prim::metadata::<Value>("propertyOrder")` with `Value::try_as_token_vec`.
+  lists in C++ `GetAuthoredPropertiesInNamespace`'s order, dictionary order
+  (`tf::dictionary_cmp`) then `propertyOrder` (mxpv/openusd#188, since
+  `26c81d8`); Moho sorted them itself before, with `sdf::element_cmp`.
 - Interface input consumers: `shade::NodeGraphInterface::interface_input_consumers(&self,
   transitive: bool) -> Result<InterfaceInputConsumersMap>` on `Material`
   (C++ `ComputeInterfaceInputConsumersMap`): every authored input of the
@@ -569,9 +567,6 @@ Read at `d7d2a29`.
   `sourceCode`) has an empty `nodeIdentifier`, where UsdImaging asks Sdr
   for one (`stage/material.rs`); its `nodeTypeInfo` carries what a consumer
   needs to resolve it.
-- `Prim::authored_attributes_in_namespace` lists in composed order where
-  C++ sorts into dictionary order first; Moho sorts material inputs and
-  outputs itself (`stage/material.rs`).
 - Authoring notices differ from USD's: a value set on an attribute without
   a spec is one resync (USD: resync, then info change); a write of the
   value already held notifies nothing; `over` specs created to author
