@@ -232,3 +232,31 @@ fn loading_one_payload_leaves_its_siblings() {
         [added("/world/a", ""), added("/world/a/geo", "mesh")]
     );
 }
+
+#[test]
+fn loading_a_payload_adds_its_loaded_parent_once() {
+    let dir = TempDir::new().unwrap();
+    dir.write("element.usda", "#usda 1.0\n(\n    defaultPrim = \"element\"\n)\ndef Xform \"element\"\n{\n    def Mesh \"geo\"\n    {\n    }\n}\n");
+    let root = dir.write(
+        "root.usda",
+        "#usda 1.0\ndef Xform \"world\"\n{\n    def Xform \"a\" (\n        payload = @./element.usda@\n    )\n    {\n    }\n}\n",
+    );
+    let usd = moho::stage::stage_builder()
+        .load(moho::openusd::usd::InitialLoadSet::LoadNone)
+        .open(root.to_str().unwrap())
+        .unwrap();
+    let index = StageSceneIndex::new();
+    let recorder = RecordingObserver::on(index.as_ref());
+    index.set_stage(usd.clone());
+    // Unloaded prims excluded: `/world`, which has no payload, is loaded and
+    // added with the stage; its unloaded child is not.
+    assert_eq!(recorder.take(), [added("/", ""), added("/world", "")]);
+    usd.load("/world/a", moho::openusd::usd::LoadPolicy::WithDescendants)
+        .unwrap();
+    index.apply_pending_updates();
+    assert_eq!(
+        recorder.take(),
+        [added("/world/a", ""), added("/world/a/geo", "mesh")]
+    );
+    assert_eq!(index.children(&p("/world")), [p("/world/a")]);
+}
