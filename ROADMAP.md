@@ -92,9 +92,6 @@ the steps that land in this repository or depend on it.
   eviction). On Moana, RSS under one stage only grew across 22 load/unload
   rounds. This is what rules out single-stage streaming (S0).
   [mxpv/openusd#173](https://github.com/mxpv/openusd/issues/173).
-- A rule-based collection's membership as one path expression (C++
-  `UsdComputePathExpressionFromCollectionMembershipQueryRuleMap`). Moho ports
-  it (`crates/moho/src/stage/collection.rs`) until openusd has it.
 - Resolved-asset-path resyncs in `StageSink::after_commit` (C++
   `UsdNotice::ObjectsChanged::GetResolvedAssetPathsResyncedPaths`), so an
   index can re-read asset-path-dependent data when resolution changes, as
