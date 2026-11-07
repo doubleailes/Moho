@@ -589,9 +589,16 @@ Read at `d7d2a29`.
   prim, where `Stage::prototypes()` would walk the stage after the edit.
   After a load (or an unload, a layer muted, a load retried) it also
   resyncs each prototype `Stage::prototypes()` holds that it has not
-  populated: a load can compose a prototype no prim instances (ALab's
-  first cinder block load composes `/__Prototype_382` beside the block's
-  `383`), which the absolute root lists all the same.
+  populated: openusd's load can also give an unloaded instance outside the
+  payload a new prototype, which no repopulated instance names (see the
+  next gap).
+- A load re-keys instances it does not touch. Loading ALab's
+  `construction_cinder_block01_0003` (`LoadNone`) composes two prototypes
+  in openusd, `/__Prototype_383` for the block and `382` for the unloaded
+  `lab_projector01_0001/decor_sheets_projector01_0001`, which moves off
+  its prototype, and retires two (`211`, `372`); C++ `Usd_InstanceCache`
+  composes one (the block's) and retires one, the projector keeping its
+  prototype.
 - openusd-schemas' UsdGeom schema lacks `model:cardVisibility`.
 - A value authored with another type than the one read is cast: a schema's
   declared type wins (`Attribute::type_name`), and
