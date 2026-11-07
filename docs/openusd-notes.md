@@ -22,9 +22,10 @@ parity changes of mxpv/openusd#195 (#187 to #194).
   &[sdf::Path], prims: &[sdf::Path] }`: subtree resyncs, minimal in
   ancestors, and prims recomposed in place with nothing beneath them
   implied. `CommittedChange::recomposed: &[sdf::Path]` is the same for an
-  edit, disjoint from `resynced`. Moho repopulates each subtree and adds
-  each recomposed prim again alone (Hydra's resync of one prim), or removes
-  its subtree when the stage no longer exposes it (`stage/pending.rs`,
+  edit, disjoint from `resynced`. Moho repopulates each subtree; for a
+  recomposed prim it reads what it held again without a notice, since USD
+  names no such prim and UsdImaging sends nothing for it, or removes its
+  subtree when the stage no longer exposes it (`stage/pending.rs`,
   `apply_pending_updates`).
 - `usd::ColorSpaceAPI::compute_attribute_name(&Attribute, Option<&mut
   ColorSpaceCache>) -> Result<Option<Token>>` (C++

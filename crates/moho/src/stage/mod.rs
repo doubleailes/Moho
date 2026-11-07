@@ -407,8 +407,9 @@ impl StageSceneIndex {
             added.extend(now);
         }
         // A prim recomposed in place, with nothing beneath it implied (the
-        // ancestor whose loaded state a load flips): added again alone,
-        // Hydra's resync of one prim, or removed with its subtree when the
+        // ancestor whose loaded state a load flips): what is held for it is
+        // read again, without a notice, since USD names no such prim and
+        // UsdImaging sends nothing for it; removed with its subtree when the
         // stage no longer exposes it.
         if !pending.recomposed.is_empty()
             && let Some(stage) = self.stage()
@@ -418,13 +419,6 @@ impl StageSceneIndex {
                 let held = self.populated.borrow().contains(path);
                 if Self::exposes(&stage, path, self.predicate()) {
                     self.children.borrow_mut().remove(path);
-                    if held {
-                        let ty = self.prim(path).ty;
-                        added.push(Added {
-                            path: path.clone(),
-                            ty,
-                        });
-                    }
                 } else if held {
                     self.forget_under(path);
                     self.globals.forget_under(path);
