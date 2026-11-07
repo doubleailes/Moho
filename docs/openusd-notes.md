@@ -553,10 +553,11 @@ Read at `d7d2a29`.
 - No `ArResolverContext` on a stage (C++ `UsdStage::GetPathResolverContext`):
   the absolute root has no `system/assetResolution/resolverContext`
   (`stage/globals.rs`).
-- No resolved-asset-path resyncs in `CommittedChange` (C++
-  `UsdNotice::ObjectsChanged::GetResolvedAssetPathsResyncedPaths`):
-  UsdImaging re-reads the asset-path-dependent data under those paths; Moho
-  cannot learn of them.
+- Resolved-asset-path resyncs (C++
+  `UsdNotice::ObjectsChanged::GetResolvedAssetPathsResyncedPaths`): openusd
+  reports them since `26c81d8` (`CommittedChange::asset_paths_resynced`),
+  and UsdImaging re-reads the asset-path-dependent data under those paths;
+  Moho does not read them yet.
 - `CommittedChange::changed_info_only` names the paths; their fields come
   from `CommittedChange::changed_fields` (C++ `GetChangedFields`).
   UsdImaging resyncs a prim for a plugin field and ignores built-in ones;
