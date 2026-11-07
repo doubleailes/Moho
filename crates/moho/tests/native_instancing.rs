@@ -818,3 +818,113 @@ def Xform "world"
         chain.children(&sdf::Path::abs_root())
     );
 }
+
+/// A payload holding two instances of `rock`, a prototype of its own.
+const ROCKS: &str = r#"#usda 1.0
+(
+    defaultPrim = "asset"
+)
+def Xform "asset"
+{
+    def Xform "i0" (
+        instanceable = true
+        references = </rock>
+    )
+    {
+    }
+    def Xform "i1" (
+        instanceable = true
+        references = </rock>
+    )
+    {
+    }
+}
+def Xform "rock"
+{
+    def Mesh "geo"
+    {
+    }
+}
+"#;
+
+/// Opens `root` with no payload loaded, under the standard chain, then loads
+/// `/world/a`. Returns the prims of the chain whose root prim is a USD
+/// prototype (`/__Prototype_N`), which the chain must never show.
+fn prototypes_shown_after_a_load(root: &str) -> Vec<sdf::Path> {
+    let dir = TempDir::new().unwrap();
+    dir.write("rocks.usda", ROCKS);
+    let root = dir.write("root.usda", root);
+    let usd = moho::stage::stage_builder()
+        .load(moho::openusd::usd::InitialLoadSet::LoadNone)
+        .open(root.to_str().unwrap())
+        .unwrap();
+    let stage_index = StageSceneIndex::new();
+    stage_index.set_stage(usd.clone());
+    let chain = moho::chain::standard(stage_index.clone());
+    usd.load("/world/a", moho::openusd::usd::LoadPolicy::WithDescendants)
+        .unwrap();
+    stage_index.apply_pending_updates();
+    walk(chain.as_ref(), &sdf::Path::abs_root())
+        .into_iter()
+        .filter(|path| {
+            path.root_prim_name()
+                .is_some_and(|name| name.starts_with("__Prototype_"))
+        })
+        .collect()
+}
+
+#[test]
+fn a_prototype_a_load_composes_stays_hidden() {
+    // No prototype before the load: the one the load composes is pruned, as
+    // UsdImaging's, which USD's load notice tells of it.
+    let shown = prototypes_shown_after_a_load(
+        r#"#usda 1.0
+def Xform "world"
+{
+    def Xform "a" (
+        payload = @./rocks.usda@
+    )
+    {
+    }
+}
+"#,
+    );
+    assert_eq!(shown, Vec::<sdf::Path>::new());
+}
+
+#[test]
+fn a_prototype_a_load_composes_beside_known_ones_stays_hidden() {
+    // A prototype populated before the load (`tree`), and a new one the load
+    // composes (`rock`): the new one is pruned too.
+    let shown = prototypes_shown_after_a_load(
+        r#"#usda 1.0
+def Xform "tree"
+{
+    def Mesh "geo"
+    {
+    }
+}
+def Xform "world"
+{
+    def Xform "t0" (
+        instanceable = true
+        references = </tree>
+    )
+    {
+    }
+    def Xform "t1" (
+        instanceable = true
+        references = </tree>
+    )
+    {
+    }
+    def Xform "a" (
+        payload = @./rocks.usda@
+    )
+    {
+    }
+}
+"#,
+    );
+    assert_eq!(shown, Vec::<sdf::Path>::new());
+}

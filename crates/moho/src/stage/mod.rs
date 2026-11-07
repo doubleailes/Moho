@@ -339,7 +339,20 @@ impl StageSceneIndex {
                 children.remove(path);
             }
         }
-        let roots = pending.resync_roots();
+        let mut roots = pending.resync_roots();
+        // Workaround, an upstream candidate in `ROADMAP.md`: openusd's
+        // notice for a load (or an unload, a layer muted, a load retried)
+        // names the prototypes that were already composed, not those the
+        // recomposition composes; USD names every prototype. Each prototype
+        // the stage holds that the index has not populated is resynced
+        // here, so that it is added and the prototype pruning hides it.
+        if pending.composition_changed {
+            for prototype in self.unpopulated_prototypes() {
+                if !roots.iter().any(|r| prototype.has_prefix(r)) {
+                    roots.push(prototype);
+                }
+            }
+        }
         let mut removed = Vec::new();
         let mut added = Vec::new();
         // A shader or node graph resynced under a material or light filter
@@ -461,6 +474,20 @@ impl StageSceneIndex {
         self.observers.send_removed(self, &removed);
         self.observers.send_added(self, &added);
         self.observers.send_dirtied(self, &dirtied);
+    }
+
+    /// The USD prototypes the stage holds that the index has not populated.
+    fn unpopulated_prototypes(&self) -> Vec<sdf::Path> {
+        let Some(stage) = self.stage() else {
+            return Vec::new();
+        };
+        let populated = self.populated.borrow();
+        stage
+            .prototypes()
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|p| !populated.contains(p))
+            .collect()
     }
 
     /// The nearest ancestor of a `Shader` or `NodeGraph` prim that

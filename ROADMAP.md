@@ -89,6 +89,11 @@ the steps that land in this repository or depend on it.
   UsdImaging, so every invalidation that walks from the root pays it: about
   20 ms of a linked light's 25 ms on the 10 000 mesh fixture
   (`docs/update-latency.md`).
+- Prototypes a load composes, in its notice. `load_rules_changed` (and the
+  other `Resynced` notices) names the prototypes composed before the load,
+  not the new ones, where C++ `UsdStage` resyncs every prototype; the stage
+  index resyncs the prototypes it has not populated after such a notice
+  (`crates/moho/src/stage/mod.rs`, `apply_pending_updates`).
 - Unloading a payload does not free what composing it took (no layer
   eviction). On Moana, RSS under one stage only grew across 22 load/unload
   rounds. This is what rules out single-stage streaming (S0).

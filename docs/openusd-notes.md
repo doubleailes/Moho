@@ -37,7 +37,9 @@ parity changes of mxpv/openusd#195 (#187 to #194).
 - Prototypes follow C++ `Usd_InstanceCache` (mxpv/openusd#194): numbered
   from `/__Prototype_1`, and kept, resynced, when the instance they were
   composed from goes or their source changes. The stage index no longer
-  resyncs fresh prototypes and their re-pointed instances itself.
+  resyncs fresh prototypes and their re-pointed instances after an edit.
+  A load's notice still leaves out the prototypes the load composes (see
+  "Gaps"), which the stage index adds itself.
 - `vt::Value::Path(sdf::Path)` (mxpv/openusd#191), in memory only: Hydra's
   single `SdfPath` fields are a `Value::Path` (they were one-element
   `Value::PathVec`s), so a single path and a path array are told apart.
@@ -576,6 +578,14 @@ Read at `d7d2a29`.
   a spec is one resync (USD: resync, then info change); a write of the
   value already held notifies nothing; `over` specs created to author
   through a reference are resynced (USD: info-only).
+- A load's notice (`StageSink::load_rules_changed`, and the other
+  `Resynced` notices) names the prototypes that were composed before it,
+  not those the load composes: loading a payload whose instances need a new
+  prototype reports the payload but not `/__Prototype_N`. C++ `UsdStage`
+  resyncs every prototype. The stage index resyncs, after such a notice,
+  each prototype `Stage::prototypes()` holds that it has not populated
+  (`StageSceneIndex::apply_pending_updates`), so that it is added and the
+  prototype pruning hides it.
 - openusd-schemas' UsdGeom schema lacks `model:cardVisibility`.
 - A value authored with another type than the one read is cast: a schema's
   declared type wins (`Attribute::type_name`), and
