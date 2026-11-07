@@ -34,6 +34,10 @@ parity changes of mxpv/openusd#195 (#187 to #194).
   defines are valid now; the attribute's declared `colorSpace` wins over
   the prims' as in C++, where Moho tried it after them. Moho passes no
   cache, which nothing would evict on an edit.
+- Prototypes follow C++ `Usd_InstanceCache` (mxpv/openusd#194): numbered
+  from `/__Prototype_1`, and kept, resynced, when the instance they were
+  composed from goes or their source changes. The stage index no longer
+  resyncs fresh prototypes and their re-pointed instances itself.
 - `tf::HashState` (C++ `Tf_HashState`, mxpv/openusd#190): `append(bytes)`
   and `code()`. Moho's `TfHash::Combine` names (`ForInstancer%zx`,
   `Primvars%zx`) use it in place of its own SpookyHash port (`tf_hash.rs`).
@@ -557,13 +561,6 @@ Read at `d7d2a29`.
   `kind`, ...), and Moho ignores every other prim-level info-only change,
   so a plugin field's resync (a `renderSettingsPrimPath` edit, chiefly) is
   missed (`stage/pending.rs`).
-- Removing the instance a prototype was composed from retires the
-  prototype: openusd composes the remaining instances under a new
-  `/__Prototype_N` and reports only the retired one (and the removed
-  instance) as resynced, not the new prototype nor the instances re-pointed
-  to it. USD keeps the prototype. The stage index resyncs both when a
-  populated prototype is resynced (`stage/mod.rs`). Prototypes are numbered
-  from `__Prototype_0` (USD: `__Prototype_1`), in composition order.
 - `vt::Value` has no single-path variant (C++ `VtValue` of `SdfPath`):
   Hydra's single `SdfPath` fields are one-element `Value::PathVec`s, absent
   when Hydra's path would be empty (`data_source.rs`).
@@ -578,9 +575,6 @@ Read at `d7d2a29`.
   a spec is one resync (USD: resync, then info change); a write of the
   value already held notifies nothing; `over` specs created to author
   through a reference are resynced (USD: info-only).
-- The prototype retiring above also follows an edit of the prototype's
-  source (a prim added or removed under it) or the source instance made
-  non-instanceable.
 - openusd-schemas' UsdGeom schema lacks `model:cardVisibility`.
 - A value authored with another type than the one read is cast: a schema's
   declared type wins (`Attribute::type_name`), and
