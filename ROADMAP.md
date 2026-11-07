@@ -106,17 +106,6 @@ the steps that land in this repository or depend on it.
   `apiSchemas`, `kind`, ...) as resyncs; Moho ignores every other
   prim-level info-only change, and misses the plugin-field resyncs
   (`crates/moho/src/stage/pending.rs`).
-- Prototypes kept when their source instance goes: removing the instance a
-  prototype was composed from makes openusd compose the others under a new
-  `/__Prototype_N`, and its commit notice names neither the new prototype
-  nor the instances re-pointed to it (USD keeps the prototype). The stage
-  index resyncs both itself meanwhile (`crates/moho/src/stage/mod.rs`).
-  Also, openusd numbers prototypes from `__Prototype_0` where USD numbers
-  from `__Prototype_1`, so propagated prototype paths differ from
-  UsdImaging's by that number.
-  The same happens on any edit that changes the prototype's source: a prim
-  added or removed under the referenced prim, or the source instance made
-  non-instanceable (found by `docs/hydra-parity-check.md`).
 - Authoring notices as USD's (found by `docs/hydra-parity-check.md`).
   Setting a value on an attribute without a spec is one resync where USD
   sends a resync then an info change (UsdImaging dirties the prim twice); a

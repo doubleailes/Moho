@@ -780,7 +780,8 @@ def Xform "world"
     stage_index.stage().unwrap().remove_prim("/world/a").unwrap();
     stage_index.apply_pending_updates();
     let notices = recorder.take();
-    // openusd composes /world/b under a new prototype: it is resynced.
+    // openusd keeps the prototype, as C++ `Usd_InstanceCache` does, and
+    // resyncs it: /world/b is added again.
     assert!(
         notices
             .iter()

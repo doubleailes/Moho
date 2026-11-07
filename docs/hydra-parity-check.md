@@ -259,12 +259,13 @@ Static data:
   order in C++ (`/world/c /world/a`), path order in openusd; a predicate
   argument quoted in C++ (`{hdType:"mesh"}`), bare in openusd. The same
   expressions.
-- **Prototype numbers.** openusd numbers prototypes from `__Prototype_0`,
+- **Prototype numbers.** openusd numbered prototypes from `__Prototype_0`,
   USD from `__Prototype_1`, so the propagated paths, and the
   `ForInstancer<hash>` of a point instancer inside a native prototype (the
   hash takes the instancer's `/__Prototype_N/...` path: checked, isCoral's
   `ForInstancerc1b037937f9934e3` is `/__Prototype_5/geometry/xgAntlers`,
-  Moho's `47c96cc13166b34e` is `/__Prototype_4/...`), differ.
+  Moho's `47c96cc13166b34e` is `/__Prototype_4/...`), differed. Since
+  openusd `26c81d8` (mxpv/openusd#194) both number from 1; not re-run.
 - **`apiSchemas` naming `MaterialXConfigAPI`** (the teapot samples): the
   reference build has no `usdMtlx`, so its registry does not know the
   schema; openusd-schemas does. A harness artifact.
@@ -290,7 +291,8 @@ Notices (all openusd's authoring, not the index; upstream candidates):
 - **Prototypes retired.** An edit of a prototype's source (a prim added or
   removed under it) or the source instance made non-instanceable makes
   openusd compose a new prototype, which the stage index resyncs: 32 edits
-  (47 with everything read).
+  (47 with everything read). Since openusd `26c81d8` (mxpv/openusd#194)
+  the prototype is kept and resynced, as in USD; not re-run.
 - **No-op writes** (a relationship set to the targets it has) notify
   nothing in openusd; USD notifies. Seen on hand-run edits only.
 
