@@ -6,6 +6,35 @@ before every bump, and add any API Moho starts relying on. Sections written
 before the bump to `d7d2a29` (doubleailes/openusd, upstream `0a4bb1b` plus
 mxpv/openusd#175) were read at `68a867a`.
 
+## Bump to `26c81d8`
+
+mxpv/openusd main at the `openusd-imaging` placeholder: back on upstream,
+which now holds the three fixes the doubleailes pin carried (the reorder
+resync, `AbstractData::holds_plain_data`, mxpv/openusd#186) and the imaging
+parity changes of mxpv/openusd#195 (#187 to #194).
+
+- `Stage::add_sink(..) -> Result<StageSinkId>` and `Stage::remove_sink(id)
+  -> Result<()>`: both fail with `sdf::LayerError::Busy` while what is
+  pending cannot be delivered first. The stage index then holds the stage
+  without a sink (`stage/mod.rs`, `Current::sink`).
+- `StageSink::load_rules_changed`, `layer_muting_changed`, and the new
+  `loads_retried` and `recomposed` take `usd::Resynced<'_> { subtrees:
+  &[sdf::Path], prims: &[sdf::Path] }`: subtree resyncs, minimal in
+  ancestors, and prims recomposed in place with nothing beneath them
+  implied. `CommittedChange::recomposed: &[sdf::Path]` is the same for an
+  edit, disjoint from `resynced`. Moho repopulates each subtree and adds
+  each recomposed prim again alone (Hydra's resync of one prim), or removes
+  its subtree when the stage no longer exposes it (`stage/pending.rs`,
+  `apply_pending_updates`).
+- `SpecSite.layer` is an `sdf::LayerHandle`; its identifier is
+  `layer.identifier()`.
+- Core metadata fields are typed: an attribute's `colorSpace` reads as a
+  `Value::Token`, as USD types it.
+- `CommittedChange::resynced` now holds a prim whose `typeName`,
+  `apiSchemas`, `kind`, `specifier`, `active` or clip metadata a layer
+  edits, as C++ `UsdStage` notifies (mxpv/openusd#193). A `kind` edit
+  repopulates the prim, as in UsdImaging.
+
 ## Bump to `54db9fd`
 
 doubleailes/openusd's `perf/path-prim-len`: `92b9066` plus mxpv/openusd#186.
@@ -48,15 +77,18 @@ layer reorders.
 
 ## Change tracking
 
-- `Stage::add_sink<S: StageSink + 'static>(&self, sink: S) -> StageSinkId` and
-  `Stage::remove_sink(&self, id: StageSinkId)` (`stage.rs`).
+- `Stage::add_sink<S: StageSink + 'static>(&self, sink: S) ->
+  Result<StageSinkId>` and `Stage::remove_sink(&self, id: StageSinkId) ->
+  Result<()>` (`stage.rs`).
 - `StageSink::after_commit(&self, stage: &Stage, change: &CommittedChange<'_>)`
   (`sink.rs`): the composed change after recomposition. It is the equivalent
   of C++ `UsdNotice::ObjectsChanged`. A plain `Fn(&Stage, &CommittedChange)`
   closure is a `StageSink`. Sinks must not add or remove sinks from inside a
   callback.
-- `CommittedChange { resynced: &[sdf::Path], changed_info_only: &[sdf::Path],
-  .. }`: prim and property paths in stage namespace.
+- `CommittedChange { resynced: &[sdf::Path], recomposed: &[sdf::Path],
+  changed_info_only: &[sdf::Path], .. }`: prim and property paths in stage
+  namespace; `recomposed` names prims recomposed in place, nothing beneath
+  them implied.
 - `CommittedChange::changed_fields(&self, path: &sdf::Path) -> impl
   Iterator<Item = &tf::Token>`: the fields authored at a stage path by the
   edit (C++ `GetChangedFields`); Moho reads `typeName` from it.
@@ -128,14 +160,13 @@ the root edit target (`crates/moho-spike/tests/probe.rs` asserts all of it):
   that prim. A new attribute spec resyncs the property path, then its value is
   `changed_info_only`.
 - **Load and unload never fire `after_commit`.** They fire only
-  `StageSink::load_rules_changed(&self, stage, resynced: &[sdf::Path])`, so an
-  index can tell them from edits.
-- **But the reported path is coarse.** Loading or unloading
-  `/world/element_0` reports `resynced = ["/world"]`: the dropped indices
-  include every ancestor whose effective rule is not `All` (under `LoadNone`,
-  the chunk's parent), and the list is reduced to minimal ancestors. Read
-  literally, as a subtree resync, it covers every sibling chunk. An index that
-  loads a chunk itself knows what it loaded and must not dirty the siblings.
+  `StageSink::load_rules_changed(&self, stage, resynced: Resynced<'_>)`, so
+  an index can tell them from edits.
+- **The reported paths are exact** (since `26c81d8`, mxpv/openusd#174).
+  Loading or unloading `/world/element_0` reports it as a subtree, and
+  `/world`, whose loaded state flipped with no payload of its own, as a
+  prim recomposed in place, so sibling chunks are not covered. Before, the
+  notice was `["/world"]` alone, a subtree resync covering every sibling.
 - An `over` authored on the root layer composes its prim even while the
   payload above it is unloaded (undefined, so default traversal skips it), so
   a value authored there stays readable across unload.
@@ -240,7 +271,7 @@ the root edit target (`crates/moho-spike/tests/probe.rs` asserts all of it):
   resolution, `resolved_path()`, which openusd sets only when the anchored
   path names an existing file (so never for a `<UDIM>` set). Moho anchors an
   unresolved relative path on the strongest site of
-  `Attribute::property_stack()` (`SpecSite.layer` is the layer identifier),
+  `Attribute::property_stack()` (`SpecSite.layer.identifier()`),
   as Crust does, and sets it with `set_resolved_path`.
 - Stage-free matching: `sdf::path_expr::PathExpressionEval::<D>::build(&expr,
   &PredicateLibrary::new())` then `match_path(&path, &domain).value`. With an
@@ -498,11 +529,6 @@ Read at `d7d2a29`.
   `Usd_InstanceCache` is updated from the change set.
 - Splines (`Ts`): a `.spline` block only round-trips as a dictionary. There
   are no typed knots, evaluation, authoring or usdc encoding.
-- `load_rules_changed` reports the nearest ancestor whose load rule changes
-  resolution (`/world`), not the loaded or unloaded path, as its resync. A
-  notice naming the paths whose payload inclusion changed would let an
-  observer that did not initiate the load avoid resyncing sibling subtrees
-  (mxpv/openusd#174).
 - No layer eviction: unloading a payload leaves its layers resident
   (`Stage::find_loadable`'s documentation says so). In the S0 spike, RSS on
   one `LoadNone` stage only grew across Moana's 22 load/unload rounds

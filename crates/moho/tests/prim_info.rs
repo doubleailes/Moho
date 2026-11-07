@@ -215,8 +215,8 @@ fn time_variance_does_not_depend_on_the_index_time() {
 }
 
 #[test]
-fn a_kind_edit_notifies_nothing() {
-    use moho::scene_index::testing::RecordingObserver;
+fn a_kind_edit_resyncs_the_prim() {
+    use moho::scene_index::testing::{Notice, RecordingObserver};
 
     let (_dir, usd) = stage(SCENE);
     let index = StageSceneIndex::new();
@@ -230,9 +230,17 @@ fn a_kind_edit_notifies_nothing() {
         .set_metadata("kind", Token::from("assembly"))
         .unwrap();
     index.apply_pending_updates();
-    // `kind` is a built-in field: UsdImaging ignores its change.
-    let notices = recorder.take();
-    assert!(notices.is_empty(), "{notices:?}");
+    // C++ `UsdStage` reports a `kind` edit among the resynced paths, so
+    // UsdImaging repopulates the prim's subtree: one `Added` per prim.
+    let added: Vec<String> = recorder
+        .take()
+        .into_iter()
+        .map(|n| match n {
+            Notice::Added(a) => a.path.to_string(),
+            other => panic!("{other:?}"),
+        })
+        .collect();
+    assert_eq!(added, ["/world", "/world/dome", "/world/moving", "/world/still"]);
     assert_eq!(info(&index, "/world", "kind"), token("assembly"));
 }
 

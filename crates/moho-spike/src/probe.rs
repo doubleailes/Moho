@@ -11,7 +11,7 @@ use std::fmt;
 use std::rc::Rc;
 
 use openusd::sdf;
-use openusd::usd::{CommittedChange, InitialLoadSet, LoadPolicy, Stage, StageSink};
+use openusd::usd::{CommittedChange, InitialLoadSet, LoadPolicy, Resynced, Stage, StageSink};
 
 use crate::{Result, fixture};
 
@@ -31,8 +31,12 @@ pub enum Notice {
         resynced: Vec<String>,
         changed_info_only: Vec<String>,
     },
-    /// `StageSink::load_rules_changed`: a load or unload.
-    LoadRules { resynced: Vec<String> },
+    /// `StageSink::load_rules_changed`: a load or unload, its subtree
+    /// resyncs and the prims recomposed in place.
+    LoadRules {
+        subtrees: Vec<String>,
+        prims: Vec<String>,
+    },
 }
 
 /// One step of the probe: what was done, whether it failed, and the notices
@@ -68,9 +72,10 @@ impl StageSink for Recorder {
         });
     }
 
-    fn load_rules_changed(&self, _stage: &Stage, resynced: &[sdf::Path]) {
+    fn load_rules_changed(&self, _stage: &Stage, resynced: Resynced<'_>) {
         self.0.borrow_mut().push(Notice::LoadRules {
-            resynced: paths(resynced),
+            subtrees: paths(resynced.subtrees),
+            prims: paths(resynced.prims),
         });
     }
 }
@@ -79,7 +84,7 @@ impl StageSink for Recorder {
 pub fn run(root: &str) -> Result<Vec<Step>> {
     let stage = Stage::builder().load(InitialLoadSet::LoadNone).open(root)?;
     let recorder = Recorder::default();
-    stage.add_sink(recorder.clone());
+    stage.add_sink(recorder.clone())?;
     let element = fixture::element_path(0);
     let prim = edited_prim();
     let attribute = format!("{prim}.{EDITED_ATTRIBUTE}");
@@ -147,9 +152,10 @@ impl fmt::Display for Step {
                     f,
                     "\n    after_commit: resynced {resynced:?}, changed_info_only {changed_info_only:?}"
                 )?,
-                Notice::LoadRules { resynced } => {
-                    write!(f, "\n    load_rules_changed: resynced {resynced:?}")?
-                }
+                Notice::LoadRules { subtrees, prims } => write!(
+                    f,
+                    "\n    load_rules_changed: subtrees {subtrees:?}, prims {prims:?}"
+                )?,
             }
         }
         Ok(())

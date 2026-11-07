@@ -76,12 +76,6 @@ the steps that land in this repository or depend on it.
 
 ## Upstream candidates (openusd)
 
-- A resync for a prim whose children or properties a layer reorders, and
-  the asset path walk's plain data probe (`AbstractData::holds_plain_data`).
-  Moho pins doubleailes/openusd at `54db9fd` (`perf/path-prim-len`:
-  upstream `5b86332` plus both, and mxpv/openusd#186's one-lookup
-  prototype root) until they are upstream.
-
 - Splines (`Ts`): typed knots, evaluation, authoring, usdc encoding.
 - Child listing cost. `Prim::filtered_children` costs about 1 µs per child
   (10 ms for 10 000 siblings), and about twice that on the first listing
@@ -102,10 +96,6 @@ the steps that land in this repository or depend on it.
   eviction). On Moana, RSS under one stage only grew across 22 load/unload
   rounds. This is what rules out single-stage streaming (S0).
   [mxpv/openusd#173](https://github.com/mxpv/openusd/issues/173).
-- `StageSink::load_rules_changed` reports the nearest ancestor whose load
-  rule changes resolution (e.g. `/world`) rather than the loaded or unloaded
-  path, so taken as a subtree resync it covers every sibling subtree.
-  [mxpv/openusd#174](https://github.com/mxpv/openusd/issues/174).
 - A rule-based collection's membership as one path expression (C++
   `UsdComputePathExpressionFromCollectionMembershipQueryRuleMap`). Moho ports
   it (`crates/moho/src/stage/collection.rs`) until openusd has it.
