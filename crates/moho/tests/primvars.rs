@@ -452,3 +452,49 @@ def Points "dots"
         "a widths edit dirties the primvar"
     );
 }
+
+#[test]
+fn a_defined_color_space_applies() {
+    // A name a `ColorSpaceDefinitionAPI` above defines is valid
+    // (`UsdColorSpaceAPI::IsValidColorSpaceName`); one nothing defines
+    // gives none.
+    let (_dir, usd) = stage(
+        r#"#usda 1.0
+def Xform "world" (
+    prepend apiSchemas = ["ColorSpaceDefinitionAPI:studio"]
+)
+{
+    uniform token colorSpaceDefinition:studio:name = "studio"
+
+    def Mesh "geo" (
+        prepend apiSchemas = ["ColorSpaceAPI"]
+    )
+    {
+        uniform token colorSpace:name = "studio"
+        color3f[] primvars:displayColor = [(1, 0, 0)] (
+            interpolation = "constant"
+        )
+    }
+    def Mesh "odd" (
+        prepend apiSchemas = ["ColorSpaceAPI"]
+    )
+    {
+        uniform token colorSpace:name = "nowhere"
+        color3f[] primvars:displayColor = [(1, 0, 0)] (
+            interpolation = "constant"
+        )
+    }
+}
+"#,
+    );
+    let index = StageSceneIndex::new();
+    index.set_stage(usd);
+    let color_space = |path: &str| {
+        primvars(&index, path)
+            .primvar("displayColor")
+            .unwrap()
+            .color_space()
+    };
+    assert_eq!(color_space("/world/geo"), Some(Value::Token("studio".into())));
+    assert_eq!(color_space("/world/odd"), None);
+}
