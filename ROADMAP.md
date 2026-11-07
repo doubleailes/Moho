@@ -81,10 +81,6 @@ the steps that land in this repository or depend on it.
   (10 ms for 10 000 siblings), and about twice that on the first listing
   after an edit. The stage index now holds each prim's children until a
   resync reaches them (`crates/moho/src/stage/mod.rs`).
-- `SchemaRegistry::is_a` walks the base graph with a fresh hash set on
-  every call (openusd's own `TODO(perf)`: a transitive closure computed at
-  `build`). It was most of the stage index's `prim()` and `children()`
-  cost; Moho memoizes it per registry (`crates/moho/src/stage/mod.rs`).
 - Incremental prototype discovery. After any structural edit, the next
   `Stage::prototypes()` walks the whole populated namespace again (its
   `TODO(perf)` in `usd/stage.rs`); C++ updates `Usd_InstanceCache` from the

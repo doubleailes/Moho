@@ -37,7 +37,8 @@ Profiled with callgrind (the fixture) and stack sampling (ALab).
    times per prim (`skips_prim_data`, whether a prim represents its
    descendants, the adapters). Fixed by remembering the answer per
    registry, schema type and base (`stage::is_a`); the base graph is fixed
-   once a registry is built.
+   once a registry is built. Since openusd `26c81d8` the registry computes
+   the bases at `build` (mxpv/openusd#187) and Moho no longer remembers.
 2. **The stage index's `children()`** listed the stage's children and
    composed the prim's `typeName` on every call (openusd's child listing
    costs about 1 µs per child). It now holds each prim's children, as it

@@ -503,13 +503,10 @@ Read at `d7d2a29`.
   word where `std`'s `RandomState` runs SipHash over the whole text. The
   path-keyed caches of the stage index, flattening, material binding
   resolving and merging use them.
-- `Prim::stage() -> &Stage`, `Stage::schema_registry() -> &Arc<SchemaRegistry>`,
-  `Prim::prim_type_info() -> Result<Arc<PrimTypeInfo>>`,
-  `PrimTypeInfo::schema_type_name() -> &Token` and
-  `SchemaRegistry::is_a(schema, base) -> bool`: what `Prim::is_a` does, in
-  parts, so that Moho can remember the answer per registry, schema type and
-  base (`stage::is_a`). The registry's base graph is fixed once `build`
-  returns (only its `type_infos` cache is behind a lock).
+- `Prim::is_a(schema) -> Result<bool>` answers from bases the schema
+  registry computes at `build` (mxpv/openusd#187, since `26c81d8`), so
+  `stage::is_a` calls it directly. Moho remembered the answer per registry,
+  schema type and base before.
 - `Stage::prototypes()` re-runs `discover_prototypes`, a walk of the whole
   populated namespace, the first time it is called after any structural
   edit (the population epoch moved; openusd's own `TODO(perf)` in
@@ -520,10 +517,6 @@ Read at `d7d2a29`.
 
 ## Gaps
 
-- `SchemaRegistry::is_a` walks the base graph with a fresh `HashSet` on
-  every call (its `TODO(perf)`: a transitive closure computed in `build`).
-  It was most of a walk's cost through the stage index; Moho memoizes it
-  (`stage/mod.rs`, `is_a`).
 - Prototype discovery is not incremental: any structural edit makes the
   next `Stage::prototypes()` walk the whole stage, where C++'s
   `Usd_InstanceCache` is updated from the change set.
