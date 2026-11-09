@@ -498,3 +498,89 @@ def Xform "world" (
     assert_eq!(color_space("/world/geo"), Some(Value::Token("studio".into())));
     assert_eq!(color_space("/world/odd"), None);
 }
+
+/// A primvar sourced by value clips is named when a clip authors it, whether
+/// the clip active at the index's time does (`early`) or only another one
+/// (`late`), and not when no clip does (`never`): openusd's
+/// `has_authored_value`, for each.
+#[test]
+fn clipped_primvars_are_named_when_any_clip_authors_them() {
+    let dir = common::TempDir::new().unwrap();
+    dir.write(
+        "manifest.usda",
+        r#"#usda 1.0
+over "clip"
+{
+    float[] primvars:early
+    float[] primvars:late
+    float[] primvars:never
+}
+"#,
+    );
+    dir.write(
+        "a.usda",
+        r#"#usda 1.0
+over "clip"
+{
+    float[] primvars:early.timeSamples = { 1: [1] }
+}
+"#,
+    );
+    dir.write(
+        "b.usda",
+        r#"#usda 1.0
+over "clip"
+{
+    float[] primvars:late.timeSamples = { 10: [2] }
+}
+"#,
+    );
+    let root = dir.write(
+        "root.usda",
+        r#"#usda 1.0
+def BasisCurves "hair" (
+    clips = {
+        dictionary default = {
+            asset[] assetPaths = [@./a.usda@, @./b.usda@]
+            asset manifestAssetPath = @./manifest.usda@
+            string primPath = "/clip"
+            double2[] active = [(1, 0), (10, 1)]
+            double2[] times = [(1, 1), (10, 10)]
+        }
+    }
+)
+{
+    int[] curveVertexCounts = [2]
+    point3f[] points = [(0, 0, 0), (0, 1, 0)]
+    float[] primvars:early
+    float[] primvars:late
+    float[] primvars:never
+}
+"#,
+    );
+    let stage = common::open(&root);
+    let index = StageSceneIndex::new();
+    index.set_stage(stage.clone());
+    index.set_time(TimeCode::new(1.0));
+    let schema = primvars(&index, "/hair");
+    for (name, authored) in [("early", true), ("late", true), ("never", false)] {
+        let attribute = stage
+            .attribute(format!("/hair.primvars:{name}").as_str())
+            .unwrap();
+        assert_eq!(
+            attribute.has_authored_value().unwrap(),
+            authored,
+            "{name} in openusd"
+        );
+        assert_eq!(schema.primvar(name).is_some(), authored, "{name}");
+    }
+    assert_eq!(
+        schema
+            .primvar("early")
+            .unwrap()
+            .primvar_value()
+            .unwrap()
+            .value(0.0),
+        Some(Value::FloatVec(vec![1.0]))
+    );
+}
