@@ -19,6 +19,7 @@
 //! (`hydra:instanceTranslations`, ...), read as before until
 //! `hydra-parity-instancing`.
 
+use std::cell::OnceCell;
 use std::rc::Rc;
 
 use openusd::sdf::{self, Role};
@@ -306,12 +307,24 @@ enum Source {
 struct Primvars(PrimContext);
 
 impl Primvars {
+    /// `attribute.has_authored_value()`, asked at the index's time first: a
+    /// value authored there is authored, and that question reads only the
+    /// clip active at the time, where the untimed one decodes the samples of
+    /// every clip its set schedules. The untimed question answers the rest
+    /// (a value authored at other times only), so the answer is the same.
+    fn authored(&self, attribute: &usd::Attribute) -> bool {
+        attribute
+            .resolve_info_at(self.0.globals.time())
+            .is_ok_and(|info| info.has_authored_value())
+            || attribute.has_authored_value().unwrap_or(false)
+    }
+
     fn source(&self, prim: &usd::Prim, name: &str) -> Option<Source> {
         if !REJECTED.contains(&name) {
             let full = format!("{PRIMVARS_PREFIX}{name}");
             let attribute = prim.attribute(full.as_str());
             if attribute.is_defined().unwrap_or(false) {
-                if attribute.has_authored_value().unwrap_or(false) {
+                if self.authored(&attribute) {
                     return Primvar::from_attribute(attribute).map(Source::Primvar);
                 }
             } else {
@@ -324,15 +337,12 @@ impl Primvars {
         // The custom primvars are weaker than `primvars:*`.
         if let Some((_, attribute)) = gprim_custom(prim).into_iter().find(|(p, _)| *p == name) {
             let attribute = prim.attribute(attribute);
-            return attribute
-                .has_authored_value()
-                .unwrap_or(false)
-                .then_some(Source::Custom(attribute));
+            return self.authored(&attribute).then_some(Source::Custom(attribute));
         }
         instancer_custom(prim)
             .into_iter()
             .find(|(n, _)| n == name)
-            .filter(|(_, a)| a.has_authored_value().unwrap_or(false))
+            .filter(|(_, a)| self.authored(a))
             .map(|(_, a)| Source::Instance(a))
     }
 }
@@ -365,6 +375,7 @@ impl Container for Primvars {
             ctx: self.0.clone(),
             name: name.clone(),
             source,
+            indexed: OnceCell::new(),
         })))
     }
 }
@@ -374,6 +385,10 @@ struct PrimvarEntry {
     ctx: PrimContext,
     name: Token,
     source: Source,
+    /// Whether the indices attribute has a value, asked once: on a
+    /// value-clipped attribute the question resolves the clip set, and
+    /// every member the entry answers depends on it.
+    indexed: OnceCell<bool>,
 }
 
 impl PrimvarEntry {
@@ -388,7 +403,9 @@ impl PrimvarEntry {
     /// Indexed when its indices attribute has a value (custom primvars never
     /// are).
     fn indexed(&self) -> bool {
-        matches!(&self.source, Source::Primvar(p) if p.indices_attr().has_value().unwrap_or(false))
+        *self.indexed.get_or_init(
+            || matches!(&self.source, Source::Primvar(p) if p.indices_attr().has_value().unwrap_or(false)),
+        )
     }
 
     fn locator(&self, member: &str) -> Locator {
