@@ -83,6 +83,11 @@ the steps that land in this repository or depend on it.
   prototype root) until they are upstream.
 
 - Splines (`Ts`): typed knots, evaluation, authoring, usdc encoding.
+- An array-size read on `usd::Attribute`. A Gaussian splat's float-or-half
+  choice (`ParticleField3DGaussianSplat::attribute_in_use`, C++
+  `_UsesFloatAttr`) composes and copies the float array to ask whether it
+  has elements: millions of elements on a capture, once per primvar fetch
+  (`crates/moho/src/stage/particle_field.rs`).
 - Child listing cost. `Prim::filtered_children` costs about 1 µs per child
   (10 ms for 10 000 siblings), and about twice that on the first listing
   after an edit. The stage index now holds each prim's children until a

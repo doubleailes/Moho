@@ -210,6 +210,24 @@ the root edit target (`crates/moho-spike/tests/probe.rs` asserts all of it):
   Result<Option<sdf::Role>>` gives the Hydra role. `Prim::is_a("PointBased")`
   and `is_a("Curves")` select the plain attributes Hydra reads as primvars.
 
+## Particle fields (`particle-field-adapter`)
+
+- `openusd_schemas::vol::ParticleField3DGaussianSplat::from_prim_unchecked(Prim)`
+  views any prim; `attribute_in_use(SplatData) -> Result<Attribute>` is C++
+  `_UsesFloatAttr`: the float attribute when its value at
+  `TimeCode::EARLIEST` is an array with elements, else the `half` one
+  (also when neither is authored). `uses_float(SplatData)` answers the
+  same as a bool. `SplatData` names the five pairs (`Positions`,
+  `Orientations`, `Scales`, `Opacities`, `RadianceCoefficients`).
+- The question reads the float attribute's whole array (its `TODO(perf)`:
+  `Attribute` has no array-size read); the stage index asks it only for the
+  primvar fetched.
+- `Prim::is_a("ParticleField")` holds for `ParticleField3DGaussianSplat`
+  (the registry's base chain: `ParticleField`, `Gprim`).
+- `.usdc` decodes `point3h[]`, `half3[]`, `quath[]` and `half[]`
+  (`Value::Vec3hVec`, `QuathVec`, `HalfVec`), checked against a layer
+  OpenUSD 26.11 wrote (`crates/moho/tests/data/particle_field.usdc`).
+
 ## Material schemas (S1)
 
 - `openusd_schemas::shade::MaterialBindingAPI::get(&Stage, path) ->
