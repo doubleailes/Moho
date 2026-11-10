@@ -23,6 +23,7 @@ pub mod material;
 pub mod material_binding;
 pub mod mesh;
 pub mod model;
+pub mod particle_field;
 pub mod pending;
 pub mod point_instancer;
 pub mod prim_info;
@@ -623,15 +624,19 @@ impl StageSceneIndex {
         locators
     }
 
-    /// The USD type whose adapter serves `prim`: its own, or `LightFilter`
-    /// for a type derived from it that has no adapter of its own
-    /// (UsdImaging looks adapters up along the type's bases).
+    /// The USD type whose adapter serves `prim`: its own, or, for a type
+    /// with no adapter of its own, the first type registered with its
+    /// derived types (`includeDerivedPrimTypes`: `LightFilter`,
+    /// `ParticleField`) that it derives from.
     fn adapter_type(&self, prim: &usd::Prim) -> Token {
         let usd_type = prim.type_name().ok().flatten().unwrap_or_default();
-        if self.adapters.for_type(usd_type.as_str()).is_none() && material::is_light_filter(prim) {
-            return Token::from("LightFilter");
+        if self.adapters.for_type(usd_type.as_str()).is_some() {
+            return usd_type;
         }
-        usd_type
+        self.adapters
+            .derived_base(|base| prim.is_a(base).unwrap_or(false))
+            .map(Token::from)
+            .unwrap_or(usd_type)
     }
 
     fn context(&self, stage: &Stage, path: &sdf::Path) -> PrimContext {
