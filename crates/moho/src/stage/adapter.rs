@@ -65,6 +65,10 @@ pub struct AdapterRegistry {
     by_api: Vec<(String, Rc<dyn Adapter>)>,
     /// Applied to every prim (transform, visibility, generic attributes...).
     base: Vec<Rc<dyn Adapter>>,
+    /// The USD types whose adapter also serves the types derived from them
+    /// that have no adapter of their own (`includeDerivedPrimTypes`), in
+    /// registration order.
+    derived: Vec<String>,
 }
 
 impl AdapterRegistry {
@@ -74,6 +78,7 @@ impl AdapterRegistry {
             by_type: HashMap::new(),
             by_api: Vec::new(),
             base: Vec::new(),
+            derived: Vec::new(),
         }
     }
 
@@ -119,9 +124,15 @@ impl AdapterRegistry {
             Rc::new(crate::stage::point_instancer::PointInstancerAdapter),
         );
         registry.set_type("Material", Rc::new(crate::stage::material::MaterialAdapter));
-        for filter in ["LightFilter", "PluginLightFilter"] {
-            registry.set_type(filter, Rc::new(crate::stage::light::LightFilterAdapter));
-        }
+        registry.set_type_and_derived("LightFilter", Rc::new(crate::stage::light::LightFilterAdapter));
+        registry.set_type(
+            "PluginLightFilter",
+            Rc::new(crate::stage::light::LightFilterAdapter),
+        );
+        registry.set_type_and_derived(
+            crate::stage::particle_field::PARTICLE_FIELD,
+            Rc::new(crate::stage::particle_field::ParticleFieldAdapter),
+        );
         registry.set_type("BasisCurves", Rc::new(crate::stage::curves::BASIS_CURVES));
         registry.set_type("NurbsCurves", Rc::new(crate::stage::curves::NURBS_CURVES));
         {
@@ -145,6 +156,22 @@ impl AdapterRegistry {
     /// Sets the adapter for prims of USD type `usd_type`.
     pub fn set_type(&mut self, usd_type: &str, adapter: Rc<dyn Adapter>) {
         self.by_type.insert(usd_type.to_owned(), adapter);
+    }
+
+    /// Sets the adapter for prims of USD type `usd_type` and of every type
+    /// derived from it that has no adapter of its own (UsdImaging's
+    /// `includeDerivedPrimTypes`).
+    pub fn set_type_and_derived(&mut self, usd_type: &str, adapter: Rc<dyn Adapter>) {
+        self.set_type(usd_type, adapter);
+        if !self.derived.iter().any(|t| t == usd_type) {
+            self.derived.push(usd_type.to_owned());
+        }
+    }
+
+    /// The first type registered with its derived types for which `is_a`
+    /// holds.
+    pub fn derived_base(&self, is_a: impl Fn(&str) -> bool) -> Option<&str> {
+        self.derived.iter().map(String::as_str).find(|base| is_a(base))
     }
 
     /// Adds an adapter for prims that apply `api` (an instance of a
@@ -209,6 +236,7 @@ const USD_TO_HYDRA_TYPES: &[(&str, &str)] = &[
     ("Volume", prim_type::VOLUME),
     ("OpenVDBAsset", prim_type::OPENVDB_ASSET),
     ("Field3DAsset", prim_type::FIELD3D_ASSET),
+    ("ParticleField", prim_type::PARTICLE_FIELD),
     ("RenderSettings", prim_type::RENDER_SETTINGS),
     ("RenderProduct", prim_type::RENDER_PRODUCT),
     ("RenderVar", prim_type::RENDER_VAR),

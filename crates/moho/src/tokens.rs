@@ -26,6 +26,7 @@ pub mod prim_type {
     pub const VOLUME: &str = "volume";
     pub const OPENVDB_ASSET: &str = "openvdbAsset";
     pub const FIELD3D_ASSET: &str = "field3dAsset";
+    pub const PARTICLE_FIELD: &str = "particleField";
     pub const RENDER_SETTINGS: &str = "renderSettings";
     pub const RENDER_PRODUCT: &str = "renderProduct";
     pub const RENDER_VAR: &str = "renderVar";
@@ -411,6 +412,18 @@ pub mod volume {
     pub const FIELD_INDEX: &str = "fieldIndex";
     pub const FIELD_DATA_TYPE: &str = "fieldDataType";
     pub const VECTOR_DATA_ROLE_HINT: &str = "vectorDataRoleHint";
+}
+
+/// A UsdVol particle field's primvars (`UsdVolTokens`), as
+/// `UsdImagingDataSourceParticleFieldPrim` names them: the float attribute's
+/// name, whichever of the pair the value comes from.
+pub mod particle_field {
+    pub const POSITIONS: &str = "positions";
+    pub const ORIENTATIONS: &str = "orientations";
+    pub const SCALES: &str = "scales";
+    pub const OPACITIES: &str = "opacities";
+    pub const RADIANCE_SPHERICAL_HARMONICS_COEFFICIENTS: &str = "radiance:sphericalHarmonicsCoefficients";
+    pub const RADIANCE_SPHERICAL_HARMONICS_DEGREE: &str = "radiance:sphericalHarmonicsDegree";
 }
 
 /// UsdRender as UsdImaging's stage index exposes it

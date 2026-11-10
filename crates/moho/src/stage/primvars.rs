@@ -15,6 +15,10 @@
 //!   colour, its value (`primvarValue`, or `indexedPrimvarValue` and
 //!   `indices`) and `elementSize` when it is not 1.
 //!
+//! A particle field's custom primvars are its adapter's
+//! ([`crate::stage::particle_field`]): a constant degree and five vertex
+//! primvars, each read from its float or its `half` attribute.
+//!
 //! A point instancer's instance data are primvars too
 //! (`hydra:instanceTranslations`, ...), read as before until
 //! `hydra-parity-instancing`.
@@ -36,6 +40,7 @@ use crate::locator::{Locator, LocatorSet};
 use crate::stage::PrimContext;
 use crate::stage::adapter::Adapter;
 use crate::stage::attribute::AttributeValue;
+use crate::stage::particle_field;
 use crate::tokens::primvars as t;
 
 const PRIMVARS_PREFIX: &str = "primvars:";
@@ -245,6 +250,7 @@ impl Adapter for PrimvarsAdapter {
         // composes every property of the prim, and every gprim has some.
         let any = !gprim_custom(&prim).is_empty()
             || !instancer_custom(&prim).is_empty()
+            || particle_field::is_particle_field(&prim)
             || !PrimvarsAPI::from_prim_unchecked(prim.clone())
                 .authored_primvars()
                 .unwrap_or_default()
@@ -299,6 +305,9 @@ enum Source {
     Relationship(usd::Relationship),
     /// A gprim's plain attribute read as a primvar.
     Custom(usd::Attribute),
+    /// A particle field's attribute read as a primvar, at the interpolation
+    /// its mapping names.
+    Mapped(usd::Attribute, &'static str),
     /// A point instancer's instance data.
     Instance(usd::Attribute),
 }
@@ -339,6 +348,11 @@ impl Primvars {
             let attribute = prim.attribute(attribute);
             return self.authored(&attribute).then_some(Source::Custom(attribute));
         }
+        if particle_field::is_particle_field(prim) {
+            return particle_field::custom(prim, name)
+                .filter(|(a, _)| self.authored(a))
+                .map(|(a, interpolation)| Source::Mapped(a, interpolation));
+        }
         instancer_custom(prim)
             .into_iter()
             .find(|(n, _)| n == name)
@@ -359,7 +373,14 @@ impl Container for Primvars {
         let custom = gprim_custom(&prim)
             .into_iter()
             .map(|(n, _)| Token::from(n))
-            .chain(instancer_custom(&prim).into_iter().map(|(n, _)| n));
+            .chain(instancer_custom(&prim).into_iter().map(|(n, _)| n))
+            .chain(
+                particle_field::is_particle_field(&prim)
+                    .then(particle_field::custom_names)
+                    .into_iter()
+                    .flatten()
+                    .map(Token::from),
+            );
         for name in custom {
             if !names.contains(&name) {
                 names.push(name);
@@ -395,7 +416,7 @@ impl PrimvarEntry {
     fn attribute(&self) -> Option<&usd::Attribute> {
         match &self.source {
             Source::Primvar(p) => Some(p.attribute()),
-            Source::Custom(a) | Source::Instance(a) => Some(a),
+            Source::Custom(a) | Source::Instance(a) | Source::Mapped(a, _) => Some(a),
             Source::Relationship(_) => None,
         }
     }
@@ -448,6 +469,7 @@ impl PrimvarEntry {
             Source::Primvar(_) | Source::Relationship(_) => primvar,
             Source::Custom(a) => metadata(a).unwrap_or_else(|| Token::from(t::VERTEX)),
             Source::Instance(_) => Token::from(INSTANCE),
+            Source::Mapped(_, interpolation) => Token::from(*interpolation),
         }
     }
 
@@ -473,7 +495,9 @@ impl PrimvarEntry {
             Source::Primvar(_) | Source::Relationship(_) => self.hd_role(),
             // `UsdImagingDataSourceCustomPrimvars` always builds a role,
             // empty when the attribute has none.
-            Source::Custom(_) | Source::Instance(_) => Some(self.hd_role().unwrap_or_default()),
+            Source::Custom(_) | Source::Instance(_) | Source::Mapped(..) => {
+                Some(self.hd_role().unwrap_or_default())
+            }
         }
     }
 
