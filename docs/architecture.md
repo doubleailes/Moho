@@ -324,6 +324,33 @@ give. A consumer that needs other stage metadata (or whether a field other
 than `metersPerUnit` is authored) reads it from the stage it opened,
 through `moho::openusd`.
 
+### Particle fields
+
+`ParticleField` and every type derived from it
+(`ParticleField3DGaussianSplat`) are UsdImaging's particle field adapter
+(`usdVolImaging`): a gprim of type `particleField`, whose `primvars`
+overlay, under the gprim's, the custom primvars
+`radiance:sphericalHarmonicsDegree` (constant), `positions`,
+`orientations`, `scales`, `opacities` and
+`radiance:sphericalHarmonicsCoefficients` (vertex).
+- Each of the five pairs reads its float attribute when that holds
+  elements at the earliest time, else its `half` twin (`positionsh`, ...),
+  named without the suffix either way (C++ `UsesFloat*`, openusd's
+  `attribute_in_use`).
+- As every custom primvar, a value is given only when authored (the
+  degree's fallback is not), `role` is the attribute's Hydra role or empty,
+  `colorSpace` is given for a colour role only and `elementSize` never. The
+  coefficients' authored `elementSize` and `colorSpace` are in the generic
+  attribute data; the element size is `(degree + 1)²`.
+- An edit to either twin dirties that one primvar, a degree edit the
+  degree's. UsdImaging's `particleField` schema (kernel, projection and
+  sorting hints) is an `XXX` there, and not here.
+
+An adapter registered with its derived types
+(`AdapterRegistry::set_type_and_derived`, UsdImaging's
+`includeDerivedPrimTypes`) serves every type that `is_a` it and has no
+adapter of its own: `LightFilter` and `ParticleField`.
+
 ### Materials and lights
 
 A material's `material` is `UsdImagingDataSourceMaterial`'s: one network per

@@ -591,6 +591,16 @@ The fourth open gap, the stage-level `includeRoot` edit's two entries, is
 openusd's authoring (see "A new spec is one resync"): with USD's two
 notices Moho sends both entries.
 
+## Particle fields (`particle-field-adapter`)
+
+Not in the corpus above: the reference build (USD 26.08 from conda-forge)
+has `usdVolImaging`'s particle field adapter, but the check ran before Moho
+had one. The adapter is a line-by-line port of `particleFieldAdapter.cpp`
+and `dataSourceParticleField.cpp` (OpenUSD `release`), checked by
+`tests/particle_field.rs` against the behaviour read in those sources
+(names, interpolations, roles, the float-or-half choice and the dirty
+locators). Add a splat scene to the corpus at the next re-run.
+
 ## Scene globals filter (`hydra-scene-globals`)
 
 Checked afterwards against USD 26.08 with a small oracle:
