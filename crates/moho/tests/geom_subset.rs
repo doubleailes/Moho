@@ -43,7 +43,7 @@ fn read(index: &StageSceneIndex, path: &str, locator: &str) -> Option<Value> {
 fn a_subset_is_a_prim_of_its_own() {
     let (_dir, usd) = stage(SCENE);
     let index = StageSceneIndex::new();
-    index.set_stage(usd);
+    index.set_stage(usd).expect("the stage takes the sink");
     assert_eq!(index.prim(&p("/geo/top")).ty, "geomSubset");
     assert_eq!(
         read(&index, "/geo/top", "geomSubset/type"),
@@ -72,7 +72,7 @@ fn a_subset_is_a_prim_of_its_own() {
 fn a_subset_edit_dirties_as_usd_imaging_does() {
     let (_dir, usd) = stage(SCENE);
     let index = StageSceneIndex::new();
-    index.set_stage(usd.clone());
+    index.set_stage(usd.clone()).expect("the stage takes the sink");
     let recorder = RecordingObserver::on(index.as_ref());
     usd.attribute("/geo/top.indices")
         .unwrap()

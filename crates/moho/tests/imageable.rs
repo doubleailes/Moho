@@ -40,7 +40,7 @@ def Xform "world"
 fn setup() -> (common::TempDir, std::rc::Rc<StageSceneIndex>) {
     let (dir, stage) = stage(SCENE);
     let index = StageSceneIndex::new();
-    index.set_stage(stage);
+    index.set_stage(stage).expect("the stage takes the sink");
     (dir, index)
 }
 
@@ -153,7 +153,7 @@ def Shader "shader"
 "#,
     );
     let index = moho::stage::StageSceneIndex::new();
-    index.set_stage(usd);
+    index.set_stage(usd).expect("the stage takes the sink");
     let names = |path: &str| index.prim(&common::p(path)).data.unwrap().names();
     let group = names("/group");
     assert!(

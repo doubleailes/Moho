@@ -16,7 +16,7 @@ use moho::stage::StageSceneIndex;
 fn settings_data(scene: &str) -> (common::TempDir, moho::data_source::ContainerHandle) {
     let (dir, usd) = stage(scene);
     let stage_index = StageSceneIndex::new();
-    stage_index.set_stage(usd);
+    stage_index.set_stage(usd).expect("the stage takes the sink");
     let flat = RenderSettingsFlatteningSceneIndex::new(stage_index);
     let data = flat.prim(&p("/Render/settings")).data.unwrap();
     (dir, data)

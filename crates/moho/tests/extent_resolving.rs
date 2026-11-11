@@ -42,7 +42,7 @@ fn read(index: &dyn SceneIndex, path: &str, locator: &str) -> Option<Value> {
 fn a_model_with_only_a_hint() {
     let (_dir, usd) = stage(SCENE);
     let stage_index = StageSceneIndex::new();
-    stage_index.set_stage(usd);
+    stage_index.set_stage(usd).expect("the stage takes the sink");
     let index = ExtentResolvingSceneIndex::new(stage_index.clone(), STANDARD_PURPOSES.iter().copied());
     let names = index.prim(&p("/model")).data.unwrap().names();
     assert!(names.iter().any(|n| n == "extent"), "{names:?}");
@@ -57,7 +57,7 @@ fn a_model_with_only_a_hint() {
 fn an_authored_extent_wins() {
     let (_dir, usd) = stage(SCENE);
     let stage_index = StageSceneIndex::new();
-    stage_index.set_stage(usd);
+    stage_index.set_stage(usd).expect("the stage takes the sink");
     let index = ExtentResolvingSceneIndex::new(stage_index, STANDARD_PURPOSES.iter().copied());
     assert_eq!(read(index.as_ref(), "/mesh", "extent/max"), v(2.0, 2.0, 2.0));
 }
@@ -66,7 +66,9 @@ fn an_authored_extent_wins() {
 fn a_hint_edit_dirties_the_extent() {
     let (_dir, usd) = stage(SCENE);
     let stage_index = StageSceneIndex::new();
-    stage_index.set_stage(usd.clone());
+    stage_index
+        .set_stage(usd.clone())
+        .expect("the stage takes the sink");
     let index = ExtentResolvingSceneIndex::new(stage_index.clone(), STANDARD_PURPOSES.iter().copied());
     let recorder = RecordingObserver::on(index.as_ref());
     usd.attribute("/model.extentsHint")

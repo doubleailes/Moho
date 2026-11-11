@@ -72,7 +72,7 @@ fn single(value: Option<Value>) -> Option<sdf::Path> {
 fn a_binding_into_an_instance_names_the_propagated_prototype() {
     let (_dir, usd) = stage(SCENE);
     let stage_index = StageSceneIndex::new();
-    stage_index.set_stage(usd);
+    stage_index.set_stage(usd).expect("the stage takes the sink");
     let chain = moho::chain::standard(stage_index);
     let instancer = single(value(
         chain.as_ref(),
@@ -110,7 +110,7 @@ fn a_binding_into_an_instance_names_the_propagated_prototype() {
 fn other_paths_and_data_are_left_alone() {
     let (_dir, usd) = stage(SCENE);
     let stage_index = StageSceneIndex::new();
-    stage_index.set_stage(usd);
+    stage_index.set_stage(usd).expect("the stage takes the sink");
     let chain = moho::chain::standard(stage_index);
     assert_eq!(
         single(value(

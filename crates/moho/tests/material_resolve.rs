@@ -109,7 +109,7 @@ fn chain() -> Chain {
 fn chain_of(scene: &str) -> Chain {
     let (dir, usd) = stage(scene);
     let stage_index = StageSceneIndex::new();
-    stage_index.set_stage(usd);
+    stage_index.set_stage(usd).expect("the stage takes the sink");
     let flat = FlatteningSceneIndex::new(stage_index.clone());
     let resolved = MaterialBindingResolvingSceneIndex::new(flat);
     Chain {

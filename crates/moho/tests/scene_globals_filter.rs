@@ -34,7 +34,7 @@ def Xform "world"
 fn over_stage(text: &str) -> (common::TempDir, Rc<StageSceneIndex>, Rc<SceneGlobalsSceneIndex>) {
     let (dir, stage) = stage(text);
     let stage_index = StageSceneIndex::new();
-    stage_index.set_stage(stage);
+    stage_index.set_stage(stage).expect("the stage takes the sink");
     let globals = SceneGlobalsSceneIndex::new(chain::standard(stage_index.clone()));
     (dir, stage_index, globals)
 }
@@ -308,7 +308,7 @@ fn a_renderer_filter_at_phase_zero_handed_to_the_host() {
 
     let (_dir, stage) = stage(AUTHORED);
     let stage_index = StageSceneIndex::new();
-    stage_index.set_stage(stage);
+    stage_index.set_stage(stage).expect("the stage takes the sink");
     let held: Rc<OnceCell<Rc<SceneGlobalsSceneIndex>>> = Rc::default();
     let slot = held.clone();
     let below_light_linking: Rc<RefCell<Option<SceneIndexHandle>>> = Rc::default();

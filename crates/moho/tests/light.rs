@@ -80,7 +80,7 @@ const TYPES: &[(&str, &str)] = &[
 fn setup() -> (common::TempDir, std::rc::Rc<StageSceneIndex>) {
     let (dir, stage) = stage(SCENE);
     let index = StageSceneIndex::new();
-    index.set_stage(stage);
+    index.set_stage(stage).expect("the stage takes the sink");
     (dir, index)
 }
 

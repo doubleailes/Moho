@@ -109,7 +109,7 @@ fn names(index: &StageSceneIndex, path: &str, locator: &str) -> Vec<String> {
 fn setup() -> (common::TempDir, std::rc::Rc<StageSceneIndex>) {
     let (dir, usd) = stage(SPLATS);
     let index = StageSceneIndex::new();
-    index.set_stage(usd);
+    index.set_stage(usd).expect("the stage takes the sink");
     index.set_time(TimeCode::new(1.0));
     (dir, index)
 }
@@ -199,10 +199,10 @@ fn float_only() {
     );
     // The attribute's metadata stays in the generic attribute data.
     let attribute = "__usdAttributes/radiance:sphericalHarmonicsCoefficients";
-    // openusd at this revision reads the metadatum as a string.
+    // openusd reads the metadatum as a token, as C++ does.
     assert_eq!(
         read(&index, path, &format!("{attribute}/colorSpace")),
-        Some(Value::String("lin_rec709_scene".to_owned()))
+        Some(Value::Token("lin_rec709_scene".into()))
     );
     assert_eq!(
         read(&index, path, &format!("{attribute}/elementSize")),
@@ -267,7 +267,7 @@ fn nothing_authored_gives_nothing() {
 fn usdc_written_by_openusd() {
     let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/particle_field.usdc");
     let index = StageSceneIndex::new();
-    index.set_stage(open(&fixture));
+    index.set_stage(open(&fixture)).expect("the stage takes the sink");
     let coefficients: Vec<_> = (0..8u8)
         .map(|i| (0.25 * f32::from(i), -0.125 * f32::from(i), 0.5))
         .collect();
@@ -481,7 +481,7 @@ fn a_time_change_dirties_animated_positions_alone() {
 fn the_standard_chain_keeps_the_particle_field() {
     let (_dir, usd) = stage(SPLATS);
     let index = StageSceneIndex::new();
-    index.set_stage(usd);
+    index.set_stage(usd).expect("the stage takes the sink");
     let chain = moho::chain::standard(index);
     let prim = chain.prim(&p("/world/halfOnly"));
     assert_eq!(prim.ty, "particleField");

@@ -63,7 +63,7 @@ def Material "mtlx"
 fn setup() -> (common::TempDir, std::rc::Rc<StageSceneIndex>) {
     let (dir, stage) = stage(SCENE);
     let index = StageSceneIndex::new();
-    index.set_stage(stage);
+    index.set_stage(stage).expect("the stage takes the sink");
     (dir, index)
 }
 
@@ -398,7 +398,7 @@ def Material "m"
 "#,
     );
     let index = StageSceneIndex::new();
-    index.set_stage(usd);
+    index.set_stage(usd).expect("the stage takes the sink");
     let net = network(&index, "/m", "");
     let links = locate(&net, &Locator::new(["nodes", "sum", "inputConnections", "in"])).unwrap();
     let links = links.as_vector().unwrap();
@@ -461,7 +461,7 @@ def Material "m" (
 fn networks() -> (common::TempDir, std::rc::Rc<StageSceneIndex>) {
     let (dir, stage) = stage(NETWORKS);
     let index = StageSceneIndex::new();
-    index.set_stage(stage);
+    index.set_stage(stage).expect("the stage takes the sink");
     (dir, index)
 }
 
@@ -554,7 +554,7 @@ def Material "m"
 "#,
     );
     let index = StageSceneIndex::new();
-    index.set_stage(usd);
+    index.set_stage(usd).expect("the stage takes the sink");
     let net = network(&index, "/m", "");
     // The material's `propertyOrder`, its inputs only, by base name.
     assert_eq!(
@@ -637,7 +637,9 @@ def Scope "lib"
 "#,
     );
     let index = StageSceneIndex::new();
-    index.set_stage(open_masked(&root, &["/m"]));
+    index
+        .set_stage(open_masked(&root, &["/m"]))
+        .expect("the stage takes the sink");
     let net = network(&index, "/m", "");
     assert_eq!(names(&net, "nodes"), ["surface"]);
     assert!(names(&net, "nodes/surface/inputConnections").is_empty());
@@ -678,7 +680,7 @@ def Material "m"
 "#,
     );
     let index = StageSceneIndex::new();
-    index.set_stage(usd.clone());
+    index.set_stage(usd.clone()).expect("the stage takes the sink");
     let recorder = RecordingObserver::on(index.as_ref());
     usd.attribute("/m/u.inputs:x").unwrap().set(2.0f32).unwrap();
     index.apply_pending_updates();

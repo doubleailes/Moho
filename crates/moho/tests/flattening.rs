@@ -65,7 +65,7 @@ def Xform "moving"
 fn setup() -> (common::TempDir, Rc<StageSceneIndex>, Rc<FlatteningSceneIndex>) {
     let (dir, stage) = stage(SCENE);
     let stage_index = StageSceneIndex::new();
-    stage_index.set_stage(stage);
+    stage_index.set_stage(stage).expect("the stage takes the sink");
     stage_index.set_time(TimeCode::new(1.0));
     let flat = FlatteningSceneIndex::new(stage_index.clone());
     (dir, stage_index, flat)
@@ -352,7 +352,7 @@ fn read(flat: &FlatteningSceneIndex, path: &str, locator: &str) -> Option<Value>
 fn the_up_axis_reaches_every_prim() {
     let (_dir, stage) = stage(MODELS);
     let stage_index = StageSceneIndex::new();
-    stage_index.set_stage(stage);
+    stage_index.set_stage(stage).expect("the stage takes the sink");
     let flat = FlatteningSceneIndex::new(stage_index);
     for path in ["/asset", "/asset/part", "/asset/part/geo"] {
         assert_eq!(
@@ -367,7 +367,7 @@ fn the_up_axis_reaches_every_prim() {
 fn model_data_is_inherited() {
     let (_dir, stage) = stage(MODELS);
     let stage_index = StageSceneIndex::new();
-    stage_index.set_stage(stage);
+    stage_index.set_stage(stage).expect("the stage takes the sink");
     let flat = FlatteningSceneIndex::new(stage_index);
     assert_eq!(
         read(&flat, "/asset/part/geo", "model/modelPath"),

@@ -249,7 +249,9 @@ fn scene() -> (Stage, Rc<StageSceneIndex>, SceneIndexHandle) {
     stage.define_typed_prim("/world/geo", "Mesh").unwrap();
     stage.define_typed_prim("/Looks/red", "Material").unwrap();
     let stage_index = StageSceneIndex::new();
-    stage_index.set_stage(stage.clone());
+    stage_index
+        .set_stage(stage.clone())
+        .expect("the stage takes the sink");
     let chain = chain::standard(stage_index.clone());
     (stage, stage_index, chain)
 }

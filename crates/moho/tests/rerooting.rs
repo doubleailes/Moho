@@ -99,7 +99,7 @@ fn walk(index: &dyn SceneIndex, root: &sdf::Path) -> Vec<sdf::Path> {
 fn a_binding_inside_a_native_prototype_names_the_propagated_material() {
     let (_dir, usd) = stage(SCENE);
     let index = StageSceneIndex::new();
-    index.set_stage(usd);
+    index.set_stage(usd).expect("the stage takes the sink");
     let chain = moho::chain::standard(index);
     let all = walk(chain.as_ref(), &sdf::Path::abs_root());
     let geo = all
@@ -124,7 +124,7 @@ fn a_binding_inside_a_native_prototype_names_the_propagated_material() {
 fn a_binding_inside_a_point_instancer_prototype_names_the_copy() {
     let (_dir, usd) = stage(SCENE);
     let index = StageSceneIndex::new();
-    index.set_stage(usd);
+    index.set_stage(usd).expect("the stage takes the sink");
     let chain = moho::chain::standard(index);
     let all = walk(chain.as_ref(), &p("/world/scatter"));
     let geo = all

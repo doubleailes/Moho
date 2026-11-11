@@ -33,7 +33,7 @@ fn setting_a_stage_adds_its_prims() {
     let (_dir, stage) = stage(SCENE);
     let index = StageSceneIndex::new();
     let recorder = RecordingObserver::on(index.as_ref());
-    index.set_stage(stage);
+    index.set_stage(stage).expect("the stage takes the sink");
     assert_eq!(
         recorder.take(),
         [
@@ -56,9 +56,9 @@ fn replacing_the_stage_removes_first() {
     let (_a, first) = stage(SCENE);
     let (_b, second) = stage("#usda 1.0\ndef Mesh \"other\"\n{\n}\n");
     let index = StageSceneIndex::new();
-    index.set_stage(first);
+    index.set_stage(first).expect("the stage takes the sink");
     let recorder = RecordingObserver::on(index.as_ref());
-    index.set_stage(second);
+    index.set_stage(second).expect("the stage takes the sink");
     assert_eq!(
         recorder.take(),
         [
@@ -81,7 +81,9 @@ fn a_masked_stage_holds_only_the_mask() {
     );
     let index = StageSceneIndex::new();
     let recorder = RecordingObserver::on(index.as_ref());
-    index.set_stage(open_masked(&root, &["/world/a"]));
+    index
+        .set_stage(open_masked(&root, &["/world/a"]))
+        .expect("the stage takes the sink");
     assert_eq!(
         recorder.take(),
         [
@@ -100,7 +102,7 @@ fn inactive_and_abstract_prims_are_not_exposed() {
         "#usda 1.0\ndef Xform \"world\"\n{\n    def Mesh \"off\" (\n        active = false\n    )\n    {\n    }\n}\nclass Xform \"_class\"\n{\n}\nover \"undefined\"\n{\n    def Mesh \"pebble\"\n    {\n    }\n}\n",
     );
     let index = StageSceneIndex::new();
-    index.set_stage(stage);
+    index.set_stage(stage).expect("the stage takes the sink");
     assert!(!index.prim(&p("/world/off")).is_defined());
     assert!(!index.prim(&p("/_class")).is_defined());
     // Overs are exposed, as UsdImaging's traversal does not require a
@@ -119,7 +121,7 @@ fn instance_contents_are_hidden() {
         "#usda 1.0\ndef Xform \"asset\"\n{\n    def Mesh \"geo\"\n    {\n    }\n}\ndef Xform \"inst\" (\n    instanceable = true\n    references = </asset>\n)\n{\n}\n",
     );
     let index = StageSceneIndex::new();
-    index.set_stage(stage);
+    index.set_stage(stage).expect("the stage takes the sink");
     assert!(index.prim(&p("/inst")).is_defined());
     assert!(!index.prim(&p("/inst/geo")).is_defined());
     assert!(index.children(&p("/inst")).is_empty());
@@ -140,12 +142,16 @@ fn unloaded_prims_included() {
             .unwrap()
     };
     let loaded_only = StageSceneIndex::new();
-    loaded_only.set_stage(open_unloaded());
+    loaded_only
+        .set_stage(open_unloaded())
+        .expect("the stage takes the sink");
     assert!(!loaded_only.prim(&p("/world/elem")).is_defined());
 
     let with_unloaded = StageSceneIndex::new();
     with_unloaded.set_include_unloaded_prims(true);
-    with_unloaded.set_stage(open_unloaded());
+    with_unloaded
+        .set_stage(open_unloaded())
+        .expect("the stage takes the sink");
     assert!(with_unloaded.prim(&p("/world/elem")).is_defined());
     assert!(!with_unloaded.prim(&p("/world/elem/geo")).is_defined());
     assert!(with_unloaded.children(&p("/world/elem")).is_empty());

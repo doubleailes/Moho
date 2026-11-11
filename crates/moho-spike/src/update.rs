@@ -194,7 +194,7 @@ impl Bench {
         let start = Instant::now();
         stage.define_typed_prim(LIGHTS, "Scope")?;
         let stage_index = StageSceneIndex::new();
-        stage_index.set_stage(stage.clone());
+        stage_index.set_stage(stage.clone())?;
         let find = |given: Option<&str>, ty: &str| -> Result<sdf::Path> {
             match given {
                 Some(path) => Ok(sdf::path(path)?),

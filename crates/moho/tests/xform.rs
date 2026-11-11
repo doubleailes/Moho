@@ -47,7 +47,7 @@ def Xform "cancelled"
 fn setup() -> (common::TempDir, std::rc::Rc<StageSceneIndex>) {
     let (dir, stage) = stage(SCENE);
     let index = StageSceneIndex::new();
-    index.set_stage(stage);
+    index.set_stage(stage).expect("the stage takes the sink");
     (dir, index)
 }
 
@@ -170,7 +170,7 @@ def Xform "still"
 "#,
     );
     let index = moho::stage::StageSceneIndex::new();
-    index.set_stage(usd);
+    index.set_stage(usd).expect("the stage takes the sink");
     let moved = index.prim(&common::p("/moved")).data.unwrap();
     assert_eq!(
         locate(&moved, &Locator::parse("geomXformVectors/translation")).and_then(|d| d.value()),

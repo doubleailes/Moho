@@ -31,7 +31,7 @@ const MEMBERS: &[(&str, &str, &str)] = &[
 fn render_prims_equal_openusd() {
     let (_dir, stage) = stage(common::render::SCENE);
     let index = StageSceneIndex::new();
-    index.set_stage(stage.clone());
+    index.set_stage(stage.clone()).expect("the stage takes the sink");
     for (path, ty) in [
         ("/Render/settings", "renderSettings"),
         ("/Render/beauty", "renderProduct"),
@@ -70,7 +70,7 @@ fn render_prims_equal_openusd() {
 fn stage_level_render_data_is_usd_imaging_s() {
     let (_dir, stage) = stage(common::render::SCENE);
     let index = StageSceneIndex::new();
-    index.set_stage(stage);
+    index.set_stage(stage).expect("the stage takes the sink");
     let var = index.prim(&p("/Render/color")).data.unwrap();
     assert!(locate(&var, &Locator::parse("__usdRenderVar")).is_some());
     assert!(locate(&var, &Locator::parse("renderVar")).is_none());
@@ -106,7 +106,7 @@ fn render_prim_edits_dirty_their_member_or_the_namespaced_settings() {
 
     let (_dir, stage) = stage(common::render::SCENE);
     let index = StageSceneIndex::new();
-    index.set_stage(stage.clone());
+    index.set_stage(stage.clone()).expect("the stage takes the sink");
     let recorder = RecordingObserver::on(index.as_ref());
     stage
         .attribute("/Render/settings.myRenderer:samplesPerPixel")
@@ -141,7 +141,7 @@ fn render_prim_edits_dirty_their_member_or_the_namespaced_settings() {
 fn namespaced_settings_and_pass_collections() {
     let (_dir, stage) = stage(common::render::SCENE);
     let index = StageSceneIndex::new();
-    index.set_stage(stage);
+    index.set_stage(stage).expect("the stage takes the sink");
     assert_eq!(
         read(
             &index,
@@ -197,7 +197,7 @@ def RenderPass "pass" (
 "#,
     );
     let index = StageSceneIndex::new();
-    index.set_stage(usd);
+    index.set_stage(usd).expect("the stage takes the sink");
     let pass = index.prim(&p("/pass")).data.unwrap();
     let collections = locate(&pass, &Locator::parse("collections"))
         .unwrap()

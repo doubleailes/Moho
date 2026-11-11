@@ -44,7 +44,7 @@ def Scope "lights"
 fn setup() -> (common::TempDir, Rc<StageSceneIndex>, SceneIndexHandle) {
     let (dir, usd) = stage(&scene());
     let stage_index = StageSceneIndex::new();
-    stage_index.set_stage(usd);
+    stage_index.set_stage(usd).expect("the stage takes the sink");
     let terminal = chain::renderer_filters(
         chain::standard(stage_index.clone()),
         &[

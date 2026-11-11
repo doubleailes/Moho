@@ -142,7 +142,9 @@ pub fn stage_index(stage: Stage, include_unloaded: bool) -> std::rc::Rc<moho::st
         .then(|| openusd::usd::TimeCode::new(stage.start_time_code()));
     let index = moho::stage::StageSceneIndex::new();
     index.set_include_unloaded_prims(include_unloaded);
-    index.set_stage(stage);
+    index
+        .set_stage(stage)
+        .expect("a stage outside any edit takes the sink");
     if let Some(t) = time {
         index.set_time(t);
     }

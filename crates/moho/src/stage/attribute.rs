@@ -73,7 +73,7 @@ impl AttributeValue {
                 .ok()
                 .and_then(|stack| stack.into_iter().next())
                 .and_then(|site| {
-                    std::path::Path::new(&site.layer)
+                    std::path::Path::new(site.layer.resolved_path().unwrap_or(site.layer.identifier()))
                         .parent()
                         .map(std::path::Path::to_path_buf)
                 })

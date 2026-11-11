@@ -109,7 +109,7 @@ fn setup() -> (
 ) {
     let (dir, usd) = stage(SCENE);
     let stage_index = StageSceneIndex::new();
-    stage_index.set_stage(usd);
+    stage_index.set_stage(usd).expect("the stage takes the sink");
     stage_index.set_time(TimeCode::new(1.0));
     let chain = moho::chain::standard(stage_index.clone());
     (dir, stage_index, chain)
@@ -414,7 +414,7 @@ def Scope "Render"
 fn the_standard_chain_composes_and_links_no_lights() {
     let (_dir, usd) = stage(COMPOSITION);
     let stage_index = StageSceneIndex::new();
-    stage_index.set_stage(usd);
+    stage_index.set_stage(usd).expect("the stage takes the sink");
     let chain = moho::chain::standard(stage_index);
     // A native instance inside a point instancer prototype is scattered.
     let copy = match read(chain.as_ref(), "/world/scatter", "instancerTopology/prototypes") {
@@ -481,7 +481,7 @@ def Xform "world"
     let stage_index = moho::stage::StageSceneIndex::new();
     let chain = moho::chain::standard(stage_index.clone());
     let recorder = moho::scene_index::testing::RecordingObserver::on(chain.as_ref());
-    stage_index.set_stage(stage);
+    stage_index.set_stage(stage).expect("the stage takes the sink");
     let added: Vec<String> = recorder
         .take()
         .into_iter()

@@ -59,7 +59,7 @@ fn read(index: &dyn SceneIndex, path: &sdf::Path, locator: &str) -> Option<Value
 fn chain() -> (common::TempDir, moho::scene_index::SceneIndexHandle) {
     let (dir, usd) = stage(SCENE);
     let stage_index = StageSceneIndex::new();
-    stage_index.set_stage(usd);
+    stage_index.set_stage(usd).expect("the stage takes the sink");
     (dir, moho::chain::standard(stage_index))
 }
 

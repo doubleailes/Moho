@@ -64,7 +64,7 @@ fn attr(index: &StageSceneIndex, prim: &str, name: &str, field: &str) -> Option<
 fn index() -> (common::TempDir, std::rc::Rc<StageSceneIndex>) {
     let (dir, stage) = stage(SCENE);
     let index = StageSceneIndex::new();
-    index.set_stage(stage);
+    index.set_stage(stage).expect("the stage takes the sink");
     (dir, index)
 }
 
@@ -103,8 +103,8 @@ fn metadata_only_when_authored() {
     let (_dir, index) = index();
     assert_eq!(
         attr(&index, "/world/geo", "primvars:displayColor", "colorSpace"),
-        // Raw, as openusd stores the metadata.
-        Some(Value::String("lin_rec709".into()))
+        // Raw, as openusd stores the metadata: a token, as C++ does.
+        Some(Value::Token(Token::from("lin_rec709")))
     );
     assert_eq!(
         attr(&index, "/world/geo", "primvars:displayColor", "interpolation"),

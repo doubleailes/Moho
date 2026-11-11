@@ -37,7 +37,7 @@ fn setup() -> (
 ) {
     let (dir, stage) = stage(SCENE);
     let index = StageSceneIndex::new();
-    index.set_stage(stage);
+    index.set_stage(stage).expect("the stage takes the sink");
     let recorder = RecordingObserver::on(index.as_ref());
     (dir, index, recorder)
 }
@@ -234,7 +234,7 @@ def Xform "world"
 "#,
     );
     let index = StageSceneIndex::new();
-    index.set_stage(usd);
+    index.set_stage(usd).expect("the stage takes the sink");
     let recorder = RecordingObserver::on(index.as_ref());
     let stage = index.stage().unwrap();
     stage
@@ -310,7 +310,7 @@ def Xform "world"
 "#,
     );
     let index = StageSceneIndex::new();
-    index.set_stage(usd);
+    index.set_stage(usd).expect("the stage takes the sink");
     let stage = index.stage().unwrap();
     let root = moho::openusd::sdf::Path::abs_root();
     // Listed once, so that what follows reads children held since.
@@ -366,7 +366,7 @@ def Xform "world"
 "#,
     );
     let index = StageSceneIndex::new();
-    index.set_stage(usd);
+    index.set_stage(usd).expect("the stage takes the sink");
     let stage = index.stage().unwrap();
     // Listed once, so that what follows reads children held since.
     assert_eq!(index.children(&p("/world")), [p("/world/a"), p("/world/b")]);
@@ -402,7 +402,7 @@ def Xform "world"
 "#,
     );
     let index = StageSceneIndex::new();
-    index.set_stage(usd);
+    index.set_stage(usd).expect("the stage takes the sink");
     let stage = index.stage().unwrap();
     // Listed once, so that what follows reads children held since.
     assert_eq!(index.children(&p("/world")), [p("/world/a"), p("/world/b")]);

@@ -66,7 +66,7 @@ def Xform "world" (
 fn setup() -> (common::TempDir, std::rc::Rc<StageSceneIndex>) {
     let (dir, stage) = stage(SCENE);
     let index = StageSceneIndex::new();
-    index.set_stage(stage);
+    index.set_stage(stage).expect("the stage takes the sink");
     index.set_time(TimeCode::new(1.0));
     (dir, index)
 }
@@ -267,7 +267,7 @@ def BasisCurves "hair"
 "#,
     );
     let index = StageSceneIndex::new();
-    index.set_stage(usd);
+    index.set_stage(usd).expect("the stage takes the sink");
     let geo = primvars(&index, "/geo");
     assert_eq!(
         geo.primvar("points").unwrap().primvar_value().unwrap().value(0.0),
@@ -345,7 +345,7 @@ def PointInstancer "pi"
 "#,
     );
     let index = StageSceneIndex::new();
-    index.set_stage(stage);
+    index.set_stage(stage).expect("the stage takes the sink");
     let data = index.prim(&p("/pi")).data.unwrap();
     let primvars = moho::data_source::locate(&data, &Locator::parse("primvars")).unwrap();
     let primvars = primvars.as_container().unwrap();
@@ -404,7 +404,7 @@ def PointInstancer "pi"
 "#,
     );
     let index = StageSceneIndex::new();
-    index.set_stage(stage);
+    index.set_stage(stage).expect("the stage takes the sink");
     let data = index.prim(&p("/pi")).data.unwrap();
     let interpolation = |name: &str| {
         moho::data_source::locate(&data, &Locator::parse(&format!("primvars/{name}/interpolation")))
@@ -429,7 +429,7 @@ def Points "dots"
 "#,
     );
     let index = StageSceneIndex::new();
-    index.set_stage(stage);
+    index.set_stage(stage).expect("the stage takes the sink");
     let data = index.prim(&p("/dots")).data.unwrap();
     assert_eq!(
         moho::data_source::locate(&data, &Locator::parse("primvars/widths/primvarValue"))
@@ -514,7 +514,7 @@ def BasisCurves "hair" (
     );
     let stage = common::open(&root);
     let index = StageSceneIndex::new();
-    index.set_stage(stage.clone());
+    index.set_stage(stage.clone()).expect("the stage takes the sink");
     index.set_time(TimeCode::new(1.0));
     let schema = primvars(&index, "/hair");
     for (name, authored) in [("early", true), ("late", true), ("never", false)] {

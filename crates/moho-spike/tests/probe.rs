@@ -14,9 +14,10 @@ fn commit(resynced: &[&str], changed_info_only: &[&str]) -> Notice {
     }
 }
 
-fn load_rules(resynced: &[&str]) -> Notice {
+fn load_rules(resynced: &[&str], recomposed: &[&str]) -> Notice {
     Notice::LoadRules {
         resynced: resynced.iter().map(|s| s.to_string()).collect(),
+        recomposed: recomposed.iter().map(|s| s.to_string()).collect(),
     }
 }
 
@@ -55,12 +56,12 @@ fn notices_across_loading() {
     assert_eq!(steps[1].attribute, Some(1.0));
 
     // Loading and unloading notify only through `load_rules_changed`, never
-    // as `after_commit`, so an index can tell them from edits. The path is
-    // the nearest ancestor whose load rule changes resolution (`/world`
-    // under `LoadNone`), not the loaded prim: read literally, as a subtree
-    // resync, it covers every sibling chunk.
-    assert_eq!(steps[2].notices, [load_rules(&["/world"])]);
-    assert_eq!(steps[4].notices, [load_rules(&["/world"])]);
+    // as `after_commit`, so an index can tell them from edits. The subtree
+    // resynced is the payload's prim; its ancestor whose load rule changes
+    // resolution (`/world` under `LoadNone`) is recomposed in place, not
+    // resynced, so its sibling chunks are not.
+    assert_eq!(steps[2].notices, [load_rules(&["/world/element_0"], &["/world"])]);
+    assert_eq!(steps[4].notices, [load_rules(&["/world/element_0"], &["/world"])]);
 
     // Edits while loaded, and after unloading again, are info-only.
     assert_eq!(steps[3].notices, [commit(&[], &[&attribute])]);

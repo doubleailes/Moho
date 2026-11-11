@@ -76,12 +76,6 @@ the steps that land in this repository or depend on it.
 
 ## Upstream candidates (openusd)
 
-- A resync for a prim whose children or properties a layer reorders, and
-  the asset path walk's plain data probe (`AbstractData::holds_plain_data`).
-  Moho pins doubleailes/openusd at `54db9fd` (`perf/path-prim-len`:
-  upstream `5b86332` plus both, and mxpv/openusd#186's one-lookup
-  prototype root) until they are upstream.
-
 - Splines (`Ts`): typed knots, evaluation, authoring, usdc encoding.
 - An array-size read on `usd::Attribute`. A Gaussian splat's float-or-half
   choice (`ParticleField3DGaussianSplat::attribute_in_use`, C++

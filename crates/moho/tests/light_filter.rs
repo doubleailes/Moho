@@ -43,7 +43,7 @@ def Xform "world"
 fn setup() -> (common::TempDir, std::rc::Rc<StageSceneIndex>) {
     let (dir, usd) = stage(SCENE);
     let index = StageSceneIndex::new();
-    index.set_stage(usd);
+    index.set_stage(usd).expect("the stage takes the sink");
     (dir, index)
 }
 

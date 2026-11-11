@@ -109,7 +109,9 @@ fn fixture() -> Fixture {
     dir.write("building.usda", BUILDING);
     let root = dir.write("root.usda", ROOT);
     let stage_index = StageSceneIndex::new();
-    stage_index.set_stage(open(&root));
+    stage_index
+        .set_stage(open(&root))
+        .expect("the stage takes the sink");
     let index = NativeInstancingSceneIndex::new(stage_index);
     Fixture { _dir: dir, index }
 }
@@ -427,7 +429,7 @@ mod through_the_chain {
     fn chain(text: &str) -> (TempDir, SceneIndexHandle) {
         let (dir, usd) = stage(text);
         let stage_index = StageSceneIndex::new();
-        stage_index.set_stage(usd);
+        stage_index.set_stage(usd).expect("the stage takes the sink");
         (dir, moho::chain::standard(stage_index))
     }
 
@@ -774,7 +776,7 @@ def Xform "world"
 "#,
     );
     let stage_index = StageSceneIndex::new();
-    stage_index.set_stage(usd);
+    stage_index.set_stage(usd).expect("the stage takes the sink");
     let chain = moho::chain::standard(stage_index.clone());
     let recorder = RecordingObserver::on(chain.as_ref());
     stage_index.stage().unwrap().remove_prim("/world/a").unwrap();

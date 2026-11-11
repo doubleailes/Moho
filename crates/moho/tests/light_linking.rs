@@ -49,7 +49,7 @@ def Xform "world"
 fn setup(scene: &str) -> (common::TempDir, Rc<StageSceneIndex>, Rc<LightLinkingSceneIndex>) {
     let (dir, usd) = stage(scene);
     let stage_index = StageSceneIndex::new();
-    stage_index.set_stage(usd);
+    stage_index.set_stage(usd).expect("the stage takes the sink");
     let linking = LightLinkingSceneIndex::new(chain::standard(stage_index.clone()));
     (dir, stage_index, linking)
 }

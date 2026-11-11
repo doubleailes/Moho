@@ -62,7 +62,7 @@ fn token(s: &str) -> Option<Value> {
 fn prim_info_names_the_usd_prim() {
     let (_dir, usd) = stage(SCENE);
     let index = StageSceneIndex::new();
-    index.set_stage(usd);
+    index.set_stage(usd).expect("the stage takes the sink");
     assert_eq!(info(&index, "/world", "specifier"), token("def"));
     assert_eq!(info(&index, "/world", "typeName"), token("Xform"));
     assert_eq!(info(&index, "/world", "kind"), token("group"));
@@ -146,7 +146,7 @@ def Xform "instance" (
 fn variant_selections() {
     let (_dir, usd) = stage(VARIANTS);
     let index = StageSceneIndex::new();
-    index.set_stage(usd);
+    index.set_stage(usd).expect("the stage takes the sink");
     assert_eq!(
         read(&index, "/asset", &["__usdPrimInfo", "variantSelections", "lod"]),
         token("high")
@@ -162,7 +162,7 @@ fn variant_selections() {
 fn a_native_instance_names_its_prototype_only() {
     let (_dir, usd) = stage(VARIANTS);
     let index = StageSceneIndex::new();
-    index.set_stage(usd);
+    index.set_stage(usd).expect("the stage takes the sink");
     let Some(Value::PathVec(prototype)) = info(&index, "/instance", "niPrototypePath") else {
         panic!()
     };
@@ -201,7 +201,7 @@ fn a_native_instance_names_its_prototype_only() {
 fn time_variance_does_not_depend_on_the_index_time() {
     let (_dir, usd) = stage(SCENE);
     let index = StageSceneIndex::new();
-    index.set_stage(usd);
+    index.set_stage(usd).expect("the stage takes the sink");
     // No time was ever set: the index reads at time code 0.
     let varying = |path: &str| {
         read(
@@ -215,12 +215,12 @@ fn time_variance_does_not_depend_on_the_index_time() {
 }
 
 #[test]
-fn a_kind_edit_notifies_nothing() {
+fn a_kind_edit_resyncs_its_prim() {
     use moho::scene_index::testing::RecordingObserver;
 
     let (_dir, usd) = stage(SCENE);
     let index = StageSceneIndex::new();
-    index.set_stage(usd);
+    index.set_stage(usd).expect("the stage takes the sink");
     let recorder = RecordingObserver::on(index.as_ref());
     index
         .stage()
@@ -230,9 +230,15 @@ fn a_kind_edit_notifies_nothing() {
         .set_metadata("kind", Token::from("assembly"))
         .unwrap();
     index.apply_pending_updates();
-    // `kind` is a built-in field: UsdImaging ignores its change.
+    // `UsdStage` resyncs a prim whose `kind` changes, and UsdImaging resyncs
+    // what the stage resyncs: the prim is added again.
     let notices = recorder.take();
-    assert!(notices.is_empty(), "{notices:?}");
+    assert!(
+        notices
+            .iter()
+            .any(|n| format!("{n:?}").contains("Added") && format!("{n:?}").contains("\"/world\"")),
+        "{notices:?}"
+    );
     assert_eq!(info(&index, "/world", "kind"), token("assembly"));
 }
 
@@ -255,7 +261,7 @@ def Material "mat" {}
 "#,
     );
     let index = StageSceneIndex::new();
-    index.set_stage(stage);
+    index.set_stage(stage).expect("the stage takes the sink");
     let names = |path: &str| -> Vec<String> {
         let data = index.prim(&p(path)).data.unwrap();
         data.names().iter().map(ToString::to_string).collect()

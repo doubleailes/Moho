@@ -16,14 +16,11 @@ repository = "https://github.com/doubleailes/moho"
 # depends on this git source at the same `rev`, crust-render patches its
 # crates.io `openusd` to it. Bump in order: Moho, then crust-render, then Mantle.
 #
-# Pinned to doubleailes/openusd's `perf/path-prim-len`: upstream main at
-# 5b86332 plus a fix resyncing a prim whose children or properties a layer
-# reorders, which a scene index holding children needs, a type probe that
-# lets the asset path walk skip plain data undecoded, and a one-lookup
-# prototype root (mxpv/openusd#186). Back to mxpv/openusd once all three are
-# upstream.
-openusd = { git = "https://github.com/doubleailes/openusd", rev = "54db9fd988df3f9901b6723aa5e8f5c48377689f" }
-openusd-schemas = { git = "https://github.com/doubleailes/openusd", rev = "54db9fd988df3f9901b6723aa5e8f5c48377689f" }
+# Pinned to doubleailes/openusd's `main`, which is upstream mxpv/openusd's
+# `main`: the reorder resync fix, the asset path walk's plain data probe and
+# the one-lookup prototype root (mxpv/openusd#186) are all upstream.
+openusd = { git = "https://github.com/doubleailes/openusd", rev = "900ea31591348e3fbf416d4661d703aa8700771b" }
+openusd-schemas = { git = "https://github.com/doubleailes/openusd", rev = "900ea31591348e3fbf416d4661d703aa8700771b" }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

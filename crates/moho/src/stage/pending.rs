@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
 
 use openusd::sdf;
-use openusd::usd::{CommittedChange, Stage, StageSink};
+use openusd::usd::{CommittedChange, Resynced, Stage, StageSink};
 
 /// What changed on the stage since updates were last applied.
 #[derive(Default)]
@@ -91,11 +91,16 @@ impl StageSink for Recorder {
         pending.record(&retyped, &[]);
     }
 
-    fn load_rules_changed(&self, _stage: &Stage, resynced: &[sdf::Path]) {
-        self.0.borrow_mut().record(resynced, &[]);
+    fn load_rules_changed(&self, _stage: &Stage, resynced: Resynced<'_>) {
+        let mut pending = self.0.borrow_mut();
+        pending.record(resynced.subtrees, &[]);
+        // A prim recomposed in place is read again whole, as a resync.
+        pending.record(resynced.prims, &[]);
     }
 
-    fn layer_muting_changed(&self, _stage: &Stage, _layer: &str, _muted: bool, resynced: &[sdf::Path]) {
-        self.0.borrow_mut().record(resynced, &[]);
+    fn layer_muting_changed(&self, _stage: &Stage, _layer: &str, _muted: bool, resynced: Resynced<'_>) {
+        let mut pending = self.0.borrow_mut();
+        pending.record(resynced.subtrees, &[]);
+        pending.record(resynced.prims, &[]);
     }
 }

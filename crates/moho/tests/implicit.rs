@@ -79,7 +79,7 @@ const SHAPES: &[(&str, &str, &[&str])] = &[
 fn every_shape_equals_openusd() {
     let (_dir, stage) = stage(SCENE);
     let index = StageSceneIndex::new();
-    index.set_stage(stage.clone());
+    index.set_stage(stage.clone()).expect("the stage takes the sink");
     for (path, ty, members) in SHAPES {
         let prim = index.prim(&p(path));
         assert_eq!(prim.ty, *ty, "{path}");
@@ -114,7 +114,7 @@ fn every_shape_equals_openusd() {
 fn a_tapered_cylinder() {
     let (_dir, stage) = stage(SCENE);
     let index = StageSceneIndex::new();
-    index.set_stage(stage);
+    index.set_stage(stage).expect("the stage takes the sink");
     let data = index.prim(&p("/tapered")).data.unwrap();
     let read = |m: &str| locate(&data, &Locator::new(["cylinder", m])).and_then(|d| d.value());
     assert_eq!(read("radiusBottom"), Some(Value::Double(2.0)));

@@ -60,7 +60,7 @@ fn relative_textures_resolve_against_their_layer() {
         "#usda 1.0\ndef Xform \"world\"\n{\n    def Material \"look\" (\n        references = @./assets/look.usda@</look>\n    )\n    {\n    }\n}\n",
     );
     let index = StageSceneIndex::new();
-    index.set_stage(open(&root));
+    index.set_stage(open(&root)).expect("the stage takes the sink");
     let assets = dir.path().join("assets");
 
     let wood = file(&index, "tex");

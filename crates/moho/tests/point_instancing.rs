@@ -65,7 +65,7 @@ fn indices(index: &dyn SceneIndex, path: &sdf::Path) -> Vec<Vec<i32>> {
 fn scattered_pebbles_and_invisible_ids() {
     let (_dir, usd) = stage(PEBBLES);
     let stage_index = StageSceneIndex::new();
-    stage_index.set_stage(usd);
+    stage_index.set_stage(usd).expect("the stage takes the sink");
     let scatter = p("/world/scatter");
     assert_eq!(stage_index.prim(&scatter).ty, "instancer");
     assert_eq!(
@@ -102,7 +102,7 @@ fn scattered_pebbles_and_invisible_ids() {
 fn prototypes_are_rerooted() {
     let (_dir, usd) = stage(PEBBLES);
     let stage_index = StageSceneIndex::new();
-    stage_index.set_stage(usd);
+    stage_index.set_stage(usd).expect("the stage takes the sink");
     let index = PointInstancingSceneIndex::new(stage_index);
     let scatter = p("/world/scatter");
     let Some(Value::PathVec(copies)) = read(index.as_ref(), &scatter, "instancerTopology/prototypes") else {
@@ -190,7 +190,9 @@ def Xform "world"
         ),
     );
     let stage_index = StageSceneIndex::new();
-    stage_index.set_stage(open(&root));
+    stage_index
+        .set_stage(open(&root))
+        .expect("the stage takes the sink");
     let native = NativeInstancingSceneIndex::new(stage_index.clone());
     let point = PointInstancingSceneIndex::new(native);
     let linking = LightLinkingSceneIndex::new(point);
@@ -240,7 +242,7 @@ def Xform "world"
 fn prototype_copies_keep_their_origin() {
     let (_dir, usd) = stage(PEBBLES);
     let stage_index = StageSceneIndex::new();
-    stage_index.set_stage(usd);
+    stage_index.set_stage(usd).expect("the stage takes the sink");
     let index = PointInstancingSceneIndex::new(stage_index);
     let Some(Value::PathVec(copies)) = read(
         index.as_ref(),
@@ -293,7 +295,7 @@ def Xform "world"
 fn a_nested_instancer_is_reinstanced_in_every_copy() {
     let (_dir, usd) = stage(NESTED);
     let stage_index = StageSceneIndex::new();
-    stage_index.set_stage(usd);
+    stage_index.set_stage(usd).expect("the stage takes the sink");
     let index = PointInstancingSceneIndex::new(stage_index);
     // Names from `TfHash::Combine` of the instancer and the enclosing copy
     // root, as UsdImaging (OpenUSD 26.08) names them.
@@ -379,7 +381,7 @@ def Xform "world"
 fn inactive_ids_are_masked_not_dropped() {
     let (_dir, usd) = stage(INACTIVE);
     let stage_index = StageSceneIndex::new();
-    stage_index.set_stage(usd);
+    stage_index.set_stage(usd).expect("the stage takes the sink");
     let a = p("/world/a");
     assert_eq!(
         indices(stage_index.as_ref(), &a),
@@ -397,7 +399,7 @@ fn inactive_ids_are_masked_not_dropped() {
 fn a_fully_inactive_prototype_is_pruned() {
     let (_dir, usd) = stage(INACTIVE);
     let stage_index = StageSceneIndex::new();
-    stage_index.set_stage(usd);
+    stage_index.set_stage(usd).expect("the stage takes the sink");
     let b = p("/world/b");
     assert_eq!(
         read(stage_index.as_ref(), &b, "instancerTopology/prototypes"),
@@ -452,7 +454,7 @@ def Xform "world"
 fn a_stray_prototype_index_reads_as_usd_imaging_without_allocating_it() {
     let (_dir, usd) = stage(STRAY_INDICES);
     let stage_index = StageSceneIndex::new();
-    stage_index.set_stage(usd);
+    stage_index.set_stage(usd).expect("the stage takes the sink");
     // UsdImaging gives one array per index up to the largest one used,
     // here 2 000 000 001 of them, nearly all empty.
     let data = stage_index.prim(&p("/world/huge")).data.unwrap();
@@ -526,7 +528,7 @@ def Xform "world"
 fn a_proxy_target_copies_as_an_empty_prim() {
     let (_dir, usd) = stage(PROXIES_AND_SCOPES);
     let stage_index = StageSceneIndex::new();
-    stage_index.set_stage(usd);
+    stage_index.set_stage(usd).expect("the stage takes the sink");
     let index = PointInstancingSceneIndex::new(stage_index);
     let copy = p("/world/coral/Prototypes/staghorn/geo/ForInstancer9b6a0f1ced50293a");
     assert_eq!(
@@ -549,7 +551,7 @@ fn a_proxy_target_copies_as_an_empty_prim() {
 fn a_copy_under_an_invisible_scope_is_visible() {
     let (_dir, usd) = stage(PROXIES_AND_SCOPES);
     let stage_index = StageSceneIndex::new();
-    stage_index.set_stage(usd);
+    stage_index.set_stage(usd).expect("the stage takes the sink");
     let flat = moho::filter::FlatteningSceneIndex::new(PointInstancingSceneIndex::new(stage_index));
     let visible = |path: &str| read(flat.as_ref(), &p(path), "visibility/visibility");
     let copy = "/world/rocks/Prototypes/rock/ForInstancera911279021ff5cc5";
@@ -574,7 +576,7 @@ fn a_copy_under_an_invisible_scope_is_visible() {
 fn a_prototype_records_its_copies() {
     let (_dir, usd) = stage(PEBBLES);
     let stage_index = StageSceneIndex::new();
-    stage_index.set_stage(usd);
+    stage_index.set_stage(usd).expect("the stage takes the sink");
     let index = PointInstancingSceneIndex::new(stage_index.clone());
     let hash = "ForInstancerad10eba5b2d19a4d";
     let round = p("/world/scatter/protos/round");

@@ -43,7 +43,7 @@ fn value_source(index: &StageSceneIndex, prim: &str) -> DataSource {
 fn setup() -> (common::TempDir, std::rc::Rc<StageSceneIndex>) {
     let (dir, stage) = stage(SCENE);
     let index = StageSceneIndex::new();
-    index.set_stage(stage);
+    index.set_stage(stage).expect("the stage takes the sink");
     index.set_time(TimeCode::new(1.0));
     (dir, index)
 }
@@ -144,7 +144,7 @@ fn instance_indices(index: &StageSceneIndex) -> Vec<Value> {
 fn a_new_index_reads_at_time_0() {
     let (_dir, usd) = stage(SAMPLED_TOPOLOGY);
     let index = StageSceneIndex::new();
-    index.set_stage(usd);
+    index.set_stage(usd).expect("the stage takes the sink");
     assert_eq!(index.time(), TimeCode::new(0.0));
     assert_eq!(
         instance_indices(&index),
@@ -166,9 +166,9 @@ fn a_new_index_reads_at_time_0() {
 fn replacing_the_stage_resets_the_time_to_the_earliest() {
     let (_dir, usd) = stage(SCENE);
     let index = StageSceneIndex::new();
-    index.set_stage(usd);
+    index.set_stage(usd).expect("the stage takes the sink");
     index.set_time(TimeCode::new(2.0));
     let (_other_dir, other) = stage(SCENE);
-    index.set_stage(other);
+    index.set_stage(other).expect("the stage takes the sink");
     assert!(index.time().is_earliest());
 }

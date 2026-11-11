@@ -53,7 +53,7 @@ const MEMBERS: &[(&str, &str, &str)] = &[
 fn curves_equal_openusd() {
     let (_dir, stage) = stage(SCENE);
     let index = StageSceneIndex::new();
-    index.set_stage(stage.clone());
+    index.set_stage(stage.clone()).expect("the stage takes the sink");
     assert_eq!(index.prim(&p("/hair")).ty, "basisCurves");
     assert_eq!(index.prim(&p("/nurbs")).ty, "nurbsCurves");
     for (path, locator, attribute) in MEMBERS {
@@ -73,7 +73,7 @@ fn curves_equal_openusd() {
 fn widths_are_primvars() {
     let (_dir, stage) = stage(SCENE);
     let index = StageSceneIndex::new();
-    index.set_stage(stage);
+    index.set_stage(stage).expect("the stage takes the sink");
     for path in ["/hair", "/nurbs"] {
         let primvars = PrimvarsSchema::get(&index.prim(&p(path)).data.unwrap()).unwrap();
         assert!(primvars.primvar("widths").is_some(), "{path}");
@@ -89,7 +89,7 @@ fn widths_are_primvars() {
 fn nurbs_point_weights_are_a_primvar() {
     let (_dir, stage) = stage(SCENE);
     let index = StageSceneIndex::new();
-    index.set_stage(stage);
+    index.set_stage(stage).expect("the stage takes the sink");
     let data = index.prim(&p("/nurbs")).data.unwrap();
     assert!(locate(&data, &Locator::parse("nurbsCurves/pointWeights")).is_none());
     let primvars = PrimvarsSchema::get(&data).unwrap();
@@ -112,7 +112,7 @@ fn a_basis_curves_edit_dirties_its_topology_member() {
 
     let (_dir, stage) = stage(SCENE);
     let index = StageSceneIndex::new();
-    index.set_stage(stage.clone());
+    index.set_stage(stage.clone()).expect("the stage takes the sink");
     let recorder = RecordingObserver::on(index.as_ref());
     stage
         .attribute("/hair.wrap")

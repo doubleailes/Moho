@@ -212,12 +212,22 @@ impl StageSceneIndex {
     /// `_StageGlobals::Clear`), then every prim of `stage` the default
     /// traversal reaches is added. Edits made to `stage` from now on are queued until
     /// [`apply_pending_updates`](Self::apply_pending_updates).
-    pub fn set_stage(&self, stage: Stage) {
-        let previous = self.current.borrow_mut().take();
-        let had_stage = previous.is_some();
-        if let Some(previous) = previous {
-            previous.stage.remove_sink(previous.sink);
+    ///
+    /// Fails, holding the stage it held, where the stage cannot take the
+    /// sink edits are queued through: from inside an edit of a layer on its
+    /// registry, or from user code its composition runs
+    /// (`openusd::sdf::LayerError::Busy`).
+    pub fn set_stage(&self, stage: Stage) -> openusd::Result<()> {
+        let pending = Rc::new(RefCell::new(Pending::default()));
+        let sink = stage.add_sink(Recorder(pending.clone()))?;
+        if let Some(previous) = self.current.borrow().as_ref()
+            && let Err(error) = previous.stage.remove_sink(previous.sink)
+        {
+            // Holding the stage it held: the new stage keeps no sink of it.
+            let _ = stage.remove_sink(sink);
+            return Err(error);
         }
+        let had_stage = self.current.borrow_mut().take().is_some();
         self.cache.borrow_mut().clear();
         self.children.borrow_mut().clear();
         self.populated.borrow_mut().clear();
@@ -232,11 +242,10 @@ impl StageSceneIndex {
             // `_StageGlobals::Clear`.
             self.globals.time.set(TimeCode::EARLIEST);
         }
-        let pending = Rc::new(RefCell::new(Pending::default()));
-        let sink = stage.add_sink(Recorder(pending.clone()));
         *self.current.borrow_mut() = Some(Current { stage, sink, pending });
         let added = self.populate(&sdf::Path::abs_root());
         self.observers.send_added(self, &added);
+        Ok(())
     }
 
     /// Forgets the prims and children held at and under `root`, and the

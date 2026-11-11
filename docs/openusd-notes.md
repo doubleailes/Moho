@@ -6,6 +6,26 @@ before every bump, and add any API Moho starts relying on. Sections written
 before the bump to `d7d2a29` (doubleailes/openusd, upstream `0a4bb1b` plus
 mxpv/openusd#175) were read at `68a867a`.
 
+## Bump to `900ea31`
+
+doubleailes/openusd's `main`, which is mxpv/openusd's `main`: the three
+fixes of `perf/path-prim-len` are upstream.
+
+- `StageSink::load_rules_changed` and `layer_muting_changed` take a
+  `usd::Resynced`: `subtrees` (subtree resyncs) and `prims` (recomposed in
+  place, none under a subtree). Moho records both as resyncs. A load now
+  reports the payload's prim as the subtree and the ancestor whose load rule
+  changed as recomposed in place.
+- `Stage::add_sink` and `remove_sink` return a `Result`: they fail with
+  `sdf::LayerError::Busy` inside an edit of the stage's layers or from user
+  code composition runs. `StageSceneIndex::set_stage` returns it, installing
+  the new sink before it lets the old stage go.
+- A property stack's site (`Attribute::property_stack`) holds the layer's
+  `sdf::LayerHandle`, not its identifier.
+- `UsdStage`'s resync of a prim whose `kind` changes is followed: the stage
+  resyncs it, so the index adds it again, as UsdImaging does.
+- `colorSpace` metadata reads as a token, as C++ stores it.
+
 ## Bump to `54db9fd`
 
 doubleailes/openusd's `perf/path-prim-len`: `92b9066` plus mxpv/openusd#186.

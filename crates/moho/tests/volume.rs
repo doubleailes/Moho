@@ -47,7 +47,7 @@ fn read(index: &StageSceneIndex, path: &str, locator: &str) -> Option<Value> {
 fn volumes_and_fields() {
     let (dir, stage) = stage(SCENE);
     let index = StageSceneIndex::new();
-    index.set_stage(stage);
+    index.set_stage(stage).expect("the stage takes the sink");
     assert_eq!(index.prim(&p("/world/smoke")).ty, "volume");
     assert_eq!(
         read(&index, "/world/smoke", "volumeFieldBinding/density"),
@@ -78,7 +78,7 @@ fn volumes_and_fields() {
 fn a_renderer_defined_volume_reads_generically() {
     let (_dir, stage) = stage(SCENE);
     let index = StageSceneIndex::new();
-    index.set_stage(stage);
+    index.set_stage(stage).expect("the stage takes the sink");
     assert_eq!(
         read(
             &index,
@@ -110,7 +110,7 @@ def Volume "smoke"
 "#,
     );
     let index = StageSceneIndex::new();
-    index.set_stage(usd.clone());
+    index.set_stage(usd.clone()).expect("the stage takes the sink");
     let binding = locate(
         &index.prim(&p("/smoke")).data.unwrap(),
         &Locator::parse("volumeFieldBinding"),

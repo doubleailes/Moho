@@ -71,7 +71,9 @@ impl Chain {
     pub fn new(stage: Stage) -> Self {
         let start = Instant::now();
         let stage_index = StageSceneIndex::new();
-        stage_index.set_stage(stage);
+        stage_index
+            .set_stage(stage)
+            .expect("a stage outside any edit takes the sink");
         let set_stage = start.elapsed();
         let start = Instant::now();
         let mut layers = vec![Layer {

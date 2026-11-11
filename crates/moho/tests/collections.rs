@@ -38,7 +38,7 @@ def Xform "world"
 fn a_light_link_collection() {
     let (_dir, stage) = stage(SCENE);
     let index = StageSceneIndex::new();
-    index.set_stage(stage);
+    index.set_stage(stage).expect("the stage takes the sink");
     let data = index.prim(&p("/world/key")).data.unwrap();
     let collections = locate(&data, &Locator::parse("collections")).unwrap();
     let mut names: Vec<String> = collections

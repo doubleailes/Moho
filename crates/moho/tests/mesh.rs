@@ -70,7 +70,7 @@ const MEMBERS: &[(&str, &str)] = &[
 fn setup() -> (common::TempDir, std::rc::Rc<StageSceneIndex>) {
     let (dir, stage) = stage(SCENE);
     let index = StageSceneIndex::new();
-    index.set_stage(stage);
+    index.set_stage(stage).expect("the stage takes the sink");
     (dir, index)
 }
 
@@ -115,7 +115,7 @@ fn an_attribute_without_a_value_reads_its_type_zero() {
     // fallback: an empty array, an empty token or asset path, zero.
     let (_dir, stage) = stage("#usda 1.0\ndef Mesh \"bare\"\n{\n}\n");
     let index = StageSceneIndex::new();
-    index.set_stage(stage);
+    index.set_stage(stage).expect("the stage takes the sink");
     let data = index.prim(&p("/bare")).data.unwrap();
     let read = |l: &str| locate(&data, &Locator::parse(l)).and_then(|d| d.value());
     assert_eq!(

@@ -66,7 +66,7 @@ fn read(index: &StageSceneIndex, path: &str, member: &str) -> Option<Value> {
 fn a_50mm_lens_and_shutter() {
     let (_dir, stage) = stage(SCENE);
     let index = StageSceneIndex::new();
-    index.set_stage(stage);
+    index.set_stage(stage).expect("the stage takes the sink");
     assert_eq!(index.prim(&p("/persp")).ty, "camera");
     assert_eq!(read(&index, "/persp", "focalLength"), Some(Value::Float(5.0)));
     assert!(
@@ -88,7 +88,7 @@ fn a_50mm_lens_and_shutter() {
 fn cameras_equal_openusd_after_scaling() {
     let (_dir, stage) = stage(SCENE);
     let index = StageSceneIndex::new();
-    index.set_stage(stage.clone());
+    index.set_stage(stage.clone()).expect("the stage takes the sink");
     for path in ["/persp", "/ortho"] {
         for (member, usd) in PLAIN {
             let expected = stage
@@ -133,7 +133,7 @@ def Camera "cam"
 "#,
     );
     let index = StageSceneIndex::new();
-    index.set_stage(stage);
+    index.set_stage(stage).expect("the stage takes the sink");
     index.set_time(moho::openusd::usd::TimeCode::new(2.0));
     let data = index.prim(&p("/cam")).data.unwrap();
     let source = locate(&data, &Locator::parse("camera/linearExposureScale")).unwrap();
@@ -151,7 +151,7 @@ fn the_camera_container_is_usd_imaging_s() {
 
     let (_dir, usd) = stage(SCENE);
     let index = StageSceneIndex::new();
-    index.set_stage(usd.clone());
+    index.set_stage(usd.clone()).expect("the stage takes the sink");
     let data = index.prim(&p("/persp")).data.unwrap();
     let camera = locate(&data, &Locator::parse("camera")).unwrap();
     let names = camera.as_container().unwrap().names();

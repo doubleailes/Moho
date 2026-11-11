@@ -21,7 +21,7 @@ fn setup() -> (
 ) {
     let (dir, usd) = stage(common::render::SCENE);
     let stage_index = StageSceneIndex::new();
-    stage_index.set_stage(usd);
+    stage_index.set_stage(usd).expect("the stage takes the sink");
     let flat = RenderSettingsFlatteningSceneIndex::new(stage_index.clone());
     (dir, stage_index, flat)
 }
