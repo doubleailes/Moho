@@ -58,7 +58,7 @@ cargo test --workspace        # everything
 
 ## Boundaries
 
-- **openusd only** (openusd and openusd-schemas, one rev). Moho never depends
+- **openusd only** (openusd, openusd-schemas and openusd-mtlx, one rev). Moho never depends
   on a consumer (the DCC that feeds it, the renderers that read it), and
   holds none of their types. Adapters (a DCC's changes to a mirror stage, a
   renderer's import) live in the consumers. Crate docs and comments name no
@@ -77,8 +77,10 @@ cargo test --workspace        # everything
 
 - Pure-Rust USD (https://github.com/mxpv/openusd). **Its API is not stable.**
   It is pinned by git `rev` in the root `Cargo.toml`. `openusd` and
-  `openusd-schemas` must use the same rev. The pin is on mxpv/openusd's
-  main, at or after the `openusd-imaging` placeholder.
+  `openusd-schemas` (and `openusd-mtlx`) must use the same rev. The pin is
+  on mxpv/openusd's main, at or after the `openusd-imaging` placeholder,
+  or on a doubleailes/openusd branch carrying open mxpv/openusd PRs on top
+  of it, until they merge.
 - **One rev across the stack, through Moho.** Mantle, crust-render and
   Obsidian take openusd only through `moho::openusd` and
   `moho::openusd_schemas`, never as a dependency of their own, so Moho's pin
@@ -94,10 +96,12 @@ cargo test --workspace        # everything
 - If openusd lacks something, don't work around it silently: add it to
   "Upstream candidates" in `ROADMAP.md` (and to the gaps in
   `docs/openusd-notes.md`), and comment the workaround in code.
-- `moho` re-exports `openusd` (`moho::openusd`) and `openusd-schemas`
-  (`moho::openusd_schemas`) from the same rev: the only way consumers reach
-  openusd. openusd-schemas is part of the openusd project, so depending on it
-  keeps Moho "openusd only". The re-exports and feature forwarding are a
+- `moho` re-exports `openusd` (`moho::openusd`), `openusd-schemas`
+  (`moho::openusd_schemas`) and `openusd-mtlx` (`moho::openusd_mtlx`, the
+  `.mtlx` file format `stage::stage_builder` registers) from the same rev:
+  the only way consumers reach openusd. openusd-schemas and openusd-mtlx are
+  part of the openusd project, so depending on them keeps Moho "openusd
+  only". The re-exports and feature forwarding are a
   downstream policy for the stack's single pin: they change no Hydra
   behaviour, and if Moho moves into openusd's workspace as `openusd-imaging`
   they move to a thin downstream crate (or consumers depend on openusd at

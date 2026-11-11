@@ -10,6 +10,7 @@ repository.workspace = true
 [dependencies]
 openusd.workspace = true
 openusd-schemas = { workspace = true, features = ["geom", "lux", "render", "shade", "vol"] }
+openusd-mtlx.workspace = true
 
 # Moho's consumers take openusd only through `moho::openusd` and
 # `moho::openusd_schemas`, so Moho's pin is the stack's. These forward the
