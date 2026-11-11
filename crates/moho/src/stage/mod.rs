@@ -52,10 +52,13 @@ use pending::{Pending, Recorder};
 use adapter::{Adapter, AdapterRegistry};
 
 /// A stage builder with openusd-schemas' registry installed, which typed
-/// schemas and schema fallbacks need. Open stages for a `StageSceneIndex`
-/// with it.
+/// schemas and schema fallbacks need, reading `.mtlx` documents as layers
+/// ([`openusd_mtlx::MTLX`]), as C++ reads them through `usdMtlx`. Open stages
+/// for a `StageSceneIndex` with it.
 pub fn stage_builder() -> StageBuilder {
-    Stage::builder().schema_registry(openusd_schemas::schema_registry())
+    Stage::builder()
+        .schema_registry(openusd_schemas::schema_registry())
+        .format(&openusd_mtlx::MTLX)
 }
 
 /// State every data source of one stage scene index shares: the current

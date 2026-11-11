@@ -6,6 +6,17 @@ before every bump, and add any API Moho starts relying on. Sections written
 before the bump to `d7d2a29` (doubleailes/openusd, upstream `0a4bb1b` plus
 mxpv/openusd#175) were read at `68a867a`.
 
+## Bump to `a3cde1a`
+
+doubleailes/openusd's `feat/mtlx-format-plugin`: `900ea31` plus file formats
+a registry is given at run time and the `.mtlx` format.
+
+- `usd::StageBuilder::format(&'static dyn sdf::FileFormat)` adds a format to
+  the builder's registry; `resolver` keeps the formats already added.
+- `openusd_mtlx::MTLX`, the read-only `.mtlx` format: a document composes as
+  `UsdShade` prims in `usdMtlx`'s layout. `stage::stage_builder` gives it to
+  every stage it builds.
+
 ## Bump to `900ea31`
 
 doubleailes/openusd's `main`, which is mxpv/openusd's `main`: the three
