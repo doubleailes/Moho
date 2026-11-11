@@ -16,12 +16,14 @@ repository = "https://github.com/doubleailes/moho"
 # depends on this git source at the same `rev`, crust-render patches its
 # crates.io `openusd` to it. Bump in order: Moho, then crust-render, then Mantle.
 #
-# Pinned to mxpv/openusd main at the `openusd-imaging` placeholder
-# (26c81d8), which holds the reorder resync, the asset path walk's plain data
-# probe, the one-lookup prototype root, and the imaging parity changes of
-# mxpv/openusd#195 (#187 to #194).
-openusd = { git = "https://github.com/mxpv/openusd", rev = "26c81d80293c745ce73c139ae7b171c297cb8648" }
-openusd-schemas = { git = "https://github.com/mxpv/openusd", rev = "26c81d80293c745ce73c139ae7b171c297cb8648" }
+# Pinned to doubleailes/openusd's `feat/mtlx-format-plugin` (bac9080):
+# mxpv/openusd main (900ea31) plus file formats added at run time
+# (mxpv/openusd#215) and the `.mtlx` format (mxpv/openusd#213). Back to
+# mxpv/openusd main once both are merged.
+openusd = { git = "https://github.com/doubleailes/openusd", rev = "bac908085750ae6f3023333540ff00e8d2f1974b" }
+openusd-schemas = { git = "https://github.com/doubleailes/openusd", rev = "bac908085750ae6f3023333540ff00e8d2f1974b" }
+# The `.mtlx` file format, from the same openusd revision.
+openusd-mtlx = { git = "https://github.com/doubleailes/openusd", rev = "bac908085750ae6f3023333540ff00e8d2f1974b" }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

@@ -46,6 +46,10 @@ pub mod tokens;
 /// openusd's workspace (as `openusd-imaging`), the re-export would move to a
 /// thin crate of its own.
 pub use openusd;
+/// The `.mtlx` file format from the same openusd revision, which
+/// [`stage::stage_builder`] gives every stage it builds, as C++ UsdImaging's
+/// stages read `.mtlx` documents through the `usdMtlx` plugin.
+pub use openusd_mtlx;
 /// The pinned openusd-schemas, from the same openusd revision. The families
 /// Moho reads (`geom`, `lux`, `render`, `shade`, `vol`) are always on; the
 /// others are Moho features of the same name (`media`, `physics`, `proc`,
