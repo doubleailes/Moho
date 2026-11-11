@@ -20,10 +20,10 @@ repository = "https://github.com/doubleailes/moho"
 # (mxpv/openusd's) plus file formats added at run time
 # (`sdf::LayerRegistry::with_format`) and the `.mtlx` format
 # (`openusd-mtlx`). Back to `main` once both are there.
-openusd = { git = "https://github.com/doubleailes/openusd", rev = "a3cde1a48dec16fcbfdd484447acde98a8373351" }
-openusd-schemas = { git = "https://github.com/doubleailes/openusd", rev = "a3cde1a48dec16fcbfdd484447acde98a8373351" }
+openusd = { git = "https://github.com/doubleailes/openusd", rev = "bac908085750ae6f3023333540ff00e8d2f1974b" }
+openusd-schemas = { git = "https://github.com/doubleailes/openusd", rev = "bac908085750ae6f3023333540ff00e8d2f1974b" }
 # The `.mtlx` file format, from the same openusd revision.
-openusd-mtlx = { git = "https://github.com/doubleailes/openusd", rev = "a3cde1a48dec16fcbfdd484447acde98a8373351" }
+openusd-mtlx = { git = "https://github.com/doubleailes/openusd", rev = "bac908085750ae6f3023333540ff00e8d2f1974b" }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
