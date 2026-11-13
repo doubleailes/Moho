@@ -6,6 +6,13 @@ before every bump, and add any API Moho starts relying on. Sections written
 before the bump to `d7d2a29` (doubleailes/openusd, upstream `0a4bb1b` plus
 mxpv/openusd#175) were read at `68a867a`.
 
+## Bump to `ca53e71`
+
+doubleailes/openusd's `feat/mtlx-format-plugin`, one commit over `bac9080`:
+`openusd-mtlx` embeds MaterialX 1.39's `nprlib` nodedefs beside `stdlib`,
+`pbrlib` and `bxdf`, so a document's NPR nodes resolve their `info:id`. No
+API change.
+
 ## Bump to `bac9080`
 
 doubleailes/openusd's `feat/mtlx-format-plugin`: mxpv/openusd main
