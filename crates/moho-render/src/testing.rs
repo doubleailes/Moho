@@ -110,6 +110,7 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
@@ -124,6 +125,7 @@ use moho::tokens::render as r;
 
 use crate::capabilities::{AovDescriptor, Capabilities, CommandDescriptor, SettingDescriptor, SettingType};
 use crate::control::{Control, ControlHandle, Shared};
+use crate::device::{DeviceImage, ReadbackError};
 use crate::output::OutputSceneIndex;
 use crate::renderer::{ControlledRenderer, InvalidationTracker, TrackedNotice};
 use crate::targets::{RenderTargets, RenderView};
@@ -150,6 +152,9 @@ pub struct TestConfig {
     pub create_only_settings: Vec<Token>,
     /// Fails the render when this sample is reached.
     pub fail_at_sample: Option<u32>,
+    /// Publishes every frame as a device image of the test backend
+    /// ([`HostImage`]) instead of host pixels.
+    pub device_frames: bool,
 }
 
 impl Default for TestConfig {
@@ -164,6 +169,7 @@ impl Default for TestConfig {
             writes_products: true,
             create_only_settings: vec![Token::new("test:integrator")],
             fail_at_sample: None,
+            device_frames: false,
         }
     }
 }
@@ -192,6 +198,71 @@ impl RendererPlugin for TestPlugin {
         _: &RendererCreateArgsSchema,
     ) -> Option<TestRenderer> {
         Some(TestRenderer::new(terminal, self.config.clone()))
+    }
+}
+
+/// A device image of the test backend (`test`), held in host memory: lets
+/// render control's device frames be tested with no GPU. Counts its reads.
+pub struct HostImage {
+    backend: Token,
+    format: PixelFormat,
+    size: (u32, u32),
+    bytes: Arc<[u8]>,
+    reads: AtomicUsize,
+}
+
+impl HostImage {
+    /// The name of its backend.
+    pub const BACKEND: &str = "test";
+
+    /// An image of `size` holding `bytes` of `format`, rows top to bottom.
+    pub fn new(format: PixelFormat, size: (u32, u32), bytes: Arc<[u8]>) -> Self {
+        Self {
+            backend: Token::new(Self::BACKEND),
+            format,
+            size,
+            bytes,
+            reads: AtomicUsize::new(0),
+        }
+    }
+
+    /// The reads it served: one per transfer.
+    pub fn reads(&self) -> usize {
+        self.reads.load(Ordering::SeqCst)
+    }
+}
+
+impl DeviceImage for HostImage {
+    fn backend(&self) -> &Token {
+        &self.backend
+    }
+
+    fn format(&self) -> PixelFormat {
+        self.format
+    }
+
+    fn size(&self) -> (u32, u32) {
+        self.size
+    }
+
+    fn read(&self, rect: PixelRect) -> Result<Vec<u8>, ReadbackError> {
+        self.reads.fetch_add(1, Ordering::SeqCst);
+        let pixel = self.format.bytes_per_pixel();
+        let row = self.size.0 as usize * pixel;
+        let mut out = Vec::with_capacity(rect.area() * pixel);
+        for y in rect.y.max(0) as usize..rect.y.max(0) as usize + rect.height as usize {
+            let start = y * row + rect.x.max(0) as usize * pixel;
+            let line = self
+                .bytes
+                .get(start..start + rect.width as usize * pixel)
+                .ok_or_else(|| ReadbackError::Device("rectangle outside the test image".into()))?;
+            out.extend_from_slice(line);
+        }
+        Ok(out)
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }
 
@@ -305,6 +376,7 @@ struct Job {
     fail_at: Option<u32>,
     /// The meshes' identifiers, in path order, and their table.
     ids: Arc<IdTable>,
+    device_frames: bool,
 }
 
 impl Job {
@@ -355,6 +427,7 @@ impl Job {
             delay: config.sample_delay,
             fail_at: config.fail_at_sample,
             ids,
+            device_frames: config.device_frames,
         }
     }
 
@@ -444,28 +517,29 @@ fn sample(job: Job, shared: Arc<Shared>, epoch: u64, start: u32) {
             return;
         }
         for var in &job.vars {
-            let frame = if aov::is_identifier(var.name.as_str()) {
-                Frame::new(
-                    PixelFormat::I32,
-                    var.display_window,
-                    var.data_window,
-                    samples,
-                    identifiers(&job.ids, var.display_window, var.data_window),
-                )
-                .with_ids(job.ids.clone())
+            let identifier = aov::is_identifier(var.name.as_str());
+            let format = if identifier { PixelFormat::I32 } else { var.format };
+            let bytes = if identifier {
+                identifiers(&job.ids, var.display_window, var.data_window)
             } else {
-                Frame::new(
-                    var.format,
-                    var.display_window,
-                    var.data_window,
+                pixels(
+                    job.digest,
+                    var.name.as_str(),
                     samples,
-                    pixels(
-                        job.digest,
-                        var.name.as_str(),
-                        samples,
-                        var.data_window.area() * var.format.bytes_per_pixel(),
-                    ),
+                    var.data_window.area() * var.format.bytes_per_pixel(),
                 )
+            };
+            let frame = if job.device_frames {
+                let size = (var.data_window.width, var.data_window.height);
+                let image = Arc::new(HostImage::new(format, size, bytes));
+                Frame::on_device(format, var.display_window, var.data_window, samples, image)
+            } else {
+                Frame::new(format, var.display_window, var.data_window, samples, bytes)
+            };
+            let frame = if identifier {
+                frame.with_ids(job.ids.clone())
+            } else {
+                frame
             }
             .with_view(var.view.clone());
             shared.publish_frame(epoch, &var.path, frame);
@@ -515,7 +589,10 @@ fn write_product(shared: &Shared, product: &JobProduct) -> Result<(), String> {
         let format = frame.as_ref().map(|f| f.format.token()).unwrap_or_default();
         bytes.extend((format.as_str().len() as u32).to_le_bytes());
         bytes.extend(format.as_str().as_bytes());
-        let pixels = frame.map(|f| f.pixels.to_vec()).unwrap_or_default();
+        let pixels = match frame {
+            Some(frame) => frame.read_pixels().map_err(|e| e.to_string())?.to_vec(),
+            None => Vec::new(),
+        };
         bytes.extend((pixels.len() as u64).to_le_bytes());
         bytes.extend(pixels);
     }

@@ -700,7 +700,8 @@ impl UsdRenderSettingsSchema {
 /// Only `gpuEnabled` is read. Hydra's `drivers` holds `HdDriver` objects (Hgi
 /// and the like), which a `vt::Value` cannot carry and openusd has no
 /// counterpart for: a renderer that needs a device takes it in its plugin's
-/// constructor.
+/// constructor, as the named drivers of the render control crate
+/// (`moho_render::Drivers`, its device under `renderDriver`).
 #[derive(Clone)]
 pub struct RendererCreateArgsSchema(ContainerHandle);
 

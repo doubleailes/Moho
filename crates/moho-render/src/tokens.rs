@@ -106,3 +106,10 @@ pub mod stats {
     /// [`UPDATE_CLASS`]: the update changed nothing the renderer holds.
     pub const UPDATE_UNCHANGED: &str = "unchanged";
 }
+
+/// Driver names a host hands a renderer plugin ([`Drivers`](crate::Drivers)).
+pub mod driver {
+    /// The graphics device the host renders and presents with, as Hydra's
+    /// `HgiTokens->renderDriver`.
+    pub const RENDER_DRIVER: &str = "renderDriver";
+}
