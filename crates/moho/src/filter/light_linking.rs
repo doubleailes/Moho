@@ -97,7 +97,7 @@ impl Default for LightLinkingPrimTypes {
                 prim_type::NURBS_CURVES,
                 "particleField",
                 prim_type::PLANE,
-                "points",
+                prim_type::POINTS,
                 prim_type::SPHERE,
                 prim_type::VOLUME,
                 "model",

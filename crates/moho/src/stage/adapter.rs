@@ -214,6 +214,7 @@ const USD_TO_HYDRA_TYPES: &[(&str, &str)] = &[
     ("Mesh", prim_type::MESH),
     ("BasisCurves", prim_type::BASIS_CURVES),
     ("NurbsCurves", prim_type::NURBS_CURVES),
+    ("Points", prim_type::POINTS),
     ("Sphere", prim_type::SPHERE),
     ("Cube", prim_type::CUBE),
     ("Cone", prim_type::CONE),

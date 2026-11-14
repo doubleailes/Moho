@@ -88,6 +88,16 @@ NURBS curves data source does.
 - **WHEN** a NURBS curves prim authors `pointWeights`
 - **THEN** `primvars/pointWeights/primvarValue` gives them, and `nurbsCurves` has no `pointWeights`
 
+### Requirement: Points
+A `Points` SHALL have type `points` and SHALL expose the gprim data, with
+`widths` as a primvar beside the point-based ones (`points`, `velocities`,
+`accelerations`, `normals`), as UsdImaging's points adapter does. It SHALL
+have no schema of its own, and its `ids` SHALL NOT be a primvar.
+
+#### Scenario: A particle cache
+- **WHEN** a points prim authors `points`, `widths` with interpolation `varying`, and `ids`
+- **THEN** its type is `points`, `primvars/widths` gives the widths with interpolation `varying`, and there is no `ids` primvar
+
 ### Requirement: Implicit shapes
 `Sphere`, `Cube`, `Cone`, `Cylinder`, `Capsule` and `Plane` SHALL have their
 own type (`sphere`, `cube`, `cone`, `cylinder`, `capsule`, `plane`) and SHALL
