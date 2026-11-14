@@ -10,7 +10,8 @@ pub mod renderer {
     pub const PROGRESS: &str = "progress";
     /// Why the render failed, in the `failed` state.
     pub const FAILURE: &str = "failure";
-    /// An open container: each renderer chooses its keys.
+    /// An open container: each renderer chooses its keys, beside the
+    /// standard ones ([`stats`](super::stats)).
     pub const STATS: &str = "stats";
     pub const CAPABILITIES: &str = "capabilities";
 }
@@ -56,6 +57,10 @@ pub mod capabilities {
     pub const KEY: &str = "key";
     pub const TYPE: &str = "type";
     pub const DEFAULT: &str = "default";
+    /// A setting's display name, help text and group.
+    pub const LABEL: &str = "label";
+    pub const HELP: &str = "help";
+    pub const GROUP: &str = "group";
     pub const MIN: &str = "min";
     pub const MAX: &str = "max";
     pub const CHOICES: &str = "choices";
@@ -67,4 +72,26 @@ pub mod capabilities {
 pub mod synthetic {
     /// Its path. A var under it is named after the default AOV.
     pub const PRODUCT: &str = "/__moho_render__/product";
+}
+
+/// AOV names render control gives a meaning to.
+pub mod aov {
+    /// The identifier of the prim a pixel shows (Hydra's `primId`).
+    pub const PRIM_ID: &str = "primId";
+    /// The identifier of the instance a pixel shows (Hydra's `instanceId`).
+    pub const INSTANCE_ID: &str = "instanceId";
+
+    /// Whether an AOV's frames hold identifiers, and carry an
+    /// [`IdTable`](crate::IdTable).
+    pub fn is_identifier(name: &str) -> bool {
+        name == PRIM_ID || name == INSTANCE_ID
+    }
+}
+
+/// The stats every renderer reports, under `renderer/stats`.
+pub mod stats {
+    /// The host memory (RAM) the renderer holds, in bytes.
+    pub const HOST_BYTES: &str = "hostBytes";
+    /// The device memory (VRAM) the renderer holds, in bytes.
+    pub const DEVICE_BYTES: &str = "deviceBytes";
 }

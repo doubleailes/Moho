@@ -49,8 +49,10 @@ impl SettingType {
 }
 
 /// A renderer setting (`HdRenderSettingDescriptor`), read from the active
-/// render settings' `namespacedSettings` under its full name.
+/// render settings' `namespacedSettings` under its full name. Made with
+/// [`SettingDescriptor::new`], so a field added later breaks no renderer.
 #[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub struct SettingDescriptor {
     /// The namespaced name (`ri:hider:maxsamples`).
     pub key: Token,
@@ -58,6 +60,52 @@ pub struct SettingDescriptor {
     pub default: Value,
     /// The smallest and largest values, where bounded.
     pub range: Option<(Value, Value)>,
+    /// The name a person reads (`Max Samples`): the key unless given.
+    pub label: String,
+    /// One line on what the setting does; empty unless given.
+    pub help: String,
+    /// The section a settings panel lists it in; empty unless given.
+    pub group: String,
+}
+
+impl SettingDescriptor {
+    /// The setting `key` of type `ty`, defaulting to `default`, unbounded.
+    pub fn new(key: impl Into<Token>, ty: SettingType, default: impl Into<Value>) -> Self {
+        let key = key.into();
+        Self {
+            label: key.as_str().to_owned(),
+            key,
+            ty,
+            default: default.into(),
+            range: None,
+            help: String::new(),
+            group: String::new(),
+        }
+    }
+
+    /// This setting, named `label` for a person.
+    pub fn with_label(mut self, label: impl Into<String>) -> Self {
+        self.label = label.into();
+        self
+    }
+
+    /// This setting, described by `help`.
+    pub fn with_help(mut self, help: impl Into<String>) -> Self {
+        self.help = help.into();
+        self
+    }
+
+    /// This setting, listed in `group`.
+    pub fn with_group(mut self, group: impl Into<String>) -> Self {
+        self.group = group.into();
+        self
+    }
+
+    /// This setting, bounded by `min` and `max`.
+    pub fn with_range(mut self, min: impl Into<Value>, max: impl Into<Value>) -> Self {
+        self.range = Some((min.into(), max.into()));
+        self
+    }
 }
 
 /// A command the renderer runs (`HdCommandDescriptor`).
@@ -150,6 +198,9 @@ fn settings(descriptors: &[SettingDescriptor]) -> DataSource {
             (t::KEY, value(setting.key.clone())),
             (t::TYPE, value(setting.ty.token())),
             (t::DEFAULT, value(setting.default.clone())),
+            (t::LABEL, value(setting.label.clone())),
+            (t::HELP, value(setting.help.clone())),
+            (t::GROUP, value(setting.group.clone())),
         ]);
         if let Some((min, max)) = &setting.range {
             container.set(t::MIN, value(min.clone()));
@@ -177,12 +228,14 @@ mod tests {
     #[test]
     fn a_setting_reads_back_from_the_container() {
         let capabilities = Capabilities {
-            settings: vec![SettingDescriptor {
-                key: Token::new("ri:hider:maxsamples"),
-                ty: SettingType::Int,
-                default: Value::Int(64),
-                range: Some((Value::Int(1), Value::Int(4096))),
-            }],
+            settings: vec![
+                SettingDescriptor::new(
+                    Token::new("ri:hider:maxsamples"),
+                    SettingType::Int,
+                    Value::Int(64),
+                )
+                .with_range(Value::Int(1), Value::Int(4096)),
+            ],
             ..Capabilities::default()
         };
         let container = capabilities.to_container().into_handle();
@@ -198,6 +251,44 @@ mod tests {
         assert_eq!(read(setting, "type"), Some(Value::Token(Token::new("int"))));
         assert_eq!(read(setting, "default"), Some(Value::Int(64)));
         assert_eq!(read(setting, "max"), Some(Value::Int(4096)));
+    }
+
+    #[test]
+    fn a_setting_described_for_a_person() {
+        let capabilities = Capabilities {
+            settings: vec![
+                SettingDescriptor::new(
+                    Token::new("ri:hider:maxsamples"),
+                    SettingType::Int,
+                    Value::Int(64),
+                )
+                .with_label("Max Samples")
+                .with_help("Samples per pixel at most.")
+                .with_group("Sampling"),
+            ],
+            ..Capabilities::default()
+        };
+        let container = capabilities.to_container().into_handle();
+        let settings = locate(&container, &Locator::parse("settings")).unwrap();
+        let setting = settings.as_vector().unwrap().get(0).unwrap();
+        let setting = setting.as_container().unwrap();
+        assert_eq!(read(setting, "label"), Some(Value::String("Max Samples".into())));
+        assert_eq!(
+            read(setting, "help"),
+            Some(Value::String("Samples per pixel at most.".into()))
+        );
+        assert_eq!(read(setting, "group"), Some(Value::String("Sampling".into())));
+    }
+
+    #[test]
+    fn an_undescribed_setting() {
+        let setting = SettingDescriptor::new(
+            Token::new("ri:hider:maxsamples"),
+            SettingType::Int,
+            Value::Int(64),
+        );
+        assert_eq!(setting.label, "ri:hider:maxsamples");
+        assert!(setting.help.is_empty() && setting.group.is_empty());
     }
 
     #[test]

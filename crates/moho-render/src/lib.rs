@@ -30,6 +30,14 @@
 //!   work from any thread. Render threads queue their changes, and the owning
 //!   thread sends the output notices when it calls
 //!   [`poll`](ControlledRenderer::poll) or `update`.
+//! - **A frame says what it shows.** It names its render and carries the
+//!   [`RenderView`] that render read (camera, lens, framing, time, colour
+//!   space); an identifier var's frame carries an [`IdTable`], so a host
+//!   picks from frames alone. Every var refines as the render does.
+//! - **A host builds its panels from data.** Setting descriptors carry a
+//!   label, help and group; the `hostBytes` and `deviceBytes` stats
+//!   ([`tokens::stats`]) report the memory held, readable from the control
+//!   handle.
 //! - **The renderer decides what an edit costs.** After updates it reports
 //!   an [`Invalidation`]: keep converging, restart, or recreate it.
 //!
@@ -64,10 +72,10 @@ pub use control::{Changes, Control, ControlHandle, Shared};
 pub use output::OutputSceneIndex;
 pub use renderer::{ControlledRenderer, InvalidationTracker, TrackedNotice, restart_on_any_notice};
 pub use settings_override::SettingsOverrideSceneIndex;
-pub use targets::{ProductTarget, RenderTargets, VarTarget};
+pub use targets::{ProductTarget, RenderTargets, RenderView, VarTarget};
 pub use types::{
-    Convergence, Frame, Invalidation, PixelFormat, PixelRect, ProductWriter, RenderError, RenderRequest,
-    RunState,
+    Convergence, Frame, IdTable, Invalidation, PixelFormat, PixelRect, ProductWriter, RenderError,
+    RenderRequest, RunState,
 };
 
 #[cfg(feature = "testing")]

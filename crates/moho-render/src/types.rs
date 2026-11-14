@@ -7,6 +7,8 @@ use std::sync::Arc;
 use moho::openusd::sdf;
 use moho::openusd::tf::Token;
 
+use crate::targets::RenderView;
+
 /// What the updates since the last render cost the image in flight.
 ///
 /// Ordered from cheapest to costliest, so the cost of several updates is
@@ -190,7 +192,9 @@ impl PixelRect {
 
 /// One render var's pixels at one point in time: an immutable snapshot, so
 /// a reader never locks the renderer and a later snapshot never alters it.
+/// Made with [`Frame::new`], so a field added later breaks no renderer.
 #[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub struct Frame {
     /// Grows with each snapshot of the var. Set when the frame is published.
     pub generation: u64,
@@ -204,6 +208,91 @@ pub struct Frame {
     /// The data window's pixels, rows top to bottom, tightly packed,
     /// multisampling already resolved.
     pub pixels: Arc<[u8]>,
+    /// The render that made it: grows across the renderer's renders. Set
+    /// when the frame is published.
+    pub render: u64,
+    /// The view its render read when it started, shared by the render's
+    /// frames of one product.
+    pub view: Option<Arc<RenderView>>,
+    /// For an identifier var (`primId`, `instanceId`): the prim each
+    /// identifier its pixels hold names, shared by the render's frames of
+    /// the var.
+    pub ids: Option<Arc<IdTable>>,
+}
+
+impl Frame {
+    /// A frame of `samples` samples, holding `pixels` of `format` for
+    /// `data_window` in `display_window`. Its generation is set when it is
+    /// published.
+    pub fn new(
+        format: PixelFormat,
+        display_window: PixelRect,
+        data_window: PixelRect,
+        samples: u32,
+        pixels: Arc<[u8]>,
+    ) -> Self {
+        Self {
+            generation: 0,
+            samples,
+            format,
+            display_window,
+            data_window,
+            pixels,
+            render: 0,
+            view: None,
+            ids: None,
+        }
+    }
+
+    /// This frame, its identifiers naming the prims of `ids`.
+    pub fn with_ids(mut self, ids: Arc<IdTable>) -> Self {
+        self.ids = Some(ids);
+        self
+    }
+
+    /// This frame, showing `view`.
+    pub fn with_view(mut self, view: Arc<RenderView>) -> Self {
+        self.view = Some(view);
+        self
+    }
+}
+
+/// The prims an identifier var's pixels name: each identifier to the
+/// absolute path of the prim the renderer attributes the hit to (for an
+/// instance, the instance or instancer prim, as the renderer names it). The
+/// value that marks no hit is not in the table.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct IdTable(Vec<(i32, sdf::Path)>);
+
+impl IdTable {
+    /// The table of `entries`; an identifier given twice keeps its first
+    /// path.
+    pub fn new(entries: impl IntoIterator<Item = (i32, sdf::Path)>) -> Self {
+        let mut entries: Vec<_> = entries.into_iter().collect();
+        entries.sort_by_key(|(id, _)| *id);
+        entries.dedup_by_key(|(id, _)| *id);
+        Self(entries)
+    }
+
+    /// The prim `id` names, `None` for an identifier the table lacks (the
+    /// background among them).
+    pub fn path(&self, id: i32) -> Option<&sdf::Path> {
+        let at = self.0.binary_search_by_key(&id, |(i, _)| *i).ok()?;
+        self.0.get(at).map(|(_, path)| path)
+    }
+
+    /// The identifiers and their prims, by identifier.
+    pub fn iter(&self) -> impl Iterator<Item = (i32, &sdf::Path)> {
+        self.0.iter().map(|(id, path)| (*id, path))
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
 }
 
 /// When a render stops sampling.
@@ -292,6 +381,16 @@ mod tests {
 
     fn p(s: &str) -> sdf::Path {
         sdf::path(s).unwrap()
+    }
+
+    #[test]
+    fn an_id_table_looks_up_by_identifier() {
+        let table = IdTable::new([(7, p("/b")), (3, p("/a")), (7, p("/c"))]);
+        assert_eq!(table.len(), 2);
+        assert_eq!(table.path(3), Some(&p("/a")));
+        assert_eq!(table.path(7), Some(&p("/b")), "the first path given wins");
+        assert_eq!(table.path(0), None, "the background is no entry");
+        assert_eq!(table.iter().map(|(id, _)| id).collect::<Vec<_>>(), [3, 7]);
     }
 
     #[test]

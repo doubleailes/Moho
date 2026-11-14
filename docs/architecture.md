@@ -518,13 +518,38 @@ own. Its requirements are the `render-control` capability.
   frames from any thread; a stop wins over a render thread's later work,
   because each render is an epoch. The owning thread takes the changes and
   notifies observers in `poll` and `update`, never under the lock.
+- **A frame says what it shows** (change `render-control-for-hosts`). It
+  names its render (the epoch, so a later render's frames have a greater
+  id) and carries the `RenderView` its render read when it started: the
+  camera prim, its flattened transform and `HdCameraSchema` lens, the
+  product's resolution, pixel aspect and conform policy, the index's
+  current frame and the settings' rendering colour space, `None` where the
+  index gives nothing. `RenderTargets::resolve` reads it, so every renderer
+  reads it the same way, and a product's frames share one `Arc`. A host
+  draws, picks and colour-manages from the frame, never from an index that
+  may have moved on.
+- **Identifier frames name their prims.** A `primId` or `instanceId`
+  frame carries an `IdTable`, identifier to prim path, shared by the
+  render's frames of the var; the background is not in it. Picking is the
+  host's, from frames, as Hydra's pick task reads id buffers: a renderer
+  has no pick API.
+- **Every var refines.** A progressive renderer publishes every var at each
+  pass, with the pass's sample count, not only the beauty.
+- **Settings and memory for a host.** A `SettingDescriptor` carries a
+  label, help and group beside its key, type, default and range. The stats
+  `hostBytes` and `deviceBytes` exist from creation (zero until reported,
+  `Shared::set_held`), and `ControlHandle::stats` reads every stat from any
+  thread. `Frame` and `SettingDescriptor` are `#[non_exhaustive]`, made with
+  constructors, so later fields break no renderer.
 - **The test renderer** (feature `testing`) samples a digest of the
   terminal index on a thread of its own and writes products in a raw
-  format. Its module documentation runs the host loop.
+  format. Its identifier vars show the meshes as vertical bands after the
+  background, and it reports its held bytes. Its module documentation runs
+  the host loop.
 
 Left out: Hgi and GPU drivers, zero-copy GPU frames, render pass
-collections, several devices, and a bridge to C++ Hydra delegates (a
-consumer's own).
+collections, several devices, a renderer's own framing when it differs from
+the scene's view, and a bridge to C++ Hydra delegates (a consumer's own).
 
 ## What the Hydra parity changes moved
 

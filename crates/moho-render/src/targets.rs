@@ -8,18 +8,111 @@
 //! settings, a synthetic product renders the renderer's default AOV through
 //! the primary camera. Every renderer resolves its targets this way.
 
+use std::sync::Arc;
+
 use moho::data_source::{ContainerHandle, DataSource, locate};
 use moho::locator::Locator;
+use moho::openusd::gf;
 use moho::openusd::sdf;
 use moho::openusd::tf::Token;
 use moho::openusd::vt::Value;
 use moho::scene_index::SceneIndex;
-use moho::schema::{RenderSettingsSchema, UsdRenderSettingsSchema, member, member_value};
+use moho::schema::{RenderSettingsSchema, UsdRenderSettingsSchema, XformSchema, member, member_value};
 use moho::tokens::{render as r, scene_globals as g};
 
 use crate::capabilities::AovDescriptor;
 use crate::tokens::synthetic;
 use crate::types::{PixelFormat, PixelRect, RenderError, RenderRequest};
+
+/// The view a render reads when it starts, as the terminal index gives it:
+/// what its frames show. A field the index does not give is `None`.
+///
+/// Camera fields are `HdCameraSchema`'s (`camera/<name>`), in scene units
+/// as Moho's camera data gives them; the transform is the camera's
+/// flattened `xform/matrix` (camera to world).
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct RenderView {
+    /// The camera prim rendered through.
+    pub camera: sdf::Path,
+    pub transform: Option<gf::Mat4d>,
+    /// `perspective` or `orthographic`.
+    pub projection: Option<Token>,
+    pub horizontal_aperture: Option<f64>,
+    pub vertical_aperture: Option<f64>,
+    pub horizontal_aperture_offset: Option<f64>,
+    pub vertical_aperture_offset: Option<f64>,
+    pub focal_length: Option<f64>,
+    /// Near and far.
+    pub clipping_range: Option<(f64, f64)>,
+    /// The product's image size, in pixels.
+    pub resolution: (u32, u32),
+    pub pixel_aspect_ratio: Option<f64>,
+    pub aspect_ratio_conform_policy: Option<Token>,
+    /// The index's current frame (`sceneGlobals/currentFrame`).
+    pub time: Option<f64>,
+    /// The settings' `renderingColorSpace`.
+    pub rendering_color_space: Option<Token>,
+}
+
+impl RenderView {
+    /// The view through `camera` at `resolution`, with the product's
+    /// framing from `product` (its flattened entry, when there is one), the
+    /// time from `root` and the colour space from `settings`.
+    fn read(
+        terminal: &dyn SceneIndex,
+        camera: &sdf::Path,
+        resolution: (u32, u32),
+        product: Option<&ContainerHandle>,
+        root: Option<&ContainerHandle>,
+        settings: Option<&RenderSettingsSchema>,
+    ) -> RenderView {
+        let data = terminal.prim(camera).data;
+        let field = |name: &str| {
+            data.as_ref()
+                .and_then(|d| locate(d, &Locator::new([CAMERA, name])))
+                .and_then(|s| s.value())
+        };
+        let number = |name: &str| field(name).and_then(as_f64);
+        let product_value = |name: &str| product.and_then(|e| member_value(e, name));
+        RenderView {
+            camera: camera.clone(),
+            transform: data
+                .as_ref()
+                .and_then(XformSchema::get)
+                .and_then(|x| x.matrix_value()),
+            projection: field("projection").and_then(token),
+            horizontal_aperture: number("horizontalAperture"),
+            vertical_aperture: number("verticalAperture"),
+            horizontal_aperture_offset: number("horizontalApertureOffset"),
+            vertical_aperture_offset: number("verticalApertureOffset"),
+            focal_length: number("focalLength"),
+            clipping_range: field("clippingRange").and_then(|v| match v {
+                Value::Vec2f(r) => Some((f64::from(r.x), f64::from(r.y))),
+                Value::Vec2d(r) => Some((r.x, r.y)),
+                _ => None,
+            }),
+            resolution,
+            pixel_aspect_ratio: product_value(r::PIXEL_ASPECT_RATIO).and_then(as_f64),
+            aspect_ratio_conform_policy: product_value(r::ASPECT_RATIO_CONFORM_POLICY).and_then(token),
+            time: root
+                .and_then(|d| locate(d, &Locator::new([g::SCENE_GLOBALS, g::CURRENT_FRAME])))
+                .and_then(|s| s.value())
+                .and_then(as_f64),
+            rendering_color_space: settings.and_then(|s| s.rendering_color_space()),
+        }
+    }
+}
+
+/// `HdCameraSchema`'s container.
+const CAMERA: &str = "camera";
+
+fn as_f64(value: Value) -> Option<f64> {
+    match value {
+        Value::Float(f) => Some(f64::from(f)),
+        Value::Double(d) => Some(d),
+        _ => None,
+    }
+}
 
 /// One render var to render.
 #[derive(Debug, Clone, PartialEq)]
@@ -49,6 +142,8 @@ pub struct ProductTarget {
     pub vars: Vec<VarTarget>,
     /// The product's own renderer settings.
     pub namespaced_settings: Option<ContainerHandle>,
+    /// The view the product renders, shared by its frames.
+    pub view: Arc<RenderView>,
 }
 
 impl std::fmt::Debug for ProductTarget {
@@ -60,6 +155,7 @@ impl std::fmt::Debug for ProductTarget {
             .field("display_window", &self.display_window)
             .field("data_window", &self.data_window)
             .field("vars", &self.vars)
+            .field("view", &self.view)
             .finish()
     }
 }
@@ -155,7 +251,16 @@ impl RenderTargets {
                 Some(crop) => crop,
                 None => product.data_window,
             };
+            let view = RenderView::read(
+                terminal,
+                &camera,
+                (product.display_window.width, product.display_window.height),
+                product.entry.as_ref(),
+                root.as_ref(),
+                settings.as_ref().map(|(_, _, schema)| schema),
+            );
             targets.push(ProductTarget {
+                view: Arc::new(view),
                 path: product.path,
                 name: product.name,
                 camera,
@@ -192,6 +297,8 @@ struct Candidate {
     data_window: PixelRect,
     vars: Vec<VarTarget>,
     namespaced_settings: Option<ContainerHandle>,
+    /// The product's flattened entry, for its framing.
+    entry: Option<ContainerHandle>,
 }
 
 fn non_empty_path(value: Value) -> Option<sdf::Path> {
@@ -276,6 +383,7 @@ fn product(
         data_window,
         vars,
         namespaced_settings: moho::schema::member_container(entry, r::NAMESPACED_SETTINGS),
+        entry: Some(entry.clone()),
     }
 }
 
@@ -297,6 +405,7 @@ fn synthetic_product(aov: &AovDescriptor, resolution: (u32, u32), camera: Option
             format: aov.format,
         }],
         namespaced_settings: None,
+        entry: None,
     }
 }
 

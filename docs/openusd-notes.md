@@ -606,6 +606,12 @@ Read at `d7d2a29`.
   value of an `opaque` attribute), so a frame cannot be a data source
   value: the output index gives a var's generation, and pixels go through
   the control handle.
+- A frame's view (change `render-control-for-hosts`) holds a `gf::Mat4d`
+  (`[f64; 16]`, row-major in `.0`, the translation in `.0[12..15]`), plain
+  data and `Send + Sync`, asserted with the rest. The camera's
+  `clippingRange` reads as `Value::Vec2f` (`.x` near, `.y` far), apertures
+  and focal length as `Value::Float` in scene units (Moho's camera data
+  scales them by `GfCamera`'s tenth of a unit).
 
 ## Gaps
 

@@ -129,6 +129,28 @@ fn capabilities_before_rendering() {
     assert_eq!(s.renderer.control().state(), RunState::Idle);
 }
 
+/// The settings' display names, help and groups, as the output index gives
+/// them to a settings panel.
+#[test]
+fn settings_are_described_in_the_output_index() {
+    let s = setup(SETTINGS_SCENE, TestConfig::default());
+    let output = s.renderer.output();
+    let root = output.prim(&sdf::Path::abs_root()).data.unwrap();
+    let settings = locate(&root, &Locator::parse("renderer/capabilities/settings")).unwrap();
+    let settings = settings.as_vector().unwrap();
+    let quality = (0..settings.len())
+        .filter_map(|i| settings.get(i)?.as_container().cloned())
+        .find(|c| {
+            locate(c, &Locator::parse("key")).and_then(|d| d.value())
+                == Some(Value::Token(Token::new("test:quality")))
+        })
+        .unwrap();
+    let read = |name: &str| locate(&quality, &Locator::parse(name)).and_then(|d| d.value());
+    assert_eq!(read("label"), Some(Value::String("Quality".into())));
+    assert_eq!(read("group"), Some(Value::String("Sampling".into())));
+    assert!(matches!(read("help"), Some(Value::String(help)) if !help.is_empty()));
+}
+
 #[test]
 fn render_returns_at_once() {
     let s = setup(SETTINGS_SCENE, slow());
@@ -502,5 +524,226 @@ fn the_output_follows_the_render() {
     assert_eq!(
         read("/Render/color", "renderBuffer/generation"),
         Some(Value::Int64(generation))
+    );
+}
+
+/// A frame shows the view its render started with, not a later edit.
+#[test]
+fn a_camera_edited_after_the_render_started() {
+    let s = setup(SETTINGS_SCENE, slow());
+    s.renderer.render(&request(Convergence::Never)).unwrap();
+    let control = s.renderer.control();
+    wait_for(&control, samples_at_least(1));
+    let before = control.frame(&color()).unwrap();
+    let view = before.view.clone().unwrap();
+    assert_eq!(view.camera, p("/cam"));
+    // Unauthored: the schema's fallback, 50 tenths of a unit, as the index gives it.
+    assert_eq!(view.focal_length, Some(5.0));
+
+    s.scene
+        .stage
+        .prim("/cam")
+        .unwrap()
+        .create_attribute("focalLength", "float")
+        .unwrap()
+        .set(35.0f32)
+        .unwrap();
+    s.scene.apply();
+    s.renderer.update();
+    let later = next_frame(&s, &color(), before.generation);
+    assert_eq!(
+        later.view.as_deref(),
+        Some(&*view),
+        "the render's view, not the edit"
+    );
+
+    s.renderer.render(&request(Convergence::Never)).unwrap();
+    let restarted = wait_for(&control, samples_at_least(1));
+    assert!(restarted.is_active());
+    let mut frame = control.frame(&color()).unwrap();
+    let deadline = Instant::now() + TIMEOUT;
+    while frame.render == before.render {
+        assert!(Instant::now() < deadline, "a frame of the new render");
+        thread::sleep(Duration::from_millis(1));
+        frame = control.frame(&color()).unwrap();
+    }
+    let focal = frame.view.as_ref().and_then(|v| v.focal_length).unwrap();
+    assert!(
+        (focal - 3.5).abs() < 1e-6,
+        "the next render reads the edit: {focal}"
+    );
+    control.stop();
+}
+
+/// Each frame gives the index's time and the settings' colour space.
+#[test]
+fn frames_give_time_and_colour_space() {
+    let text = SETTINGS_SCENE.replace(
+        "int test:quality = 64",
+        "int test:quality = 64\n        uniform token renderingColorSpace = \"acescg\"",
+    );
+    let s = setup(&text, TestConfig::default());
+    s.scene.globals.set_current_frame(12.0);
+    s.scene.apply();
+    s.renderer.update();
+    s.renderer.render(&request(Convergence::Samples(2))).unwrap();
+    converged(&s);
+    let frame = s.renderer.control().frame(&color()).unwrap();
+    let view = frame.view.as_ref().unwrap();
+    assert_eq!(view.time, Some(12.0));
+    assert_eq!(
+        view.rendering_color_space.as_ref().map(|t| t.as_str()),
+        Some("acescg")
+    );
+}
+
+/// A stage with one mesh and a product of `color` and `primId` vars.
+const IDS_SCENE: &str = r#"#usda 1.0
+(
+    renderSettingsPrimPath = "/Render/settings"
+)
+def Camera "cam"
+{
+}
+def Xform "World"
+{
+    def Mesh "A"
+    {
+    }
+}
+def Scope "Render"
+{
+    def RenderSettings "settings"
+    {
+        rel camera = </cam>
+        int2 resolution = (8, 4)
+        rel products = [</Render/beauty>]
+    }
+    def RenderProduct "beauty"
+    {
+        rel orderedVars = [</Render/color>, </Render/ids>]
+    }
+    def RenderVar "color"
+    {
+        uniform string sourceName = "color"
+    }
+    def RenderVar "ids"
+    {
+        uniform token dataType = "int"
+        uniform string sourceName = "primId"
+    }
+}
+"#;
+
+fn id_at(frame: &moho_render::Frame, x: u32, y: u32) -> i32 {
+    let at = ((y * frame.data_window.width + x) * 4) as usize;
+    i32::from_le_bytes(frame.pixels[at..at + 4].try_into().unwrap())
+}
+
+/// A host picks from the identifier frame alone: the centre pixel names the
+/// mesh, a background pixel nothing.
+#[test]
+fn a_pick_from_a_frame() {
+    let s = setup(IDS_SCENE, TestConfig::default());
+    assert!(
+        s.renderer
+            .capabilities()
+            .aovs
+            .iter()
+            .any(|a| a.name.as_str() == "primId" && a.format == moho_render::PixelFormat::I32)
+    );
+    s.renderer.render(&request(Convergence::Samples(2))).unwrap();
+    converged(&s);
+    let frame = s.renderer.control().frame(&p("/Render/ids")).unwrap();
+    assert_eq!(frame.format, moho_render::PixelFormat::I32);
+    let table = frame.ids.clone().unwrap();
+    assert_eq!(table.path(id_at(&frame, 4, 2)), Some(&p("/World/A")));
+    // The background.
+    let background = id_at(&frame, 0, 0);
+    assert_eq!(table.path(background), None);
+}
+
+/// Every identifier a frame holds names a prim the terminal index holds.
+#[test]
+fn identifiers_name_scene_prims() {
+    let text = IDS_SCENE.replace(
+        "def Mesh \"A\"\n    {\n    }",
+        "def Mesh \"A\"\n    {\n    }\n    def Mesh \"B\"\n    {\n    }\n    def Mesh \"C\"\n    {\n    }",
+    );
+    let s = setup(&text, TestConfig::default());
+    s.renderer.render(&request(Convergence::Samples(1))).unwrap();
+    converged(&s);
+    let frame = s.renderer.control().frame(&p("/Render/ids")).unwrap();
+    let table = frame.ids.clone().unwrap();
+    assert_eq!(table.len(), 3);
+    let mut seen = std::collections::BTreeSet::new();
+    for y in 0..frame.data_window.height {
+        for x in 0..frame.data_window.width {
+            let id = id_at(&frame, x, y);
+            if let Some(path) = table.path(id) {
+                assert!(
+                    s.scene.terminal.prim(path).data.is_some(),
+                    "{path} is in the index"
+                );
+                seen.insert(path.clone());
+            } else {
+                assert_eq!(id, moho_render::testing::BACKGROUND);
+            }
+        }
+    }
+    assert_eq!(seen.len(), 3, "every mesh shows");
+}
+
+/// The memory the renderer holds, read from another thread and from the
+/// output index after a poll.
+#[test]
+fn memory_read_from_another_thread() {
+    let s = setup(SETTINGS_SCENE, TestConfig::default());
+    let control = s.renderer.control();
+    let stats = thread::spawn(move || control.stats()).join().unwrap();
+    let host = stats.get(&Token::new("hostBytes")).cloned().unwrap();
+    assert!(matches!(host, Value::Int64(bytes) if bytes > 0), "{host:?}");
+    assert_eq!(stats.get(&Token::new("deviceBytes")), Some(&Value::Int64(0)));
+
+    s.renderer.poll();
+    let output = s.renderer.output();
+    let root = output.prim(&sdf::Path::abs_root()).data.unwrap();
+    let read = |key: &str| locate(&root, &Locator::new(["renderer", "stats", key])).and_then(|d| d.value());
+    assert_eq!(read("hostBytes"), Some(host));
+    assert_eq!(read("deviceBytes"), Some(Value::Int64(0)));
+}
+
+/// Every var refines while the render runs, not only at convergence, and a
+/// pass's frames share its sample count.
+#[test]
+fn every_var_refines() {
+    let s = setup(SETTINGS_SCENE, slow());
+    s.renderer.render(&request(Convergence::Samples(8))).unwrap();
+    let control = s.renderer.control();
+    let (mut color_samples, mut depth_samples) = (Vec::new(), Vec::new());
+    let deadline = Instant::now() + TIMEOUT;
+    while depth_samples.iter().all(|&n| n < 2) {
+        assert!(Instant::now() < deadline, "depth refines");
+        if let Some(frame) = control.frame(&color()) {
+            color_samples.push(frame.samples);
+        }
+        if let Some(frame) = control.frame(&p("/Render/depth")) {
+            depth_samples.push(frame.samples);
+        }
+        thread::sleep(Duration::from_millis(1));
+    }
+    assert!(
+        matches!(control.state(), RunState::Rendering { .. }),
+        "depth had frames before convergence"
+    );
+    control.stop();
+    let color_now = control.frame(&color()).unwrap().samples;
+    for n in &depth_samples {
+        assert!(*n <= color_now, "depth at {n} samples, color at {color_now}");
+    }
+    let last_depth = control.frame(&p("/Render/depth")).unwrap().samples;
+    assert!(
+        (color_now as i64 - last_depth as i64).abs() <= 1,
+        "one pass apart at most once stopped: color {color_now}, depth {last_depth}"
     );
 }

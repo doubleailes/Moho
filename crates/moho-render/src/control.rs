@@ -20,6 +20,7 @@ use moho::openusd::sdf;
 use moho::openusd::tf::Token;
 use moho::openusd::vt::Value;
 
+use crate::tokens::stats;
 use crate::types::{Frame, RunState};
 
 /// The host's view of a running renderer, usable from any thread.
@@ -37,6 +38,8 @@ pub trait Control: Send + Sync {
     fn resume(&self) -> bool;
     /// The latest snapshot of `var`, or `None` when it is not rendered.
     fn frame(&self, var: &sdf::Path) -> Option<Arc<Frame>>;
+    /// The renderer's stats, `hostBytes` and `deviceBytes` among them.
+    fn stats(&self) -> BTreeMap<Token, Value>;
     /// Blocks until the run state is of another kind than `seen` (see
     /// [`RunState::same_kind`]), or `timeout` passes, and returns the
     /// current state.
@@ -70,6 +73,9 @@ impl ControlHandle {
 
     pub fn frame(&self, var: &sdf::Path) -> Option<Arc<Frame>> {
         self.0.frame(var)
+    }
+    pub fn stats(&self) -> BTreeMap<Token, Value> {
+        self.0.stats()
     }
 
     pub fn wait(&self, seen: &RunState, timeout: Duration) -> RunState {
@@ -124,12 +130,29 @@ struct Inner {
 impl Shared {
     /// Shared state for a renderer that can pause and stop as given.
     pub fn new(pause_supported: bool, stop_supported: bool) -> Arc<Self> {
+        // The memory stats exist from the start, zero until reported.
+        let stats = [stats::HOST_BYTES, stats::DEVICE_BYTES]
+            .into_iter()
+            .map(|key| (Token::new(key), Value::Int64(0)))
+            .collect();
         Arc::new(Self {
             pause_supported,
             stop_supported,
-            inner: Mutex::default(),
+            inner: Mutex::new(Inner {
+                stats,
+                stats_changed: true,
+                ..Inner::default()
+            }),
             changed: Condvar::new(),
         })
+    }
+
+    /// Sets the memory the renderer holds: the `hostBytes` and
+    /// `deviceBytes` stats.
+    pub fn set_held(&self, host_bytes: u64, device_bytes: u64) {
+        let bytes = |b: u64| Value::Int64(i64::try_from(b).unwrap_or(i64::MAX));
+        self.set_stat(stats::HOST_BYTES, bytes(host_bytes));
+        self.set_stat(stats::DEVICE_BYTES, bytes(device_bytes));
     }
 
     /// The lock, taken over from a thread that panicked holding it: the
@@ -204,6 +227,7 @@ impl Shared {
         let generation = inner.generations.entry(var.clone()).or_default();
         *generation += 1;
         frame.generation = *generation;
+        frame.render = epoch;
         inner.frames.insert(var.clone(), Arc::new(frame));
         inner.unseen.insert(var.clone());
         Some(inner.generations.get(var).copied().unwrap_or_default())
@@ -312,6 +336,10 @@ impl Control for Shared {
         self.lock().frames.get(var).cloned()
     }
 
+    fn stats(&self) -> BTreeMap<Token, Value> {
+        self.lock().stats.clone()
+    }
+
     fn wait(&self, seen: &RunState, timeout: Duration) -> RunState {
         let deadline = Instant::now() + timeout;
         let mut inner = self.lock();
@@ -342,14 +370,13 @@ mod tests {
     }
 
     fn frame(samples: u32, byte: u8) -> Frame {
-        Frame {
-            generation: 0,
+        Frame::new(
+            PixelFormat::U8x4,
+            PixelRect::of_size(1, 1),
+            PixelRect::of_size(1, 1),
             samples,
-            format: PixelFormat::U8x4,
-            display_window: PixelRect::of_size(1, 1),
-            data_window: PixelRect::of_size(1, 1),
-            pixels: Arc::from(vec![byte; 4]),
-        }
+            Arc::from(vec![byte; 4]),
+        )
     }
 
     fn rendering(samples: u32) -> RunState {
@@ -368,6 +395,7 @@ mod tests {
         send_sync::<sdf::Path>();
         send_sync::<Token>();
         send_sync::<Value>();
+        send_sync::<crate::targets::RenderView>();
     }
 
     #[test]
@@ -447,6 +475,35 @@ mod tests {
         assert_eq!(shared.publish_frame(second, &p("/v"), frame(1, 1)), Some(2));
         // The first render's thread is retired.
         assert!(!shared.is_current(first));
+    }
+
+    #[test]
+    fn frames_name_their_render() {
+        let shared = Shared::new(true, true);
+        let first = shared.begin([p("/v")]);
+        shared.set_state(first, rendering(1));
+        shared.publish_frame(first, &p("/v"), frame(1, 1));
+        let before = shared.frame(&p("/v")).unwrap();
+        let second = shared.begin([p("/v")]);
+        shared.set_state(second, rendering(1));
+        shared.publish_frame(second, &p("/v"), frame(1, 2));
+        let after = shared.frame(&p("/v")).unwrap();
+        assert_eq!(before.render, first);
+        assert!(after.render > before.render);
+    }
+
+    #[test]
+    fn memory_stats_before_any_render() {
+        let shared = Shared::new(true, true);
+        let handle = ControlHandle::new(shared.clone());
+        let stats = thread::spawn(move || handle.stats()).join().unwrap();
+        assert_eq!(stats.get(&Token::new("hostBytes")), Some(&Value::Int64(0)));
+        assert_eq!(stats.get(&Token::new("deviceBytes")), Some(&Value::Int64(0)));
+        shared.set_held(1024, 0);
+        assert_eq!(
+            shared.stats().get(&Token::new("hostBytes")),
+            Some(&Value::Int64(1024))
+        );
     }
 
     #[test]
