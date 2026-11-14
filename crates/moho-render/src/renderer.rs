@@ -85,12 +85,16 @@ pub struct InvalidationTracker {
 struct Classifying {
     classify: Classifier,
     strongest: Cell<Invalidation>,
+    /// The strongest cost of the last flush's notices, `None` without any.
+    last: Cell<Option<Invalidation>>,
 }
 
 impl Classifying {
     fn record(&self, notice: TrackedNotice) {
         let cost = (self.classify)(&notice);
         self.strongest.set(self.strongest.get().max(cost));
+        self.last
+            .set(Some(self.last.get().map_or(cost, |last| last.max(cost))));
     }
 }
 
@@ -136,6 +140,7 @@ impl InvalidationTracker {
         let classifying = Rc::new(Classifying {
             classify: Box::new(classify),
             strongest: Cell::new(Invalidation::None),
+            last: Cell::new(None),
         });
         let weak: Weak<dyn Observer> = Rc::downgrade(&(classifying.clone() as Rc<dyn Observer>));
         batching.add_observer(weak);
@@ -149,6 +154,12 @@ impl InvalidationTracker {
     /// The strongest invalidation since the last reset.
     pub fn invalidation(&self) -> Invalidation {
         self.classifying.strongest.get()
+    }
+
+    /// The strongest cost of the notices the last [`update`](Renderer::update)
+    /// flushed, `None` when it flushed none: what that update alone did.
+    pub fn last_update(&self) -> Option<Invalidation> {
+        self.classifying.last.get()
     }
 
     /// Forgets the invalidation recorded: a render started.
@@ -169,6 +180,7 @@ impl InvalidationTracker {
 
 impl Renderer for InvalidationTracker {
     fn update(&self) {
+        self.classifying.last.set(None);
         self.batching.flush();
     }
 }
@@ -208,6 +220,14 @@ mod tests {
         );
         tracker.update();
         assert_eq!(tracker.invalidation(), Invalidation::Restart);
+        assert_eq!(tracker.last_update(), Some(Invalidation::Restart));
+        tracker.update();
+        assert_eq!(tracker.last_update(), None, "the next update flushed nothing");
+        assert_eq!(
+            tracker.invalidation(),
+            Invalidation::Restart,
+            "held until a render"
+        );
     }
 
     #[test]

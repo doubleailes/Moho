@@ -94,4 +94,15 @@ pub mod stats {
     pub const HOST_BYTES: &str = "hostBytes";
     /// The device memory (VRAM) the renderer holds, in bytes.
     pub const DEVICE_BYTES: &str = "deviceBytes";
+    /// What the renderer's last update did, as a token, when it says: its
+    /// own vocabulary (`materials`, `lights`, ...), but for
+    /// [`UPDATE_FULL`] and [`UPDATE_UNCHANGED`], which every renderer means
+    /// alike. Optional: a renderer that does not classify its updates
+    /// leaves it out.
+    pub const UPDATE_CLASS: &str = "updateClass";
+    /// [`UPDATE_CLASS`]: the update rebuilt the renderer's scene from
+    /// scratch.
+    pub const UPDATE_FULL: &str = "full";
+    /// [`UPDATE_CLASS`]: the update changed nothing the renderer holds.
+    pub const UPDATE_UNCHANGED: &str = "unchanged";
 }

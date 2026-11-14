@@ -747,3 +747,28 @@ fn every_var_refines() {
         "one pass apart at most once stopped: color {color_now}, depth {last_depth}"
     );
 }
+
+/// An update names its class: a host reads `unchanged` and `full` alike from
+/// every renderer, and any other token as the renderer's own.
+#[test]
+fn an_update_names_its_class() {
+    let s = setup(SETTINGS_SCENE, TestConfig::default());
+    let class = || {
+        s.renderer
+            .control()
+            .stats()
+            .get(&Token::new(moho_render::tokens::stats::UPDATE_CLASS))
+            .cloned()
+    };
+    s.renderer.update();
+    assert_eq!(class(), Some(Value::Token(Token::new("unchanged"))));
+    s.scene
+        .stage
+        .attribute("/geo.doubleSided")
+        .unwrap()
+        .set(true)
+        .unwrap();
+    s.scene.apply();
+    s.renderer.update();
+    assert_eq!(class(), Some(Value::Token(Token::new("restart"))));
+}

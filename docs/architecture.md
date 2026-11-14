@@ -541,7 +541,9 @@ own. Its requirements are the `render-control` capability.
   range; a setting with no default holds the empty value. The stats
   `hostBytes` and `deviceBytes` exist from creation (zero until reported,
   `Shared::set_held`), and `ControlHandle::stats` reads every stat from any
-  thread. `Frame` and `SettingDescriptor` are `#[non_exhaustive]`, made with
+  thread. A renderer may name what its last update did as `updateClass`:
+  its own token, but `full` (rebuilt from scratch) and `unchanged` mean the
+  same from every renderer, so a host reports them without knowing it. `Frame` and `SettingDescriptor` are `#[non_exhaustive]`, made with
   constructors, so later fields break no renderer.
 - **The test renderer** (feature `testing`) samples a digest of the
   terminal index on a thread of its own and writes products in a raw
