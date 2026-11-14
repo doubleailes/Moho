@@ -1,0 +1,23 @@
+[package]
+name = "moho-render"
+description = "Render control over a Moho terminal scene index, drafted ahead of Hydra's own HdRenderer"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+moho = { path = "../moho" }
+
+[features]
+# The test renderer (`moho_render::testing`), for this crate's tests and for
+# hosts testing their own loop.
+testing = []
+
+[dev-dependencies]
+# The crate's own tests use the test renderer.
+moho-render = { path = ".", features = ["testing"] }
+
+[lints]
+workspace = true

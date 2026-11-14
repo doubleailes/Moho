@@ -63,11 +63,16 @@ beyond Hydra inside the crate intended for upstream.
 renderer records the strongest invalidation that its updates since the last
 `render` caused, and `invalidation()` reads it. `render` resets it.
 `Invalidation` derives `Ord` (`None < Continue < Restart < Recreate`), so
-recording is a `max`. A helper, `RestartOnAnyNotice`, wraps a
-`PrimManagingRenderer` and records `Restart` for any non-empty flush. That
-covers the default in the spec. A renderer that classifies changes inspects
-the dirtied locators in its `ManagedPrim::dirty` and records `Continue`
-itself.
+recording is a `max`. An `InvalidationTracker` composes Moho's
+`PrimTypeNoticeBatchingSceneIndex` and `PrimManagingObserver`, as
+`PrimManagingRenderer` does, and also observes the batching index. At each
+`update` it flushes the batching and passes each notice the flush sends to a
+classifier, keeping the strongest answer. Its default classifier,
+`restart_on_any_notice`, answers `Restart` for every notice, which covers the
+default in the spec. A renderer that classifies changes passes its own (for
+example, `Continue` for a dirtied namespaced setting). The tracker cannot wrap
+`PrimManagingRenderer`, because that type keeps its batching index private,
+so the notices a flush sends cannot be seen from outside it.
 *Alternative:* a new `update` that returns `Invalidation`. Rejected: it
 shadows `moho`'s method and breaks `chain::create_renderer` generics.
 
@@ -133,9 +138,10 @@ Render threads write to an `Arc<Shared>` holding:
 change under the lock, releases the lock, updates the `Rc` output index's
 retained data, and sends one `dirtied` batch. This keeps one notice per var
 per poll, sends nothing without a poll, and never calls an observer under
-the lock. The output index is a small retained index of the crate's own:
-`moho::scene_index::RetainedSceneIndex` would also serve, but the crate
-needs its prims' data rebuilt from `Shared` at each poll.
+the lock. The output index wraps `moho::scene_index::RetainedSceneIndex`:
+its prims' containers read a shared `OutputState` when they are asked, so a
+poll updates that state and dirties the prims without replacing them. Adding
+and removing products goes through the retained index's own notices.
 *Alternative:* notify from render threads. Rejected: observers and indices
 are `Rc` and confined to one thread.
 
