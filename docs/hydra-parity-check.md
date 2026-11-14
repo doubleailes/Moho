@@ -374,8 +374,20 @@ Static data:
   for `skelBinding`. Since issue #46 Moho gives `coordSysBinding`: the
   `CoordSysAPI` adapter on the binding prim, and the flattening's overlay
   provider, which names it on every prim (`HdFlattenedDataSourceProviders`
-  lists it, which is why it was named everywhere). Not yet re-run against
-  the oracle.
+  lists it, which is why it was named everywhere); checked against the
+  oracle (see "Coordinate systems (#46)").
+- **A coordinate system binding edited stays stale in Hydra.**
+  `UsdImagingCoordSysAPIAdapter::GetImagingSubprimData` returns a retained
+  snapshot of the bindings, built when `UsdImagingStageSceneIndex::GetPrim`
+  is called, and `HdFlatteningSceneIndex` keeps the input prim's data
+  source across dirties (it fetches it again only on an added entry). So
+  after a binding is retargeted, removed or blocked, Hydra dirties
+  `coordSysBinding` on the prim and its descendants, yet answers the old
+  bindings (the stage scene index alone answers the new ones), and
+  `HdsiCoordSysPrimSceneIndex` recounts the old targets until the prim is
+  added again. Moho's stage data is read when asked, so it answers the new
+  bindings, and adds and removes `coordSys` prims to match. Moho keeps
+  them fresh; upstream candidate.
 - **`geomModel/cardVisibility` has no fallback.** openusd-schemas' UsdGeom
   schema predates `model:cardVisibility` (fallback `inherited`). Upstream
   candidate. Still holds.
@@ -621,6 +633,42 @@ read. Moho's `Points` is the type mapping alone, the gprim data and
 `tests/points.rs` (values, interpolations, the `widths` dirty locator,
 and points under a native instance and a point instancer). Add a points
 scene to the corpus at the next re-run.
+
+## Coordinate systems (#46)
+
+Checked against USD 26.08 (the conda-forge build above) with a small
+oracle: a C++ dumper builds `UsdImagingCreateSceneIndices` (draw mode off)
+with `HdsiCoordSysPrimSceneIndex` and `HdDependencyForwardingSceneIndex`
+over it; a Rust dumper builds `chain::standard` with
+`CoordSysPrimSceneIndex` and `DependencyForwardingSceneIndex`. Both print
+every prim's `coordSysBinding`, and each `coordSys` prim's name, `xform`
+and dependencies, then the notices of seven edits, each followed by a new
+dump: a binding retargeted, the target's transform edited, `CoordSysAPI`
+applied and bound on a prim, a binding relationship removed, a prim's
+`apiSchemas` cleared, a binding inside a native instance's prototype
+retargeted, and a binding prim removed. The scene binds at the root of a
+hierarchy and below it (a nearer binding of the same name), has an
+unbound instance, a bare `coordSys:<name>` relationship, a binding to a
+property path, and an asset with bindings referenced by two native
+instances.
+
+- **Static data: identical** but for the binding hash digits (Moho's own):
+  the same 21 prims, the same 13 naming `coordSysBinding`, the same
+  bindings (the inherited ones, the property path left alone, the
+  prototype's rewritten into `UsdNiPrototype`), and the same `coordSys`
+  prims with the same transforms. `__dependencies` reads as a block on
+  both sides (dependency forwarding).
+- **Notices:** the same prims dirtied at `coordSysBinding` on a retarget
+  (in another order), the same `coordSys` prim added and removed with its
+  binding, and the same entries when a binding prim is added again. Every
+  other difference follows from Hydra's stale bindings (class a above):
+  Moho removes `/World/Space/__coordSys_worldSpace` when every binding to
+  it is retargeted, and Hydra, still counting the old targets, keeps it,
+  then dirties its `xform` when the target moves; the prototype's retarget
+  is Hydra's added-then-removed quirk of the same prim, where Moho adds the
+  new target's prim and removes the old one. Besides: Hydra also dirties
+  `/Asset/geo` under the abstract class (known, class a) and
+  `skelBinding` (class a).
 
 ## Scene globals filter (`hydra-scene-globals`)
 
