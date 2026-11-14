@@ -601,6 +601,22 @@ and `dataSourceParticleField.cpp` (OpenUSD `release`), checked by
 (names, interpolations, roles, the float-or-half choice and the dirty
 locators). Add a splat scene to the corpus at the next re-run.
 
+## Points (#45)
+
+Not in the corpus above: `Points` prims were typeless when the check ran.
+Checked against the sources at OpenUSD `v26.08` instead
+(`pointsAdapter.cpp`, `dataSourcePoints.cpp`, `plugInfo.json`):
+`UsdImagingPointsAdapter` is registered for `Points` alone (no
+`includeDerivedPrimTypes`) and gives one subprim of type `points`;
+`UsdImagingDataSourcePointsPrim` is the gprim data source with
+`primvars` overlaid by a single custom primvar mapping (`widths` to
+`widths`), and invalidates as the gprim plus that mapping; `ids` is not
+read. Moho's `Points` is the type mapping alone, the gprim data and
+`widths` already being read for the `Points` family, checked by
+`tests/points.rs` (values, interpolations, the `widths` dirty locator,
+and points under a native instance and a point instancer). Add a points
+scene to the corpus at the next re-run.
+
 ## Scene globals filter (`hydra-scene-globals`)
 
 Checked afterwards against USD 26.08 with a small oracle:
