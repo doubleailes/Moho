@@ -65,9 +65,11 @@ A backend reaches its own type with `frame.device_image()?.as_any()
 `WgpuImage::of(&Frame) -> Option<&WgpuImage>`. This is
 `HdRenderBuffer::GetResource` returning a `VtValue` that holds an
 `HgiTextureHandle`: opaque to Hydra, typed to the host that asks. `read` is
-`Map` / `Unmap` collapsed into one call returning owned bytes. Rectangles are
-in data window coordinates; `Frame::read_rect` checks them against the window
-before calling the backend, so the error is uniform across backends.
+`Map` / `Unmap` collapsed into one call returning owned bytes. `Frame::read_rect`
+takes a rectangle in display window coordinates, as the data window itself
+is given, checks it against the data window (so the error is uniform across
+backends), and hands the backend the rectangle in the image's own
+coordinates.
 
 *Alternative:* a generic `Frame<I>` over the image type. Rejected: the
 control handle, `Shared` and every host would become generic, and a host
@@ -110,7 +112,8 @@ none across one queue, and Hgi's interop on one device does not need them.
 ### D5. `moho-render-wgpu`: the backend crate
 
 Contents: `WgpuDriver { adapter, device, queue }` (handed as
-`renderDriver`); `WgpuImage { texture, format, size, driver }`
+`renderDriver`; it also serializes readbacks' blocking polls, which some
+drivers deadlock on when concurrent); `WgpuImage { texture, format, size, driver }`
 implementing `DeviceImage` (backend `wgpu`; readback copies the asked region
 to a `MAP_READ` buffer with rows padded to `COPY_BYTES_PER_ROW_ALIGNMENT`,
 maps it, waits, strips the padding); `texture_formats(PixelFormat)` (the

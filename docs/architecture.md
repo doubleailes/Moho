@@ -551,9 +551,36 @@ own. Its requirements are the `render-control` capability.
   background, and it reports its held bytes. Its module documentation runs
   the host loop.
 
-Left out: Hgi and GPU drivers, zero-copy GPU frames, render pass
-collections, several devices, a renderer's own framing when it differs from
-the scene's view, and a bridge to C++ Hydra delegates (a consumer's own).
+- **Frames on a device** (change `render-control-device-frames`). A
+  frame's pixels (`FramePixels`) are host bytes or a `DeviceImage`: an
+  immutable image on a graphics device naming its backend, format and size,
+  as `HdRenderBuffer::GetResource` gives an Hgi texture. A reader asks the
+  frame for bytes wherever they are: `read_pixels` (a device frame reads
+  back once and keeps the bytes) or `read_rect` (a rectangle in display
+  coordinates, one pixel for a pick, checked against the data window). A
+  host knowing the backend downcasts the image (`as_any`) to reach the
+  texture.
+- **Drivers.** A host hands a renderer plugin its graphics device at
+  construction, as `Drivers` (`HdDriverVector`): named values, the device
+  under `renderDriver` (`HgiTokens->renderDriver`). `moho`'s create args
+  cannot carry one (a data source holds no device), so a plugin takes them
+  in its constructor and answers not supported from `is_supported` without
+  the driver it needs, before any filter is built.
+- **The wgpu backend** (`crates/moho-render-wgpu`), as HgiWgpu backs Hgi:
+  `WgpuDriver` (the host's adapter, device and queue), `WgpuImage` (a
+  texture of that device; readback copies the asked region to a mapped
+  buffer and strips the row padding), the pixel format mapping (three floats
+  have no texture format; identifiers are signed or unsigned 32-bit
+  textures), and `pub use wgpu`, the stack's one wgpu. A renderer submits
+  its writes before publishing, and one queue orders submissions, so the
+  host's later commands see them; a published texture is never written
+  again. It is the only crate naming wgpu; its tests run on the software
+  adapter and skip, saying so, without one.
+
+Left out: render pass collections, several devices or sharing a texture
+across devices, backends other than wgpu, a renderer's own framing when it
+differs from the scene's view, and a bridge to C++ Hydra delegates (a
+consumer's own).
 
 ## What the Hydra parity changes moved
 

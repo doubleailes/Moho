@@ -32,6 +32,10 @@ crates/moho-render render control over a terminal index (a controlled
                    overrides), drafted ahead of Hydra's HdRenderer and
                    kept outside the parity core; `testing` feature: a
                    test renderer
+crates/moho-render-wgpu  render control's wgpu backend (the host's device
+                   as the render driver, device frames of wgpu textures);
+                   the only crate naming wgpu, re-exported as
+                   `moho_render_wgpu::wgpu`
 docs/              architecture.md, openusd-notes.md, streaming-spike.md
 scripts/           streaming-spike.sh (runs the spike's strategies on a scene)
 openspec/          OpenSpec changes and specs for this repository
@@ -63,7 +67,9 @@ cargo test --workspace        # everything
 
 ## Boundaries
 
-- **openusd only** (openusd, openusd-schemas and openusd-mtlx, one rev). Moho never depends
+- **openusd only** (openusd, openusd-schemas and openusd-mtlx, one rev) for `moho` and
+  `moho-render`; wgpu is confined to `moho-render-wgpu`, outside the parity core, and is
+  the stack's one wgpu as openusd's rev is its one openusd. Moho never depends
   on a consumer (the DCC that feeds it, the renderers that read it), and
   holds none of their types. Adapters (a DCC's changes to a mirror stage, a
   renderer's import) live in the consumers. Crate docs and comments name no
