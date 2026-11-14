@@ -208,11 +208,15 @@ impl RenderTargets {
                         .and_then(|u| u.resolution())
                         .map(|r| (r.x.max(0) as u32, r.y.max(0) as u32))
                         .unwrap_or(default_resolution);
-                    vec![synthetic_product(
+                    // The settings' own image settings frame it: its pixel
+                    // aspect ratio and conform policy, as a product's would.
+                    let mut synthetic = synthetic_product(
                         default_aov,
                         resolution,
                         schema.camera().or(primary_camera.clone()),
-                    )]
+                    );
+                    synthetic.entry = moho::schema::member_container(data, r::USD_RENDER_SETTINGS);
+                    vec![synthetic]
                 } else {
                     entries
                         .iter()
@@ -361,9 +365,15 @@ fn product(
                 .and_then(token)
                 .filter(|n| !n.as_str().is_empty())
                 .unwrap_or_else(|| Token::from(path.name().unwrap_or_default()));
-            let format = data_type
-                .as_ref()
-                .map_or(PixelFormat::F32x4, |t| PixelFormat::for_data_type(t.as_str()));
+            // Identifiers are 32-bit integers whatever the type authored, as
+            // Hydra's `HdFormatInt32` id AOVs.
+            let format = if crate::tokens::aov::is_identifier(name.as_str()) {
+                PixelFormat::I32
+            } else {
+                data_type
+                    .as_ref()
+                    .map_or(PixelFormat::F32x4, |t| PixelFormat::for_data_type(t.as_str()))
+            };
             Some(VarTarget {
                 path,
                 name,

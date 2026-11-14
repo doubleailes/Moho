@@ -496,7 +496,8 @@ own. Its requirements are the `render-control` capability.
   active render settings prim's flattened products and vars, a product's
   camera before the settings' before the primary camera, and, without
   active settings, a synthetic product at `/__moho_render__/product` holding
-  the default AOV. A `RenderRequest` carries only per-call overrides:
+  the default AOV (framed by the settings' own resolution, pixel aspect
+  ratio and conform policy when they author no product). A `RenderRequest` carries only per-call overrides:
   products, a crop, a stop condition (`Convergence`) and who writes
   products (`ProductWriter`).
 - **Settings overrides are a filter.** `SettingsOverrideSceneIndex`, a
@@ -529,8 +530,10 @@ own. Its requirements are the `render-control` capability.
   draws, picks and colour-manages from the frame, never from an index that
   may have moved on.
 - **Identifier frames name their prims.** A `primId` or `instanceId`
-  frame carries an `IdTable`, identifier to prim path, shared by the
-  render's frames of the var; the background is not in it. Picking is the
+  var is `int32` whatever its authored `dataType` (Hydra's `HdFormatInt32`),
+  in the targets and so in the output index. A `primId` frame carries an
+  `IdTable`, identifier to prim path, shared by the render's frames of the
+  var; the background is not in it. Picking is the
   host's, from frames, as Hydra's pick task reads id buffers: a renderer
   has no pick API.
 - **Every var refines.** A progressive renderer publishes every var at each
@@ -547,8 +550,10 @@ own. Its requirements are the `render-control` capability.
   constructors, so later fields break no renderer.
 - **The test renderer** (feature `testing`) samples a digest of the
   terminal index on a thread of its own and writes products in a raw
-  format. Its identifier vars show the meshes as vertical bands after the
-  background, and it reports its held bytes. Its module documentation runs
+  format. Its `primId` vars show the meshes as vertical bands after the
+  background; it models no instances, so `instanceId` is -1 everywhere,
+  with no table. Frames are one per var path, so it refuses products that
+  share a var through different views. It reports its held bytes. Its module documentation runs
   the host loop.
 
 - **Frames on a device** (change `render-control-device-frames`). A

@@ -156,9 +156,18 @@ impl OutputSceneIndex {
     /// An output index for a renderer with `capabilities`, idle, with no
     /// product.
     pub fn new(capabilities: &Capabilities) -> Rc<Self> {
+        // The memory stats exist from the start, zero until reported, as
+        // the control handle's do.
+        let stats = [
+            crate::tokens::stats::HOST_BYTES,
+            crate::tokens::stats::DEVICE_BYTES,
+        ]
+        .into_iter()
+        .map(|key| (Token::new(key), Value::Int64(0)))
+        .collect();
         let state = Rc::new(RefCell::new(OutputState {
             run: RunState::Idle,
-            stats: BTreeMap::new(),
+            stats,
             capabilities: capabilities.to_container().into_handle(),
             products: BTreeMap::new(),
             vars: BTreeMap::new(),
