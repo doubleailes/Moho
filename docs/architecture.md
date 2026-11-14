@@ -574,7 +574,11 @@ own. Its requirements are the `render-control` capability.
   textures), and `pub use wgpu`, the stack's one wgpu. A renderer submits
   its writes before publishing, and one queue orders submissions, so the
   host's later commands see them; a published texture is never written
-  again. It is the only crate naming wgpu; its tests run on the software
+  again. The driver carries one submission gate shared by its clones
+  (change `wgpu-driver-submission-gate`): `submit`, `present`,
+  `configure_surface` and readbacks exclude each other, so a host
+  reconfiguring its viewport's surface never races a renderer drawing on
+  the same device. It is the only crate naming wgpu; its tests run on the software
   adapter and skip, saying so, without one.
 
 Left out: render pass collections, several devices or sharing a texture

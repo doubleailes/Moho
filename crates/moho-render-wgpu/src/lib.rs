@@ -39,6 +39,10 @@ pub struct WgpuDriver {
     pub adapter: wgpu::Adapter,
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
+    /// Submissions, presents and surface reconfigurations on the device
+    /// exclude each other, for every holder of a clone: a reconfiguration
+    /// racing a submission can fail inside wgpu's idle wait.
+    gate: Arc<Mutex<()>>,
     /// Serializes readbacks' blocking polls: some drivers (WARP) deadlock on
     /// concurrent `poll(Wait)` of one device.
     readback: Arc<Mutex<()>>,
@@ -51,8 +55,36 @@ impl WgpuDriver {
             adapter,
             device,
             queue,
+            gate: Arc::default(),
             readback: Arc::default(),
         }
+    }
+
+    /// Runs `f` under the device's submission gate: no submission, present
+    /// or surface reconfiguration through any clone overlaps it.
+    pub fn exclusive<R>(&self, f: impl FnOnce() -> R) -> R {
+        let _gate = self
+            .gate
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        f()
+    }
+
+    /// Submits `commands` on the queue under the gate.
+    pub fn submit(&self, commands: impl IntoIterator<Item = wgpu::CommandBuffer>) -> wgpu::SubmissionIndex {
+        self.exclusive(|| self.queue.submit(commands))
+    }
+
+    /// Presents a surface image under the gate (presenting may submit).
+    pub fn present(&self, image: wgpu::SurfaceTexture) {
+        self.exclusive(|| self.queue.present(image));
+    }
+
+    /// Reconfigures `surface` for this device under the gate. Error scopes
+    /// are the caller's: push one around the call to catch a validation
+    /// error.
+    pub fn configure_surface(&self, surface: &wgpu::Surface<'_>, config: &wgpu::SurfaceConfiguration) {
+        self.exclusive(|| surface.configure(&self.device, config));
     }
 
     /// Render control drivers holding this one as the `renderDriver`.
@@ -233,7 +265,7 @@ impl WgpuImage {
             .readback
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let submission = self.driver.queue.submit([encoder.finish()]);
+        let submission = self.driver.submit([encoder.finish()]);
         let slice = buffer.slice(..);
         let (done, complete) = mpsc::sync_channel(1);
         slice.map_async(wgpu::MapMode::Read, move |result| {
