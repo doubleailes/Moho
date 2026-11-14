@@ -25,6 +25,10 @@ openusd-schemas = { git = "https://github.com/doubleailes/openusd", rev = "ca53e
 # The `.mtlx` file format, from the same openusd revision.
 openusd-mtlx = { git = "https://github.com/doubleailes/openusd", rev = "ca53e71b6a3d7949918e3adb7a9a61e4f4ddd172" }
 
+# The stack's one wgpu, named only by `moho-render-wgpu` and re-exported by
+# it (`moho_render_wgpu::wgpu`): bumping it is bumping Moho in each consumer.
+wgpu = "30"
+
 [workspace.lints.rust]
 unsafe_code = "forbid"
 

@@ -1,0 +1,19 @@
+[package]
+name = "moho-render-wgpu"
+description = "The wgpu backend of Moho's render control: a host's device as the render driver, device frames of wgpu textures"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+moho = { path = "../moho" }
+moho-render = { path = "../moho-render" }
+wgpu.workspace = true
+
+[dev-dependencies]
+pollster = "1"
+
+[lints]
+workspace = true

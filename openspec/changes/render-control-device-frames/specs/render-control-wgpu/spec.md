@@ -8,7 +8,8 @@ readback, so a wgpu renderer and a wgpu host share frames with no copy.
 
 ### Requirement: Outside the parity core, one wgpu
 The wgpu backend SHALL be a crate of its own, depending on the render
-control crate and wgpu only. Neither `moho` nor the render control crate
+control crate, the `moho` crate render control already depends on, and
+wgpu only. Neither `moho` nor the render control crate
 SHALL depend on it or on wgpu. It SHALL re-export wgpu, so every crate of a
 stack names the same wgpu through it.
 
