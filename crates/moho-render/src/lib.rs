@@ -60,6 +60,7 @@
 
 mod capabilities;
 mod control;
+mod device;
 mod output;
 mod renderer;
 mod settings_override;
@@ -69,13 +70,14 @@ mod types;
 
 pub use capabilities::{AovDescriptor, Capabilities, CommandDescriptor, SettingDescriptor, SettingType};
 pub use control::{Changes, Control, ControlHandle, Shared};
+pub use device::{DeviceImage, DeviceImageHandle, Drivers, ReadbackError};
 pub use output::OutputSceneIndex;
 pub use renderer::{ControlledRenderer, InvalidationTracker, TrackedNotice, restart_on_any_notice};
 pub use settings_override::SettingsOverrideSceneIndex;
 pub use targets::{ProductTarget, RenderTargets, RenderView, VarTarget};
 pub use types::{
-    Convergence, Frame, IdTable, Invalidation, PixelFormat, PixelRect, ProductWriter, RenderError,
-    RenderRequest, RunState,
+    Convergence, Frame, FramePixels, IdTable, Invalidation, PixelFormat, PixelRect, ProductWriter,
+    RenderError, RenderRequest, RunState,
 };
 
 #[cfg(feature = "testing")]

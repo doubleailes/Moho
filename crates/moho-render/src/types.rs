@@ -2,11 +2,12 @@
 //! frames, requests and errors.
 
 use std::fmt;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use moho::openusd::sdf;
 use moho::openusd::tf::Token;
 
+use crate::device::{DeviceImageHandle, ReadbackError};
 use crate::targets::RenderView;
 
 /// What the updates since the last render cost the image in flight.
@@ -190,10 +191,41 @@ impl PixelRect {
     }
 }
 
+/// Where a frame's pixels are.
+#[derive(Clone)]
+pub enum FramePixels {
+    /// In host memory: the data window's pixels, rows top to bottom,
+    /// tightly packed, multisampling already resolved.
+    Host(Arc<[u8]>),
+    /// On a graphics device, read back on demand.
+    Device(DeviceImageHandle),
+}
+
+impl fmt::Debug for FramePixels {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            FramePixels::Host(bytes) => write!(f, "Host({} bytes)", bytes.len()),
+            FramePixels::Device(image) => write!(f, "Device({})", image.backend().as_str()),
+        }
+    }
+}
+
+impl PartialEq for FramePixels {
+    /// Host pixels by value, device images by identity.
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (FramePixels::Host(a), FramePixels::Host(b)) => a == b,
+            (FramePixels::Device(a), FramePixels::Device(b)) => Arc::ptr_eq(a, b),
+            _ => false,
+        }
+    }
+}
+
 /// One render var's pixels at one point in time: an immutable snapshot, so
 /// a reader never locks the renderer and a later snapshot never alters it.
-/// Made with [`Frame::new`], so a field added later breaks no renderer.
-#[derive(Debug, Clone, PartialEq)]
+/// Made with [`Frame::new`] or [`Frame::on_device`], so a field added later
+/// breaks no renderer.
+#[derive(Debug, Clone)]
 #[non_exhaustive]
 pub struct Frame {
     /// Grows with each snapshot of the var. Set when the frame is published.
@@ -205,9 +237,10 @@ pub struct Frame {
     pub display_window: PixelRect,
     /// Where these pixels are in the display window.
     pub data_window: PixelRect,
-    /// The data window's pixels, rows top to bottom, tightly packed,
-    /// multisampling already resolved.
-    pub pixels: Arc<[u8]>,
+    /// The data window's pixels, in host memory or on a device: read them
+    /// with [`read_pixels`](Self::read_pixels) or
+    /// [`read_rect`](Self::read_rect) wherever they are.
+    pub pixels: FramePixels,
     /// The render that made it: grows across the renderer's renders. Set
     /// when the frame is published.
     pub render: u64,
@@ -218,6 +251,23 @@ pub struct Frame {
     /// identifier its pixels hold names, shared by the render's frames of
     /// the var.
     pub ids: Option<Arc<IdTable>>,
+    /// A device frame's pixels once read back whole, so a second read
+    /// transfers nothing.
+    read_back: OnceLock<Arc<[u8]>>,
+}
+
+impl PartialEq for Frame {
+    fn eq(&self, other: &Self) -> bool {
+        self.generation == other.generation
+            && self.samples == other.samples
+            && self.format == other.format
+            && self.display_window == other.display_window
+            && self.data_window == other.data_window
+            && self.pixels == other.pixels
+            && self.render == other.render
+            && self.view == other.view
+            && self.ids == other.ids
+    }
 }
 
 impl Frame {
@@ -231,6 +281,41 @@ impl Frame {
         samples: u32,
         pixels: Arc<[u8]>,
     ) -> Self {
+        Self::with_pixels(
+            format,
+            display_window,
+            data_window,
+            samples,
+            FramePixels::Host(pixels),
+        )
+    }
+
+    /// A frame of `samples` samples whose pixels are `image`, on a device,
+    /// for `data_window` in `display_window`. The image holds `format` and
+    /// the data window's size.
+    pub fn on_device(
+        format: PixelFormat,
+        display_window: PixelRect,
+        data_window: PixelRect,
+        samples: u32,
+        image: DeviceImageHandle,
+    ) -> Self {
+        Self::with_pixels(
+            format,
+            display_window,
+            data_window,
+            samples,
+            FramePixels::Device(image),
+        )
+    }
+
+    fn with_pixels(
+        format: PixelFormat,
+        display_window: PixelRect,
+        data_window: PixelRect,
+        samples: u32,
+        pixels: FramePixels,
+    ) -> Self {
         Self {
             generation: 0,
             samples,
@@ -241,6 +326,7 @@ impl Frame {
             render: 0,
             view: None,
             ids: None,
+            read_back: OnceLock::new(),
         }
     }
 
@@ -255,6 +341,79 @@ impl Frame {
         self.view = Some(view);
         self
     }
+
+    /// The device image holding its pixels, `None` for a host frame.
+    pub fn device_image(&self) -> Option<&DeviceImageHandle> {
+        match &self.pixels {
+            FramePixels::Device(image) => Some(image),
+            FramePixels::Host(_) => None,
+        }
+    }
+
+    /// The data window's pixels in host memory, rows top to bottom, tightly
+    /// packed in [`format`](Self::format). A host frame gives its own bytes;
+    /// a device frame reads them back the first time and keeps them.
+    pub fn read_pixels(&self) -> Result<Arc<[u8]>, ReadbackError> {
+        match &self.pixels {
+            FramePixels::Host(bytes) => Ok(bytes.clone()),
+            FramePixels::Device(image) => {
+                if let Some(bytes) = self.read_back.get() {
+                    return Ok(bytes.clone());
+                }
+                let window = PixelRect::of_size(self.data_window.width, self.data_window.height);
+                let bytes: Arc<[u8]> = image.read(window)?.into();
+                // Another thread may have read it meanwhile: keep the first.
+                Ok(self.read_back.get_or_init(|| bytes).clone())
+            }
+        }
+    }
+
+    /// The pixels of `rect`, given in the display window's coordinates as
+    /// the data window is, rows top to bottom, tightly packed. A device
+    /// frame not yet read back whole reads `rect` alone (one pixel under a
+    /// pick, say). A rectangle reaching past the data window is an error.
+    pub fn read_rect(&self, rect: PixelRect) -> Result<Vec<u8>, ReadbackError> {
+        if !self.data_window.contains(&rect) {
+            return Err(ReadbackError::OutsideWindow {
+                rect,
+                window: self.data_window,
+            });
+        }
+        let local = PixelRect {
+            x: rect.x - self.data_window.x,
+            y: rect.y - self.data_window.y,
+            width: rect.width,
+            height: rect.height,
+        };
+        let whole = match &self.pixels {
+            FramePixels::Host(bytes) => bytes.clone(),
+            FramePixels::Device(image) => match self.read_back.get() {
+                Some(bytes) => bytes.clone(),
+                None => return image.read(local),
+            },
+        };
+        Ok(crop(
+            &whole,
+            self.data_window.width,
+            self.format.bytes_per_pixel(),
+            local,
+        ))
+    }
+}
+
+/// The rows of `rect` out of an image `width` pixels wide.
+fn crop(bytes: &[u8], width: u32, pixel: usize, rect: PixelRect) -> Vec<u8> {
+    let row = width as usize * pixel;
+    let (x, y) = (rect.x.max(0) as usize, rect.y.max(0) as usize);
+    let span = rect.width as usize * pixel;
+    let mut out = Vec::with_capacity(span * rect.height as usize);
+    for r in y..y + rect.height as usize {
+        let start = r * row + x * pixel;
+        if let Some(line) = bytes.get(start..start + span) {
+            out.extend_from_slice(line);
+        }
+    }
+    out
 }
 
 /// The prims an identifier var's pixels name: each identifier to the

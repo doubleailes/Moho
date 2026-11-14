@@ -450,7 +450,7 @@ mod tests {
         let held = shared.frame(&p("/v")).unwrap();
         shared.publish_frame(epoch, &p("/v"), frame(2, 2));
         let newer = shared.frame(&p("/v")).unwrap();
-        assert_eq!(&*held.pixels, &[1, 1, 1, 1]);
+        assert_eq!(&*held.read_pixels().unwrap(), &[1, 1, 1, 1]);
         assert_eq!(held.generation, 1);
         assert!(newer.generation > held.generation);
     }

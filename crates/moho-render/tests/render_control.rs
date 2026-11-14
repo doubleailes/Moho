@@ -356,7 +356,7 @@ fn a_crop() {
     let frame = s.renderer.control().frame(&color()).unwrap();
     assert_eq!(frame.data_window, crop);
     assert_eq!(frame.display_window, PixelRect::of_size(8, 4));
-    assert_eq!(frame.pixels.len(), 3 * 2 * 12);
+    assert_eq!(frame.read_pixels().unwrap().len(), 3 * 2 * 12);
 }
 
 #[test]
@@ -473,7 +473,7 @@ fn predictable_pixels() {
     let second = s.renderer.control().frame(&color()).unwrap();
     assert!(second.generation > first.generation);
     assert_eq!(second.samples, 2);
-    assert_eq!(first.pixels, second.pixels);
+    assert_eq!(first.read_pixels().unwrap(), second.read_pixels().unwrap());
 }
 
 #[test]
@@ -493,7 +493,7 @@ fn pixels_follow_the_scene() {
     s.renderer.render(&request(Convergence::Samples(2))).unwrap();
     converged(&s);
     let after = s.renderer.control().frame(&color()).unwrap();
-    assert_ne!(before.pixels, after.pixels);
+    assert_ne!(before.read_pixels().unwrap(), after.read_pixels().unwrap());
 }
 
 #[test]
@@ -637,7 +637,8 @@ def Scope "Render"
 
 fn id_at(frame: &moho_render::Frame, x: u32, y: u32) -> i32 {
     let at = ((y * frame.data_window.width + x) * 4) as usize;
-    i32::from_le_bytes(frame.pixels[at..at + 4].try_into().unwrap())
+    let pixels = frame.read_pixels().unwrap();
+    i32::from_le_bytes(pixels[at..at + 4].try_into().unwrap())
 }
 
 /// A host picks from the identifier frame alone: the centre pixel names the
