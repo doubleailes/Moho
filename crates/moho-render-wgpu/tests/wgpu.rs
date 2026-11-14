@@ -233,3 +233,52 @@ fn a_host_frame_is_no_wgpu_image() {
     let frame = Frame::new(PixelFormat::F32, window, window, 1, vec![0; 4].into());
     assert!(WgpuImage::of(&frame).is_none());
 }
+
+/// Clones share one gate: a submission through one waits while another
+/// clone holds it, and so does a readback.
+#[test]
+fn clones_share_the_submission_gate() {
+    use std::sync::mpsc;
+    use std::time::{Duration, Instant};
+
+    let _gpu = lock();
+    let Some(host) = device("clones_share_the_submission_gate") else {
+        return;
+    };
+    let renderer = WgpuDriver::from_drivers(&host.drivers()).unwrap().clone();
+    let texture = texture(&renderer, wgpu::TextureFormat::R32Float, (1, 1), &[0; 4]);
+    let frame = frame(&renderer, texture, PixelFormat::F32);
+    let (held, release) = (mpsc::channel(), mpsc::channel::<()>());
+    let holder = {
+        let host = host.clone();
+        let held = held.0;
+        let release = release.1;
+        std::thread::spawn(move || {
+            host.exclusive(|| {
+                held.send(()).unwrap();
+                release.recv().unwrap();
+            })
+        })
+    };
+    held.1.recv().unwrap();
+    let started = Instant::now();
+    let (done, finished) = mpsc::channel();
+    let submitter = {
+        let renderer = renderer.clone();
+        std::thread::spawn(move || {
+            let encoder = renderer.device.create_command_encoder(&Default::default());
+            renderer.submit([encoder.finish()]);
+            let pixels = frame.read_pixels().unwrap();
+            done.send(pixels.len()).unwrap();
+        })
+    };
+    assert!(
+        finished.recv_timeout(Duration::from_millis(200)).is_err(),
+        "the submission waits while another clone holds the gate"
+    );
+    release.0.send(()).unwrap();
+    assert_eq!(finished.recv_timeout(Duration::from_secs(20)).unwrap(), 4);
+    assert!(started.elapsed() >= Duration::from_millis(200));
+    holder.join().unwrap();
+    submitter.join().unwrap();
+}
