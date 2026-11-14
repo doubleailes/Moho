@@ -22,6 +22,10 @@ format; a command descriptor a name and its arguments.
 - **WHEN** a renderer declares a setting with the display name `Max Samples`, a help text and the group `Sampling`
 - **THEN** the descriptor and the output index's capabilities give that display name, help text and group
 
+#### Scenario: A path setting
+- **WHEN** a renderer declares a setting naming a camera prim, with no default
+- **THEN** the descriptor's type is a prim path, and its default is the empty value
+
 #### Scenario: Undescribed setting
 - **WHEN** a renderer declares a setting without a display name
 - **THEN** the descriptor's display name is the setting's name, and its help text and group are empty

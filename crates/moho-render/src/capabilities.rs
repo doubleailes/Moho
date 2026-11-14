@@ -32,6 +32,10 @@ pub enum SettingType {
     Token,
     /// A token among these.
     Enum(Vec<Token>),
+    /// An absolute prim path (a camera, a light filter).
+    Path,
+    /// A list of absolute prim paths.
+    PathList,
 }
 
 impl SettingType {
@@ -44,6 +48,8 @@ impl SettingType {
             SettingType::String => "string",
             SettingType::Token => "token",
             SettingType::Enum(_) => "enum",
+            SettingType::Path => "path",
+            SettingType::PathList => "pathList",
         })
     }
 }
@@ -278,6 +284,26 @@ mod tests {
             Some(Value::String("Samples per pixel at most.".into()))
         );
         assert_eq!(read(setting, "group"), Some(Value::String("Sampling".into())));
+    }
+
+    #[test]
+    fn a_path_setting_names_its_type() {
+        let capabilities = Capabilities {
+            settings: vec![
+                SettingDescriptor::new(Token::new("ri:dicingCamera"), SettingType::Path, Value::None),
+                SettingDescriptor::new(Token::new("ri:lightFilters"), SettingType::PathList, Value::None),
+            ],
+            ..Capabilities::default()
+        };
+        let container = capabilities.to_container().into_handle();
+        let settings = locate(&container, &Locator::parse("settings")).unwrap();
+        let settings = settings.as_vector().unwrap();
+        let ty = |i: usize| {
+            let setting = settings.get(i).unwrap();
+            read(setting.as_container().unwrap(), "type")
+        };
+        assert_eq!(ty(0), Some(Value::Token(Token::new("path"))));
+        assert_eq!(ty(1), Some(Value::Token(Token::new("pathList"))));
     }
 
     #[test]
