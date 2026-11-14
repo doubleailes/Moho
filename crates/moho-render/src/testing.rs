@@ -9,6 +9,10 @@
 //! can stop, pause and wait mid-render. The same scene, var and sample count
 //! give the same pixels; an edit to anything the index holds changes them.
 //!
+//! After each update it names the update's class (`updateClass`):
+//! `unchanged` when it flushed no notice, else the strongest cost of what it
+//! flushed (`continue`, `restart`, `recreate`).
+//!
 //! It declares a `primId` AOV: an identifier var's frames show the
 //! background's identifier ([`BACKGROUND`]) in the left band of the image,
 //! then one band per mesh in path order, each named by the frame's
@@ -123,7 +127,7 @@ use crate::control::{Control, ControlHandle, Shared};
 use crate::output::OutputSceneIndex;
 use crate::renderer::{ControlledRenderer, InvalidationTracker, TrackedNotice};
 use crate::targets::{RenderTargets, RenderView};
-use crate::tokens::aov;
+use crate::tokens::{aov, stats};
 use crate::types::{
     Convergence, Frame, IdTable, Invalidation, PixelFormat, PixelRect, ProductWriter, RenderError,
     RenderRequest, RunState,
@@ -621,6 +625,16 @@ impl Renderer for TestRenderer {
     fn update(&self) {
         self.tracker.update();
         self.shared.set_held(self.held_bytes(), 0);
+        // The update's class: `unchanged` when it flushed nothing, else the
+        // strongest cost of what it flushed, by its name.
+        let class = match self.tracker.last_update() {
+            None | Some(Invalidation::None) => stats::UPDATE_UNCHANGED,
+            Some(Invalidation::Continue) => "continue",
+            Some(Invalidation::Restart) => "restart",
+            Some(Invalidation::Recreate) => "recreate",
+        };
+        self.shared
+            .set_stat(stats::UPDATE_CLASS, Value::Token(Token::new(class)));
         self.poll();
     }
 }

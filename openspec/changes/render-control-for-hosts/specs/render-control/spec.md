@@ -125,3 +125,18 @@ thread, and the output index's root SHALL hold them.
 #### Scenario: Before any render
 - **WHEN** a host asks a newly created renderer's control handle for its stats
 - **THEN** `hostBytes` and `deviceBytes` are present
+
+### Requirement: The class of an update
+A controlled renderer MAY name what its last update did as the stat
+`updateClass`, a token of its own vocabulary, except that `full` SHALL mean
+the update rebuilt the renderer's scene from scratch and `unchanged` that it
+changed nothing the renderer holds. A host SHALL read any other token as the
+renderer's own name, never as a cost.
+
+#### Scenario: An edit
+- **WHEN** the test renderer updates over an edit it classifies as `Restart`
+- **THEN** its `updateClass` stat is `restart`
+
+#### Scenario: Nothing new
+- **WHEN** the test renderer updates with no notice since the last update
+- **THEN** its `updateClass` stat is `unchanged`
