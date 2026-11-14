@@ -5,6 +5,7 @@ pub mod prim_type {
     pub const MESH: &str = "mesh";
     pub const BASIS_CURVES: &str = "basisCurves";
     pub const NURBS_CURVES: &str = "nurbsCurves";
+    pub const POINTS: &str = "points";
     pub const SPHERE: &str = "sphere";
     pub const CUBE: &str = "cube";
     pub const CONE: &str = "cone";
