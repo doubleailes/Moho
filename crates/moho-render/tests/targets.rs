@@ -240,3 +240,74 @@ fn an_unauthored_view() {
     assert_eq!(view.rendering_color_space, None);
     assert_eq!(view.pixel_aspect_ratio, None);
 }
+
+/// An identifier var is `int32` whatever its authored `dataType` says, as
+/// Hydra's id AOVs are, so the output index and the frames agree.
+#[test]
+fn an_identifier_var_is_int32_whatever_its_type() {
+    let scene = Scene::new(
+        r#"#usda 1.0
+(
+    renderSettingsPrimPath = "/Render/settings"
+)
+def Camera "cam" {}
+def Scope "Render"
+{
+    def RenderSettings "settings"
+    {
+        rel camera = </cam>
+        int2 resolution = (8, 4)
+        rel products = [</Render/beauty>]
+    }
+    def RenderProduct "beauty"
+    {
+        rel orderedVars = [</Render/ids>, </Render/inst>]
+    }
+    def RenderVar "ids"
+    {
+        uniform string sourceName = "primId"
+    }
+    def RenderVar "inst"
+    {
+        uniform token dataType = "float"
+        uniform string sourceName = "instanceId"
+    }
+}
+"#,
+    );
+    let targets = resolve(&scene, &RenderRequest::default()).unwrap();
+    let formats: Vec<_> = targets.products[0].vars.iter().map(|v| v.format).collect();
+    assert_eq!(formats, [PixelFormat::I32, PixelFormat::I32]);
+}
+
+/// Settings with no product frame their synthetic product with their own
+/// pixel aspect ratio and conform policy.
+#[test]
+fn settings_without_products_keep_their_framing() {
+    let scene = Scene::new(
+        r#"#usda 1.0
+(
+    renderSettingsPrimPath = "/Render/settings"
+)
+def Camera "cam" {}
+def Scope "Render"
+{
+    def RenderSettings "settings"
+    {
+        rel camera = </cam>
+        int2 resolution = (8, 4)
+        float pixelAspectRatio = 2
+        uniform token aspectRatioConformPolicy = "cropAperture"
+    }
+}
+"#,
+    );
+    let targets = resolve(&scene, &RenderRequest::default()).unwrap();
+    let view = &targets.products[0].view;
+    assert_eq!(targets.products[0].path, p(synthetic::PRODUCT));
+    assert_eq!(view.pixel_aspect_ratio, Some(2.0));
+    assert_eq!(
+        view.aspect_ratio_conform_policy.as_ref().map(Token::as_str),
+        Some("cropAperture")
+    );
+}

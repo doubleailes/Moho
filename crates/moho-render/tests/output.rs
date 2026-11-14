@@ -262,3 +262,19 @@ fn stats_are_reported() {
     assert_eq!(read(&*output, "/", "renderer/stats/rays"), Some(Value::Int64(42)));
     assert_eq!(dirtied(&recorder.take()).len(), 1);
 }
+
+/// The memory stats exist on the output root from its creation, zero until
+/// reported, as the control handle's do: a host reading it before any poll
+/// finds both.
+#[test]
+fn memory_stats_exist_before_any_poll() {
+    let output = OutputSceneIndex::new(&Capabilities::default());
+    assert_eq!(
+        read(&*output, "/", "renderer/stats/hostBytes"),
+        Some(Value::Int64(0))
+    );
+    assert_eq!(
+        read(&*output, "/", "renderer/stats/deviceBytes"),
+        Some(Value::Int64(0))
+    );
+}

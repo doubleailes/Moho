@@ -773,3 +773,54 @@ fn an_update_names_its_class() {
     s.renderer.update();
     assert_eq!(class(), Some(Value::Token(Token::new("restart"))));
 }
+
+/// The test renderer models no instances: an `instanceId` var holds -1 (not
+/// instanced) everywhere and carries no table, never the meshes' `primId`s.
+#[test]
+fn instance_identifiers_are_not_instanced() {
+    let scene = IDS_SCENE.replace(
+        "rel orderedVars = [</Render/color>, </Render/ids>]",
+        "rel orderedVars = [</Render/color>, </Render/ids>, </Render/inst>]",
+    )
+    .replace(
+        "    def RenderVar \"ids\"",
+        "    def RenderVar \"inst\"\n    {\n        uniform token dataType = \"int\"\n        uniform string sourceName = \"instanceId\"\n    }\n    def RenderVar \"ids\"",
+    );
+    let s = setup(&scene, TestConfig::default());
+    s.renderer.render(&request(Convergence::Samples(1))).unwrap();
+    converged(&s);
+    let frame = s.renderer.control().frame(&p("/Render/inst")).unwrap();
+    assert_eq!(frame.format, moho_render::PixelFormat::I32);
+    assert!(frame.ids.is_none(), "no table: nothing is instanced");
+    let pixels = frame.read_pixels().unwrap();
+    assert!(
+        pixels
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .all(|b| i32::from_le_bytes(*b) == -1),
+        "every pixel is not instanced"
+    );
+}
+
+/// A var two products share is rendered once, through one view: products
+/// sharing it through different cameras are refused, never shown with the
+/// other product's view.
+#[test]
+fn a_var_shared_through_different_views_is_refused() {
+    let scene = SETTINGS_SCENE.replace(
+        "rel orderedVars = </Render/normal>",
+        "rel orderedVars = [</Render/normal>, </Render/color>]",
+    );
+    let s = setup(&scene, TestConfig::default());
+    match s.renderer.render(&request(Convergence::Samples(1))) {
+        Err(RenderError::InvalidRequest(reason)) => {
+            assert!(reason.contains("/Render/color"), "{reason}");
+            assert!(
+                reason.contains("/Render/beauty") && reason.contains("/Render/aovs"),
+                "{reason}"
+            );
+        }
+        other => panic!("refused, got {other:?}"),
+    }
+}

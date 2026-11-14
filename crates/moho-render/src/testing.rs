@@ -379,6 +379,26 @@ struct Job {
     device_frames: bool,
 }
 
+/// Frames are one per var path: a var two products share is rendered once,
+/// through one view. Products sharing a var through different views (another
+/// camera or framing) cannot both be shown its frame, so the render is
+/// refused rather than label one product's pixels with the other's view.
+fn shared_vars_share_their_view(targets: &RenderTargets) -> Result<(), RenderError> {
+    for (i, a) in targets.products.iter().enumerate() {
+        for b in &targets.products[i + 1..] {
+            if let Some(var) = a.vars.iter().find(|v| b.vars.iter().any(|w| w.path == v.path))
+                && a.view != b.view
+            {
+                return Err(RenderError::InvalidRequest(format!(
+                    "{} is shared by {} and {}, which render it through different views",
+                    var.path, a.path, b.path
+                )));
+            }
+        }
+    }
+    Ok(())
+}
+
 impl Job {
     fn new(
         targets: &RenderTargets,
@@ -518,8 +538,15 @@ fn sample(job: Job, shared: Arc<Shared>, epoch: u64, start: u32) {
         }
         for var in &job.vars {
             let identifier = aov::is_identifier(var.name.as_str());
+            // The test renderer models no instances: every pixel's
+            // `instanceId` is -1 (not instanced), with no table.
+            let instance = var.name.as_str() == aov::INSTANCE_ID;
             let format = if identifier { PixelFormat::I32 } else { var.format };
-            let bytes = if identifier {
+            let bytes: Arc<[u8]> = if instance {
+                (0..var.data_window.area())
+                    .flat_map(|_| (-1i32).to_le_bytes())
+                    .collect()
+            } else if identifier {
                 identifiers(&job.ids, var.display_window, var.data_window)
             } else {
                 pixels(
@@ -536,7 +563,7 @@ fn sample(job: Job, shared: Arc<Shared>, epoch: u64, start: u32) {
             } else {
                 Frame::new(format, var.display_window, var.data_window, samples, bytes)
             };
-            let frame = if identifier {
+            let frame = if identifier && !instance {
                 frame.with_ids(job.ids.clone())
             } else {
                 frame
@@ -743,6 +770,7 @@ impl ControlledRenderer for TestRenderer {
             default_aov,
             self.config.default_resolution,
         )?;
+        shared_vars_share_their_view(&targets)?;
         let ids = Arc::new(mesh_ids(&*self.terminal));
         let job = Job::new(&targets, request, self.digest(), ids, &self.config);
 
