@@ -458,6 +458,53 @@ impl DependenciesSchema {
     }
 }
 
+/// `HdCoordSysBindingSchema` (`coordSysBinding`): the coordinate systems a
+/// prim binds, each name to the path of the prim it designates.
+pub struct CoordSysBindingSchema(ContainerHandle);
+
+impl CoordSysBindingSchema {
+    /// The `coordSysBinding` of a prim's container.
+    pub fn get(prim: &ContainerHandle) -> Option<Self> {
+        member_container(prim, tokens::coord_sys::COORD_SYS_BINDING).map(Self)
+    }
+
+    /// The names bound, in the container's order.
+    pub fn names(&self) -> Vec<Token> {
+        self.0.names()
+    }
+
+    /// The path the binding of `name` designates (`GetCoordSysBinding`).
+    pub fn coord_sys_binding(&self, name: &str) -> Option<sdf::Path> {
+        member_value(&self.0, name).and_then(as_path)
+    }
+
+    /// Every binding that names a path, in the container's order.
+    pub fn bindings(&self) -> Vec<(Token, sdf::Path)> {
+        self.names()
+            .into_iter()
+            .filter_map(|name| {
+                let path = self.coord_sys_binding(name.as_str())?;
+                Some((name, path))
+            })
+            .collect()
+    }
+}
+
+/// `HdCoordSysSchema` (`coordSys`): a `coordSys` prim's name.
+pub struct CoordSysSchema(ContainerHandle);
+
+impl CoordSysSchema {
+    /// The `coordSys` of a prim's container.
+    pub fn get(prim: &ContainerHandle) -> Option<Self> {
+        member_container(prim, tokens::coord_sys::COORD_SYS).map(Self)
+    }
+
+    /// The coordinate system's name.
+    pub fn name(&self) -> Option<Token> {
+        member_value(&self.0, tokens::coord_sys::NAME).and_then(as_token)
+    }
+}
+
 /// The path a Hydra `SdfPath` field holds.
 fn as_path(value: Value) -> Option<sdf::Path> {
     match value {

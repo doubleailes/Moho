@@ -136,7 +136,7 @@ standard chain.
 
 ### Requirement: Flattened model data and up axis
 A flattening index SHALL also flatten, as UsdImaging's providers do:
-- `__usdUpAxis` and `model`, a prim's own data overlaying its parent's flattened data;
+- `__usdUpAxis`, `model` and `coordSysBinding`, a prim's own data overlaying its parent's flattened data;
 - `geomModel`: a prim without its own takes its parent's flattened `geomModel`; a prim with its own takes `drawMode` and `cardVisibility` from its parent's when it has none (or `drawMode` is `inherited`).
 
 A change to these on a prim SHALL dirty the same data on every descendant
@@ -149,6 +149,30 @@ that inherits it.
 #### Scenario: An inherited draw mode
 - **WHEN** a model authors `model:drawMode = "bounds"` and its child applies `GeomModelAPI` without a draw mode
 - **THEN** the child's flattened `geomModel/drawMode` is `bounds`
+
+#### Scenario: A nearer coordinate system binding wins
+- **WHEN** a prim binds `worldSpace` to `/World/Space` and its child binds `worldSpace` to `/World/Other` and `modelSpace` to itself
+- **THEN** the child's grandchild has the flattened `coordSysBinding` `worldSpace` `/World/Other` and `modelSpace` the child's path
+
+### Requirement: Coordinate system prims
+`CoordSysPrimSceneIndex` SHALL be `HdsiCoordSysPrimSceneIndex`: for each
+binding of a name `FOO` to a prim path `Q`, it SHALL add the prim
+`Q/__coordSys_FOO` of type `coordSys` with `coordSys/name` `FOO`, `Q`'s
+`xform` and a `__dependencies` entry of its `xform` on `Q`'s `xform`, and
+SHALL rewrite the binding to that prim's path. A binding to an empty or
+non-prim path SHALL be left as it is and add nothing. A `coordSys` prim
+SHALL be removed with the last binding of its name to its target. Notices
+SHALL be Hydra's: the input's entries, then the `coordSys` prims added,
+then those removed, a prim added or dirtied at `coordSysBinding` having its
+bindings dropped and counted again. It SHALL be in no chain Moho builds.
+
+#### Scenario: A coordinate system prim under its target
+- **WHEN** `/World/model` binds `modelSpace` to itself, under the flattening index
+- **THEN** `/World/model/__coordSys_modelSpace` has type `coordSys` and `coordSys/name` `modelSpace`, and `/World/model`'s `coordSysBinding/modelSpace` names it
+
+#### Scenario: The last binding removed
+- **WHEN** the only prim binding `foo` to `/q` is removed
+- **THEN** its removal is followed by the removal of `/q/__coordSys_foo`
 
 ### Requirement: The standard chain
 `chain::standard` SHALL build, over a stage scene index, exactly the

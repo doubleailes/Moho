@@ -106,6 +106,7 @@ impl AdapterRegistry {
             "CollectionAPI",
             Rc::new(crate::stage::collection::CollectionsAdapter),
         );
+        registry.add_api("CoordSysAPI", Rc::new(crate::stage::coord_sys::CoordSysAdapter));
         registry.set_type("Mesh", Rc::new(crate::stage::mesh::MeshAdapter));
         registry.set_type("Camera", Rc::new(crate::stage::camera::CameraAdapter));
         registry.set_type(

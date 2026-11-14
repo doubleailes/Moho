@@ -32,6 +32,9 @@ pub mod prim_type {
     pub const RENDER_PRODUCT: &str = "renderProduct";
     pub const RENDER_VAR: &str = "renderVar";
     pub const RENDER_PASS: &str = "renderPass";
+    /// A coordinate system (`HdPrimTypeTokens->coordSys`), the prims
+    /// `HdsiCoordSysPrimSceneIndex` adds.
+    pub const COORD_SYS: &str = "coordSys";
 }
 
 /// Moho's generic attribute data (design D3), named with the leading
@@ -311,6 +314,21 @@ pub mod collections {
     pub const CATEGORIES: &str = "categories";
     pub const INSTANCE_CATEGORIES: &str = "instanceCategories";
     pub const CATEGORIES_VALUES: &str = "categoriesValues";
+}
+
+/// `HdCoordSysBindingSchema` and `HdCoordSysSchema`: the coordinate systems a
+/// prim binds, by name, and the `coordSys` prims `HdsiCoordSysPrimSceneIndex`
+/// adds.
+pub mod coord_sys {
+    /// A prim's bindings: each name to the path of the prim it designates.
+    pub const COORD_SYS_BINDING: &str = "coordSysBinding";
+    /// A `coordSys` prim's own schema.
+    pub const COORD_SYS: &str = "coordSys";
+    /// `HdCoordSysSchema`'s name of the coordinate system.
+    pub const NAME: &str = "name";
+    /// The prefix of the property names UsdShade's `CoordSysAPI` may own
+    /// (`UsdShadeTokens->coordSys`, tested by `CanContainPropertyName`).
+    pub const COORD_SYS_PROPERTY_PREFIX: &str = "coordSys";
 }
 
 /// `HdCameraSchema`.

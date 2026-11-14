@@ -225,7 +225,7 @@ observer (`docs/update-latency.md`), and its `walk` benchmark the cost of
   it later changes no layout.
 - **`Flattening`** (`FlatteningSceneIndex`) resolves inherited data: the
   world transform, visibility, purpose, constant primvars, binding
-  opinions, `model`, `geomModel` and `__usdUpAxis`. It runs inside native
+  opinions, `model`, `geomModel`, `__usdUpAxis` and `coordSysBinding`. It runs inside native
   instancing, and stays a public filter. A dirtied prim dirties only the
   descendants whose flattened data was read since it was last dirtied, as
   `HdFlatteningSceneIndex` (flattened primvars tracked per primvar); a prim
@@ -391,6 +391,31 @@ other names the attribute itself); dome lights add `portals`, and
 the one node, by its absolute path, feeding the terminal `light`, in the
 contexts `""`, `__all` and each `<context>:light:shaderId` names. An
 `inputs:*` edit dirties `light` and `material`, a `light:*` edit `light`.
+
+### Coordinate systems
+
+A prim applying `CoordSysAPI:<name>` is UsdImaging's `CoordSysAPI` adapter:
+each instance whose `coordSys:<name>:binding` targets something gives
+`coordSysBinding/<name>`, the target's path; a prim none of whose instances
+binds has no `coordSysBinding`. Only the applied form is read, as in
+UsdImaging 2.0: a bare `coordSys:<name>` relationship gives nothing. A
+change to a property whose name starts with `coordSys` dirties the whole
+`coordSysBinding`. The flattening overlays a prim's bindings on its
+ancestors' (`HdFlattenedOverlayDataSourceProvider`), so a prim binds what it
+inherits and a nearer binding of a name wins. It is not an instance data
+source of native instancing.
+
+The `coordSys` prims are not the chain's: `CoordSysPrimSceneIndex`
+(`HdsiCoordSysPrimSceneIndex`) adds, for each binding of `FOO` to a prim
+`Q`, a prim `Q/__coordSys_FOO` of type `coordSys` (`coordSys/name`, `Q`'s
+`xform`, and `__dependencies` of that `xform` on `Q`'s) and rewrites the
+binding to name it. A binding to a non-prim path is left alone. No
+renderer plugin OpenUSD ships registers it, so Moho ships it as a filter,
+not a `RendererFilter`; a renderer that needs `coordSys` prims adds it with
+the phase it chooses. Its notices are Hydra's, quirk included: a prim
+holding the only binding of a `coordSys` prim, added again or dirtied at
+`coordSysBinding` with that binding unchanged, has the `coordSys` prim
+notified added then removed, while the filter still answers it.
 
 ### Render prims
 

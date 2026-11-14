@@ -12,6 +12,7 @@ pub mod adapter;
 pub mod attribute;
 pub mod camera;
 pub mod collection;
+pub mod coord_sys;
 pub mod curves;
 pub mod generic;
 pub mod geom_subset;

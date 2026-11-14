@@ -13,8 +13,10 @@
 //!   does not define.
 //! - `usdMaterialBindings`: per purpose, the ancestors' bindings then the
 //!   prim's.
-//! - `model` and `__usdUpAxis`: the prim's own data overlaid on its parent's
-//!   flattened data (`HdFlattenedOverlayDataSourceProvider`).
+//! - `model`, `__usdUpAxis` and `coordSysBinding`: the prim's own data
+//!   overlaid on its parent's flattened data
+//!   (`HdFlattenedOverlayDataSourceProvider`): a coordinate system name a
+//!   prim binds hides the binding of that name its ancestors make.
 //! - `geomModel`: the parent's when the prim has none; otherwise the prim's,
 //!   with `drawMode` and `cardVisibility` from the parent where the prim has
 //!   none or `inherited` (`UsdImagingFlattenedGeomModelDataSourceProvider`).
@@ -24,7 +26,8 @@
 //! (`ComputeDirtyLocatorsForDescendants`): the whole `xform`, `visibility`
 //! and `purpose`; the same `primvars` locators unless one may change an
 //! interpolation (then all of `primvars`); `usdMaterialBindings` per
-//! purpose; the same `model` and `__usdUpAxis` locators; and only
+//! purpose; the same `model`, `__usdUpAxis` and `coordSysBinding`
+//! locators; and only
 //! `geomModel`'s `drawMode` and `cardVisibility`.
 //!
 //! As `HdFlatteningSceneIndex`, only the descendants whose flattened data
@@ -53,7 +56,9 @@ use crate::scene_index::{
     Added, Dirtied, Observer, Observers, Prim, Removed, Renamed, SceneIndex, SceneIndexHandle,
 };
 use crate::schema::{PurposeSchema, VisibilitySchema, XformSchema, as_bool, member_container};
-use crate::tokens::{geom_model, imageable, material_bindings, model, primvars, usd_up_axis, xform};
+use crate::tokens::{
+    coord_sys, geom_model, imageable, material_bindings, model, primvars, usd_up_axis, xform,
+};
 
 const FLATTENED: &[&str] = &[
     xform::XFORM,
@@ -64,6 +69,7 @@ const FLATTENED: &[&str] = &[
     geom_model::GEOM_MODEL,
     model::MODEL,
     usd_up_axis::USD_UP_AXIS,
+    coord_sys::COORD_SYS_BINDING,
 ];
 
 /// What descendants inherit of the changed `relative` locators (each
@@ -575,7 +581,9 @@ impl Container for Flattened {
             primvars::PRIMVARS => self.primvars(),
             material_bindings::USD_MATERIAL_BINDINGS => self.material_bindings(),
             geom_model::GEOM_MODEL => self.geom_model(),
-            model::MODEL | usd_up_axis::USD_UP_AXIS => self.overlaid(name.as_str()),
+            model::MODEL | usd_up_axis::USD_UP_AXIS | coord_sys::COORD_SYS_BINDING => {
+                self.overlaid(name.as_str())
+            }
             _ => self.local.get(name),
         }
     }
