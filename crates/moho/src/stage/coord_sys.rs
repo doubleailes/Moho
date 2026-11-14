@@ -15,7 +15,11 @@
 //!
 //! A change to any property whose name starts with `coordSys` (C++
 //! `UsdShadeCoordSysAPI::CanContainPropertyName`, a plain prefix test) on a
-//! prim applying an instance dirties the whole `coordSysBinding`.
+//! prim applying an instance dirties the whole `coordSysBinding`. As in
+//! UsdImaging, only the binding prim's own properties are tested: a binding
+//! that forwards through a relationship on another prim is not dirtied when
+//! that relationship changes (UsdImaging tracks no such dependency; its
+//! stage globals track asset paths only), and is read anew when next asked.
 
 use openusd::tf::Token;
 use openusd::vt::Value;

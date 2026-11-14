@@ -27,6 +27,13 @@
 //! added again, or dirtied at `coordSysBinding`, without its binding
 //! changing, therefore has that prim notified added, then removed, while the
 //! index still answers it.
+//!
+//! As Hydra's, it does not look for a prim of the input at the path it
+//! generates: an authored child `Q/__coordSys_FOO` is hidden behind the
+//! `coordSys` prim while a binding holds it, listed twice among `Q`'s
+//! children, and notified removed with the last binding although the input
+//! still holds it. A renderer that needs otherwise wraps the filter in a
+//! renderer filter of its own.
 
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
