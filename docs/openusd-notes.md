@@ -301,6 +301,26 @@ the root edit target (`crates/moho-spike/tests/probe.rs` asserts all of it):
   (`Value::Vec3hVec`, `QuathVec`, `HalfVec`), checked against a layer
   OpenUSD 26.11 wrote (`crates/moho/tests/data/particle_field.usdc`).
 
+## Coordinate systems (Moho issue #46)
+
+- `openusd_schemas::shade::CoordSysAPI::all(&Prim) -> Result<Vec<CoordSysAPI>>`
+  gives the applied instances in applied order (`api_schema_instance_names`);
+  `name() -> &Token` is the instance name.
+- `CoordSysAPI::local_binding() -> Result<Option<CoordSysBinding>>` is C++
+  `GetLocalBinding`: the first forwarded target of `coordSys:<name>:binding`
+  (`Relationship::forwarded_targets`), `None` when it targets nothing.
+  `CoordSysBinding::coord_sys_path() -> &sdf::Path` is the target.
+- Only the applied form is read, as UsdImaging 2.0's `CoordSysAPI` adapter
+  reads it; a bare `coordSys:<name>` relationship gives nothing.
+- `CoordSysAPI::owns_property` accepts `coordSys` and `coordSys:*` only,
+  where C++ `CanContainPropertyName` (UsdImaging's invalidation test) is a
+  plain `TfStringStartsWith(name, "coordSys")`. The stage index tests the
+  prefix itself (`stage/coord_sys.rs`).
+- `sdf::Path::is_prim()` is C++ `IsPrimPath` (`/` and property paths are
+  not); `append_path("__coordSys_<name>")` appends a child, an `Err` for a
+  name that is no identifier (a namespaced instance name), where C++
+  `AppendChild` gives the empty path.
+
 ## Material schemas (S1)
 
 - `openusd_schemas::shade::MaterialBindingAPI::get(&Stage, path) ->

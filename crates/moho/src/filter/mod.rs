@@ -1,11 +1,13 @@
 //! Scene indices that take other scene indices as input: flattening,
 //! merging, the resolving filters, and the filters a renderer or host adds.
 
+pub mod coord_sys_prim;
 pub mod dependency_forwarding;
 pub mod extent_resolving;
 pub mod flattening;
 pub mod instance_proxy_path_translation;
 
+pub use coord_sys_prim::CoordSysPrimSceneIndex;
 pub use dependency_forwarding::DependencyForwardingSceneIndex;
 pub use extent_resolving::ExtentResolvingSceneIndex;
 

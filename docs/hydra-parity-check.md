@@ -370,7 +370,12 @@ Static data:
 - **`skelBinding` and `coordSysBinding` are not named.** UsdImaging's
   keyless API schema adapters name both on every prim, null without a
   binding; Moho has no skeleton data, and coordinate systems are on the
-  ROADMAP. (Most of the raw difference count of every scene.) Still holds.
+  ROADMAP. (Most of the raw difference count of every scene.) Still holds
+  for `skelBinding`. Since issue #46 Moho gives `coordSysBinding`: the
+  `CoordSysAPI` adapter on the binding prim, and the flattening's overlay
+  provider, which names it on every prim (`HdFlattenedDataSourceProviders`
+  lists it, which is why it was named everywhere). Not yet re-run against
+  the oracle.
 - **`geomModel/cardVisibility` has no fallback.** openusd-schemas' UsdGeom
   schema predates `model:cardVisibility` (fallback `inherited`). Upstream
   candidate. Still holds.

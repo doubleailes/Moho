@@ -62,6 +62,23 @@ collection's membership SHALL NOT dirty the prims it binds.
 - **WHEN** a mesh's `material:binding` changes and updates are applied
 - **THEN** the resolving index notifies the mesh dirtied for `materialBindings` and not for `usdMaterialBindings`
 
+### Requirement: Coordinate system bindings
+A prim applying `CoordSysAPI:<name>` instances SHALL have, as UsdImaging's
+`CoordSysAPI` adapter gives it, `coordSysBinding/<name>` the first
+forwarded target of `coordSys:<name>:binding` for each instance that
+targets something, and no `coordSysBinding` when none does. A bare
+`coordSys:<name>` relationship on a prim applying no instance SHALL give
+nothing. A change to a property whose name starts with `coordSys` on a
+prim applying an instance SHALL dirty `coordSysBinding`.
+
+#### Scenario: Two instances, one unbound
+- **WHEN** a prim applies `CoordSysAPI:worldSpace` targeting `/World/Space` and `CoordSysAPI:unbound` targeting nothing
+- **THEN** its `coordSysBinding` names `worldSpace` only, `/World/Space`
+
+#### Scenario: A retargeted binding
+- **WHEN** `coordSys:worldSpace:binding` is retargeted
+- **THEN** the prim is dirtied at `coordSysBinding` and gives the new target
+
 ### Requirement: Material networks
 A `Material` SHALL have type `material` and SHALL expose `material`, keyed by
 render context, as `UsdImagingDataSourceMaterial` builds it:

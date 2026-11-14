@@ -56,8 +56,6 @@ the steps that land in this repository or depend on it.
 - `HdsiLocatorCachingSceneIndex` on `material`, which UsdImaging's chain
   holds: a cache, to weigh with the per-prim cost profiling above.
 - `UsdImagingSelectionSceneIndex`, for a consumer with a selection.
-- Coordinate systems (`UsdShadeCoordSysAPI`, `coordSysBinding`), which the
-  stage index does not give yet.
 - Update latency: a linked light's invalidation walks the whole scene from
   the root (Hydra's algorithm: the union of the dirty expressions matched
   once over the input), so it grows with the scene
