@@ -403,7 +403,9 @@ change to a property whose name starts with `coordSys` dirties the whole
 `coordSysBinding`. The flattening overlays a prim's bindings on its
 ancestors' (`HdFlattenedOverlayDataSourceProvider`), so a prim binds what it
 inherits and a nearer binding of a name wins. It is not an instance data
-source of native instancing.
+source of native instancing. Hydra 26.08 answers a binding's old value
+after an edit until the prim is added again (a snapshot its flattening
+keeps); Moho answers the new one (`docs/hydra-parity-check.md`).
 
 The `coordSys` prims are not the chain's: `CoordSysPrimSceneIndex`
 (`HdsiCoordSysPrimSceneIndex`) adds, for each binding of `FOO` to a prim

@@ -73,6 +73,14 @@ the steps that land in this repository or depend on it.
   Moho follows 2.0 (`hydra-parity-instancing` removed its M12 workaround);
   the regression is worth raising with OpenUSD.
 
+- Coordinate system bindings go stale after an edit. UsdImaging's
+  `CoordSysAPI` adapter returns a retained snapshot of a prim's bindings,
+  and `HdFlatteningSceneIndex` keeps the prim's input data source across
+  dirties, so a retargeted or removed binding is dirtied but read with its
+  old value until the prim is added again (`docs/hydra-parity-check.md`,
+  issue #46). Moho reads the bindings when asked and answers the new ones;
+  a lazy adapter data source would fix it in UsdImaging.
+
 ## Upstream candidates (openusd)
 
 - Splines (`Ts`): typed knots, evaluation, authoring, usdc encoding.
