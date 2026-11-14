@@ -38,8 +38,9 @@ the steps that land in this repository or depend on it.
 
 - The render control side of `moho::renderer::Renderer` (execute, outputs
   and render buffers, render settings, pause, stop and restart, commands,
-  stats), once Hydra replaces `HdLegacyRenderControlInterface` with an
-  `HdRenderer` API of its own. Until then each renderer offers its own.
+  stats). `crates/moho-render` drafts it ahead of Hydra, outside the parity
+  core (change `renderer-control`). Reconcile the two once Hydra replaces
+  `HdLegacyRenderControlInterface` with an `HdRenderer` API of its own.
 - Instancing and material-network-resolve filters beyond what S2 needs.
 - Profile the standard chain's per-prim cost when data is read. Strategy
   (D), which reads every data source, took 6.6× (B)'s time on Moana

@@ -127,7 +127,9 @@ A Hydra 2.0 renderer consumes Hydra in three steps; Moho offers each.
    Moho consumer names its plugin and calls its renderer's own API
    (rendering, outputs, settings) directly. Hydra's render control API is
    not ported until Hydra settles the one replacing
-   `HdLegacyRenderControlInterface`. There is no plugin registry.
+   `HdLegacyRenderControlInterface`; `crates/moho-render` drafts one ahead
+   of it, outside the parity core ("Render control" below). There is no
+   plugin registry.
 
 Update latency ranks above first-load time: an edit dirties exactly what
 Hydra dirties (a camera edit its camera at `camera/<field>` or `xform`, a
@@ -470,6 +472,59 @@ stage_index.apply_pending_updates(); // when edits are pending, as before
 A delegate then reads its index's frame from the terminal index's root
 (`sceneGlobals/currentFrame`), exactly as under Hydra, and learns of a new
 frame by the root dirtied at that locator.
+
+## Render control (`crates/moho-render`)
+
+Hydra has not settled how a host controls a renderer: `HdRenderer` only
+returns `HdLegacyRenderControlInterface`. Moho drops what Hydra lacks, so
+`moho::renderer::Renderer` stays at `update`. `crates/moho-render` drafts
+the control side ahead of the reference, in its own crate depending on
+`moho` alone, so `moho` keeps its parity rule and its path upstream. When
+Hydra ships its own API, the crate is reconciled with it in a change of its
+own. Its requirements are the `render-control` capability.
+
+- **The renderer.** `ControlledRenderer` extends `moho`'s `Renderer`, so its
+  plugin goes through `chain::create_renderer` unchanged. It adds
+  `capabilities` (pause, stop, progressive, continue on edit, product
+  writing, material contexts, AOV, setting and command descriptors),
+  `invalidation`, `render(RenderRequest)`, `output`, `control`, `poll` and
+  `invoke`. `InvalidationTracker` composes notice batching and prim
+  managing as `PrimManagingRenderer` does, and classifies each notice a
+  flush sends into an `Invalidation` (`None < Continue < Restart <
+  Recreate`), keeping the strongest until the next render.
+- **What to render is scene data.** `RenderTargets::resolve` reads the
+  active render settings prim's flattened products and vars, a product's
+  camera before the settings' before the primary camera, and, without
+  active settings, a synthetic product at `/__moho_render__/product` holding
+  the default AOV. A `RenderRequest` carries only per-call overrides:
+  products, a crop, a stop condition (`Convergence`) and who writes
+  products (`ProductWriter`).
+- **Settings overrides are a filter.** `SettingsOverrideSceneIndex`, a
+  renderer filter at phase 0 `AtEnd`, overlays host values on the target
+  settings prim's `renderSettings/namespacedSettings` and dirties only the
+  keys it changes, in place of Hydra's settings map. What the renderer reads
+  is what the terminal index says.
+- **The output is a scene index.** `OutputSceneIndex` holds the renderer's
+  state, samples, progress, stats and capabilities at the root (`renderer`),
+  a `renderProductOutput` prim per product and a `renderBuffer` prim per
+  var, at their stage paths. It holds no pixels (`vt::Value` cannot carry
+  them): a var's `renderBuffer/generation` is dirtied once per poll that
+  finds a new snapshot, and the host reads the frame through the control
+  handle.
+- **Threads.** Scene indices stay `Rc` on the owning thread. Render threads
+  write to `Shared` (a mutex and a condition variable): the run state,
+  each var's latest `Arc<Frame>`, with generations that only grow, and what
+  changed. `ControlHandle` (`Send + Sync`) stops, pauses, waits and reads
+  frames from any thread; a stop wins over a render thread's later work,
+  because each render is an epoch. The owning thread takes the changes and
+  notifies observers in `poll` and `update`, never under the lock.
+- **The test renderer** (feature `testing`) samples a digest of the
+  terminal index on a thread of its own and writes products in a raw
+  format. Its module documentation runs the host loop.
+
+Left out: Hgi and GPU drivers, zero-copy GPU frames, render pass
+collections, several devices, and a bridge to C++ Hydra delegates (a
+consumer's own).
 
 ## What the Hydra parity changes moved
 

@@ -268,6 +268,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "moho-render"
+version = "0.1.0"
+dependencies = [
+ "moho",
+ "moho-render",
+]
+
+[[package]]
 name = "moho-spike"
 version = "0.1.0"
 dependencies = [

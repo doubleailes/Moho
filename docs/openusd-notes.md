@@ -595,6 +595,18 @@ Read at `d7d2a29`.
   resync pays it: about 20 ms of a linked light's 25 ms on the 10 000 mesh
   fixture (`docs/update-latency.md`).
 
+## Render control (`moho-render`, change `renderer-control`)
+
+- `sdf::Path` (an `Arc` of its text), `tf::Token` (a static literal or an
+  `Arc<str>`) and `vt::Value` are `Send + Sync`, so render threads hold var
+  and product paths, AOV names and stat values directly. `moho-render`'s
+  unit tests assert it, so a bump that changes it fails there. Moho's data
+  sources stay `Rc`: only these values cross threads.
+- `vt::Value` has no variant for host data (`Value::Opaque` is the empty
+  value of an `opaque` attribute), so a frame cannot be a data source
+  value: the output index gives a var's generation, and pixels go through
+  the control handle.
+
 ## Gaps
 
 - Prototype discovery is not incremental: any structural edit makes the

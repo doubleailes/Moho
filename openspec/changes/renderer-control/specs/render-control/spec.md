@@ -33,7 +33,9 @@ processes the terminal index's notices as before.
 A controlled renderer SHALL declare, without rendering, whether it can
 pause, stop, render progressively, continue after an edit and write
 products, its material render contexts, and its AOV, setting and command
-descriptors. Each descriptor SHALL carry a name, a type and a default.
+descriptors. A setting descriptor SHALL carry a name, a type and a default;
+an AOV descriptor a name and a pixel format; a command descriptor a name
+and its arguments.
 
 #### Scenario: Capabilities read before any render
 - **WHEN** a host asks a newly created renderer for its capabilities
