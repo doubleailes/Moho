@@ -536,7 +536,9 @@ own. Its requirements are the `render-control` capability.
 - **Every var refines.** A progressive renderer publishes every var at each
   pass, with the pass's sample count, not only the beauty.
 - **Settings and memory for a host.** A `SettingDescriptor` carries a
-  label, help and group beside its key, type, default and range. The stats
+  label, help and group beside its key, type (bool, int, float, string,
+  token, a choice of tokens, a prim path or a list of them), default and
+  range; a setting with no default holds the empty value. The stats
   `hostBytes` and `deviceBytes` exist from creation (zero until reported,
   `Shared::set_held`), and `ControlHandle::stats` reads every stat from any
   thread. `Frame` and `SettingDescriptor` are `#[non_exhaustive]`, made with
