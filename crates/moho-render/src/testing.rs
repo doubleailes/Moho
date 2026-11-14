@@ -9,6 +9,12 @@
 //! can stop, pause and wait mid-render. The same scene, var and sample count
 //! give the same pixels; an edit to anything the index holds changes them.
 //!
+//! It declares a `primId` AOV: an identifier var's frames show the
+//! background's identifier ([`BACKGROUND`]) in the left band of the image,
+//! then one band per mesh in path order, each named by the frame's
+//! [`IdTable`](crate::IdTable). It reports its held bytes as stats after
+//! each update.
+//!
 //! It writes products in a small raw format (`MOHORAW1`, the display window,
 //! then each var's name, format and pixels) at each product's name, so tests
 //! can check a file without an image library.
@@ -84,6 +90,15 @@
 //! )));
 //! let frame = control.frame(&var).unwrap();
 //! assert_eq!(frame.samples, 4);
+//!
+//! // The frame says what it shows: the view its render read.
+//! let view = frame.view.as_ref().unwrap();
+//! assert_eq!(view.camera, sdf::path("/cam").unwrap());
+//! assert_eq!(view.resolution, (8, 4));
+//!
+//! // And how much memory the renderer holds, from any thread.
+//! let stats = control.stats();
+//! assert!(stats.contains_key(&moho::openusd::tf::Token::new("hostBytes")));
 //! ```
 
 use std::cell::RefCell;
@@ -107,10 +122,11 @@ use crate::capabilities::{AovDescriptor, Capabilities, CommandDescriptor, Settin
 use crate::control::{Control, ControlHandle, Shared};
 use crate::output::OutputSceneIndex;
 use crate::renderer::{ControlledRenderer, InvalidationTracker, TrackedNotice};
-use crate::targets::RenderTargets;
+use crate::targets::{RenderTargets, RenderView};
+use crate::tokens::aov;
 use crate::types::{
-    Convergence, Frame, Invalidation, PixelFormat, PixelRect, ProductWriter, RenderError, RenderRequest,
-    RunState,
+    Convergence, Frame, IdTable, Invalidation, PixelFormat, PixelRect, ProductWriter, RenderError,
+    RenderRequest, RunState,
 };
 
 /// How a [`TestRenderer`] behaves.
@@ -187,25 +203,34 @@ fn capabilities(config: &TestConfig) -> Capabilities {
         continue_on_edit: config.continue_on_edit,
         writes_products: config.writes_products,
         material_contexts: vec![Token::new("")],
-        aovs: vec![AovDescriptor {
-            name: Token::new("color"),
-            format: PixelFormat::F32x4,
-            clear_value: Value::Float(0.0),
-            multi_sampled: false,
-        }],
+        aovs: vec![
+            AovDescriptor {
+                name: Token::new("color"),
+                format: PixelFormat::F32x4,
+                clear_value: Value::Float(0.0),
+                multi_sampled: false,
+            },
+            AovDescriptor {
+                name: Token::new(aov::PRIM_ID),
+                format: PixelFormat::I32,
+                clear_value: Value::Int(BACKGROUND),
+                multi_sampled: false,
+            },
+        ],
         settings: vec![
-            SettingDescriptor {
-                key: Token::new("test:quality"),
-                ty: SettingType::Int,
-                default: Value::Int(64),
-                range: Some((Value::Int(1), Value::Int(4096))),
-            },
-            SettingDescriptor {
-                key: Token::new("test:integrator"),
-                ty: SettingType::Enum(vec![Token::new("pt"), Token::new("bdpt")]),
-                default: Value::Token(Token::new("pt")),
-                range: None,
-            },
+            SettingDescriptor::new(Token::new("test:quality"), SettingType::Int, Value::Int(64))
+                .with_range(Value::Int(1), Value::Int(4096))
+                .with_label("Quality")
+                .with_help("Samples the test renderer would take, were it a real one.")
+                .with_group("Sampling"),
+            SettingDescriptor::new(
+                Token::new("test:integrator"),
+                SettingType::Enum(vec![Token::new("pt"), Token::new("bdpt")]),
+                Value::Token(Token::new("pt")),
+            )
+            .with_label("Integrator")
+            .with_help("Read only when the renderer is made: a change needs it made again.")
+            .with_group("Integrator"),
         ],
         commands: vec![CommandDescriptor {
             name: Token::new(FLUSH_TEXTURE_CACHE),
@@ -246,6 +271,8 @@ fn classify(notice: &TrackedNotice, continue_on_edit: bool, create_only: &[Token
 #[derive(Debug, Clone, PartialEq)]
 struct JobVar {
     path: sdf::Path,
+    /// The view of the var's product.
+    view: Arc<RenderView>,
     name: Token,
     format: PixelFormat,
     display_window: PixelRect,
@@ -272,18 +299,32 @@ struct Job {
     converge_at: u32,
     delay: Duration,
     fail_at: Option<u32>,
+    /// The meshes' identifiers, in path order, and their table.
+    ids: Arc<IdTable>,
 }
 
 impl Job {
-    fn new(targets: &RenderTargets, request: &RenderRequest, digest: u64, config: &TestConfig) -> Self {
+    fn new(
+        targets: &RenderTargets,
+        request: &RenderRequest,
+        digest: u64,
+        ids: Arc<IdTable>,
+        config: &TestConfig,
+    ) -> Self {
         let mut vars: Vec<JobVar> = Vec::new();
         for product in &targets.products {
             for var in &product.vars {
                 if !vars.iter().any(|v| v.path == var.path) {
                     vars.push(JobVar {
                         path: var.path.clone(),
+                        view: product.view.clone(),
                         name: var.name.clone(),
-                        format: var.format,
+                        // Identifiers are 32-bit integers, whatever the type.
+                        format: if aov::is_identifier(var.name.as_str()) {
+                            PixelFormat::I32
+                        } else {
+                            var.format
+                        },
                         display_window: product.display_window,
                         data_window: product.data_window,
                     });
@@ -309,6 +350,7 @@ impl Job {
             converge_at: config.converge_at,
             delay: config.sample_delay,
             fail_at: config.fail_at_sample,
+            ids,
         }
     }
 
@@ -330,6 +372,41 @@ impl Job {
             Convergence::Never => None,
         }
     }
+}
+
+/// The identifier of a pixel that shows no mesh.
+pub const BACKGROUND: i32 = 0;
+
+/// The meshes of `index` in path order, each identified by its rank from 1.
+pub fn mesh_ids(index: &dyn SceneIndex) -> IdTable {
+    let mut meshes = Vec::new();
+    let mut stack = vec![sdf::Path::abs_root()];
+    while let Some(path) = stack.pop() {
+        if index.prim(&path).ty.as_str() == "mesh" {
+            meshes.push(path.clone());
+        }
+        stack.extend(index.children(&path).into_iter().rev());
+    }
+    meshes.sort();
+    IdTable::new(meshes.into_iter().zip(1..).map(|(path, id)| (id, path)))
+}
+
+/// An identifier var's pixels: the display window split into vertical
+/// bands, the background's first (left), then one per mesh in path order.
+/// The same scene gives the same identifiers at every sample.
+pub fn identifiers(ids: &IdTable, display: PixelRect, data: PixelRect) -> Arc<[u8]> {
+    let bands = ids.len() as i64 + 1;
+    let width = i64::from(display.width.max(1));
+    let mut bytes = Vec::with_capacity(data.area() * 4);
+    for _ in 0..data.height {
+        for column in 0..data.width {
+            let x = i64::from(data.x) + i64::from(column);
+            let band = (x * bands / width).clamp(0, bands - 1);
+            let id = if band == 0 { BACKGROUND } else { band as i32 };
+            bytes.extend(id.to_le_bytes());
+        }
+    }
+    bytes.into()
 }
 
 /// The pixels of `var` at `samples` over a scene with `digest`.
@@ -363,19 +440,30 @@ fn sample(job: Job, shared: Arc<Shared>, epoch: u64, start: u32) {
             return;
         }
         for var in &job.vars {
-            let frame = Frame {
-                generation: 0,
-                samples,
-                format: var.format,
-                display_window: var.display_window,
-                data_window: var.data_window,
-                pixels: pixels(
-                    job.digest,
-                    var.name.as_str(),
+            let frame = if aov::is_identifier(var.name.as_str()) {
+                Frame::new(
+                    PixelFormat::I32,
+                    var.display_window,
+                    var.data_window,
                     samples,
-                    var.data_window.area() * var.format.bytes_per_pixel(),
-                ),
-            };
+                    identifiers(&job.ids, var.display_window, var.data_window),
+                )
+                .with_ids(job.ids.clone())
+            } else {
+                Frame::new(
+                    var.format,
+                    var.display_window,
+                    var.data_window,
+                    samples,
+                    pixels(
+                        job.digest,
+                        var.name.as_str(),
+                        samples,
+                        var.data_window.area() * var.format.bytes_per_pixel(),
+                    ),
+                )
+            }
+            .with_view(var.view.clone());
             shared.publish_frame(epoch, &var.path, frame);
         }
         shared.set_stat("samples", Value::Int(samples as i32));
@@ -511,6 +599,14 @@ impl TestRenderer {
         scene_digest(&*self.terminal)
     }
 
+    /// The bytes the renderer holds: itself and the layout of the render in
+    /// flight, plus one per prim it would digest. All on the host.
+    pub fn held_bytes(&self) -> u64 {
+        let layout = self.layout.borrow().capacity() * std::mem::size_of::<JobVar>();
+        let prims = mesh_ids(&*self.terminal).len();
+        (std::mem::size_of::<Self>() + layout + prims) as u64
+    }
+
     /// Ends the sampling thread, if any.
     fn retire_worker(&self) {
         self.shared.retire();
@@ -524,6 +620,7 @@ impl TestRenderer {
 impl Renderer for TestRenderer {
     fn update(&self) {
         self.tracker.update();
+        self.shared.set_held(self.held_bytes(), 0);
         self.poll();
     }
 }
@@ -555,7 +652,8 @@ impl ControlledRenderer for TestRenderer {
             default_aov,
             self.config.default_resolution,
         )?;
-        let job = Job::new(&targets, request, self.digest(), &self.config);
+        let ids = Arc::new(mesh_ids(&*self.terminal));
+        let job = Job::new(&targets, request, self.digest(), ids, &self.config);
 
         let state = self.shared.state();
         let keep = state.is_active()

@@ -152,3 +152,91 @@ fn switching_the_active_settings_off_falls_back_to_the_primary_camera() {
     assert_eq!(targets.settings, None);
     assert_eq!(targets.products[0].camera, p("/cam2"));
 }
+
+/// A camera with every lens field authored, framed by a product, at a set
+/// frame and colour space: the view gives each as the index does.
+#[test]
+fn the_view_of_a_product() {
+    let scene = Scene::new(
+        r#"#usda 1.0
+(
+    renderSettingsPrimPath = "/Render/settings"
+)
+def Camera "cam"
+{
+    token projection = "perspective"
+    float horizontalAperture = 36
+    float verticalAperture = 24
+    float horizontalApertureOffset = 2
+    float verticalApertureOffset = -1
+    float focalLength = 50
+    float2 clippingRange = (0.5, 500)
+    double3 xformOp:translate = (1, 2, 3)
+    uniform token[] xformOpOrder = ["xformOp:translate"]
+}
+def Scope "Render"
+{
+    def RenderSettings "settings"
+    {
+        rel camera = </cam>
+        int2 resolution = (8, 4)
+        uniform token renderingColorSpace = "acescg"
+        rel products = [</Render/beauty>]
+    }
+    def RenderProduct "beauty"
+    {
+        float pixelAspectRatio = 2
+        token aspectRatioConformPolicy = "adjustPixelAspectRatio"
+        rel orderedVars = [</Render/color>]
+    }
+    def RenderVar "color"
+    {
+        uniform string sourceName = "color"
+    }
+}
+"#,
+    );
+    scene.globals.set_current_frame(12.0);
+    let targets = resolve(&scene, &RenderRequest::default()).unwrap();
+    let view = &targets.products[0].view;
+    assert_eq!(view.camera, p("/cam"));
+    assert_eq!(view.projection.as_ref().map(|t| t.as_str()), Some("perspective"));
+    // Moho's camera data is in scene units: tenths of the authored values.
+    let near = |a: Option<f64>, b: f64| a.is_some_and(|a| (a - b).abs() < 1e-6);
+    assert!(
+        near(view.horizontal_aperture, 3.6),
+        "{:?}",
+        view.horizontal_aperture
+    );
+    assert!(near(view.vertical_aperture, 2.4));
+    assert!(near(view.horizontal_aperture_offset, 0.2));
+    assert!(near(view.vertical_aperture_offset, -0.1));
+    assert!(near(view.focal_length, 5.0));
+    assert_eq!(view.clipping_range, Some((0.5, 500.0)));
+    let translation = view.transform.map(|m| [m.0[12], m.0[13], m.0[14]]);
+    assert_eq!(translation, Some([1.0, 2.0, 3.0]));
+    assert_eq!(view.resolution, (8, 4));
+    assert_eq!(view.pixel_aspect_ratio, Some(2.0));
+    assert_eq!(
+        view.aspect_ratio_conform_policy.as_ref().map(|t| t.as_str()),
+        Some("adjustPixelAspectRatio")
+    );
+    assert_eq!(view.time, Some(12.0));
+    assert_eq!(
+        view.rendering_color_space.as_ref().map(|t| t.as_str()),
+        Some("acescg")
+    );
+}
+
+/// Nothing authored and no frame set: the view gives nothing for them.
+#[test]
+fn an_unauthored_view() {
+    let scene = Scene::new(CAMERA_SCENE);
+    scene.globals.set_primary_camera_prim_path(p("/cam"));
+    let targets = resolve(&scene, &RenderRequest::default()).unwrap();
+    let view = &targets.products[0].view;
+    assert_eq!(view.camera, p("/cam"));
+    assert_eq!(view.time, None);
+    assert_eq!(view.rendering_color_space, None);
+    assert_eq!(view.pixel_aspect_ratio, None);
+}

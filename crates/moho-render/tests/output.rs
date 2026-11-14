@@ -46,14 +46,13 @@ fn read(index: &dyn SceneIndex, path: &str, locator: &str) -> Option<Value> {
 }
 
 fn frame(width: u32, height: u32, samples: u32) -> Frame {
-    Frame {
-        generation: 0,
+    Frame::new(
+        PixelFormat::F32x3,
+        PixelRect::of_size(width, height),
+        PixelRect::of_size(width, height),
         samples,
-        format: PixelFormat::F32x3,
-        display_window: PixelRect::of_size(width, height),
-        data_window: PixelRect::of_size(width, height),
-        pixels: Arc::from(vec![0u8; (width * height * 12) as usize]),
-    }
+        Arc::from(vec![0u8; (width * height * 12) as usize]),
+    )
 }
 
 fn rendering(samples: u32) -> RunState {
