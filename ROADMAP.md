@@ -52,8 +52,6 @@ the steps that land in this repository or depend on it.
   left are in `README.md`. The `moho::openusd` and `moho::openusd_schemas`
   re-exports and feature forwarding are a downstream policy (one openusd
   pin for the stack) and would move to a thin downstream crate then.
-- Draw mode (`UsdImagingDrawModeSceneIndex`), through native instancer
-  propagation's append callback (`hydra-parity-instancing`, design D7).
 - `HdsiLocatorCachingSceneIndex` on `material`, which UsdImaging's chain
   holds: a cache, to weigh with the per-prim cost profiling above.
 - `UsdImagingSelectionSceneIndex`, for a consumer with a selection.
@@ -85,6 +83,10 @@ the steps that land in this repository or depend on it.
 ## Upstream candidates (openusd)
 
 - Splines (`Ts`): typed knots, evaluation, authoring, usdc encoding.
+- Image metadata (C++ `HioImage`'s `GetMetadata`). A `fromTexture` draw
+  mode card reads its textures' `worldtoscreen` matrix; openusd reads no
+  image, so such a card draws no face, as UsdImaging when the image does
+  not open (`crates/moho/src/filter/draw_mode/standin.rs`).
 - An array-size read on `usd::Attribute`. A Gaussian splat's float-or-half
   choice (`ParticleField3DGaussianSplat::attribute_in_use`, C++
   `_UsesFloatAttr`) composes and copies the float array to ask whether it

@@ -301,6 +301,20 @@ the root edit target (`crates/moho-spike/tests/probe.rs` asserts all of it):
   (`Value::Vec3hVec`, `QuathVec`, `HalfVec`), checked against a layer
   OpenUSD 26.11 wrote (`crates/moho/tests/data/particle_field.usdc`).
 
+## Draw mode (`draw-mode-scene-index`, Moho issue #52)
+
+- `gf::Mat4d::inverse_or_max()` is C++ `GetInverse()` at its default `eps`
+  of zero, and `Mat4d::transform(Vec3d)` C++ `Transform` (the homogeneous
+  divide): the `fromTexture` card points use both.
+- `sdf::AssetPath::asset_path()` is C++ `GetAssetPath` (the evaluated path
+  where set, else the authored one): a card texture counts when it is not
+  empty.
+- `sdf::Path::ancestors()` yields the path itself, then each parent up to
+  `/`: the draw mode index finds a path's standin by looking each up.
+- `usd::ModelAPI::is_kind("component", Default::default())` validates the
+  model hierarchy, as C++ `IsKind`: a component under a prim without a
+  group kind is not a model, so its `applyDrawMode` stays false.
+
 ## Coordinate systems (Moho issue #46)
 
 - `openusd_schemas::shade::CoordSysAPI::all(&Prim) -> Result<Vec<CoordSysAPI>>`
@@ -678,6 +692,9 @@ Read at `d7d2a29`.
   composes one (the block's) and retires one, the projector keeping its
   prototype.
 - openusd-schemas' UsdGeom schema lacks `model:cardVisibility`.
+- No image reading (C++ `HioImage`): a `fromTexture` card cannot read its
+  textures' `worldtoscreen` metadata, so it draws no face, as UsdImaging
+  does when it cannot open the image (`filter/draw_mode/standin.rs`).
 - A value authored with another type than the one read is cast: a schema's
   declared type wins (`Attribute::type_name`), and
   `XformCommonAPI::xform_vectors` casts a `float3` translate or a `double3`
