@@ -752,3 +752,44 @@ def Xform "set" (
         [p("/asset/chair/originCurves")]
     );
 }
+
+#[test]
+fn loading_a_payload_keeps_its_bounds_as_in_usd_imaging() {
+    // UsdImaging 26.08's quirk, kept for parity: the stage index re-adds the
+    // loaded prim without removing it, and the draw mode index forwards it
+    // without dropping its standin, so the loaded children stay hidden.
+    let dir = TempDir::new().unwrap();
+    dir.write(
+        "element.usda",
+        "#usda 1.0\n(\n    defaultPrim = \"element\"\n)\ndef Xform \"element\"\n{\n    def Mesh \"geo\"\n    {\n    }\n}\n",
+    );
+    let root = dir.write(
+        "root.usda",
+        "#usda 1.0\ndef Xform \"world\"\n{\n    def Xform \"elem\" (\n        payload = @./element.usda@\n    )\n    {\n        float3[] extentsHint = [(0, 0, 0), (2, 2, 2)]\n    }\n}\n",
+    );
+    let usd = moho::stage::stage_builder()
+        .load(moho::openusd::usd::InitialLoadSet::LoadNone)
+        .open(root.to_str().unwrap())
+        .unwrap();
+    let stage_index = StageSceneIndex::new();
+    let chain = chain::standard_with(
+        stage_index.clone(),
+        StandardOptions {
+            add_draw_mode_scene_index: true,
+            display_unloaded_prims_with_bounds: true,
+        },
+    );
+    stage_index.set_stage(usd.clone());
+    let recorder = RecordingObserver::on(chain.as_ref());
+    usd.load("/world/elem", moho::openusd::usd::LoadPolicy::WithDescendants)
+        .unwrap();
+    stage_index.apply_pending_updates();
+    assert_eq!(
+        recorder.take(),
+        [Notice::Added(Added {
+            path: p("/world/elem"),
+            ty: Token::default()
+        })]
+    );
+    assert_eq!(chain.children(&p("/world/elem")), [p("/world/elem/boundsCurves")]);
+}

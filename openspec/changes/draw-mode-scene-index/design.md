@@ -35,3 +35,13 @@ C++ opens each texture with `HioImage` to read its `worldtoscreen` (or
 fails, and a `fromTexture` card has no face and an empty extent, exactly
 what UsdImaging gives when no image opens. The geometry for a found matrix
 is ported, so adding an image reader changes only the lookup.
+
+## D5. A standin outlives a resync, as in UsdImaging
+
+UsdImaging's stage index resyncs a populated prim with an added entry and
+no removal, and its draw mode index forwards a re-added prim that no
+longer resolves to a standin without dropping the old standin. So a
+payload drawn as bounds keeps its bounds once loaded, its children hidden.
+Moho keeps this (Hydra parity, quirks included; issue #52 review), pins it
+with a test, and records it as an upstream candidate in `ROADMAP.md`. A
+renderer that needs otherwise fixes it in a renderer filter of its own.
