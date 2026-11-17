@@ -404,8 +404,6 @@ pub mod geom_model {
     pub const CARD_TEXTURE_Z_NEG: &str = "cardTextureZNeg";
 }
 
-/// `HdInstancerTopologySchema`, `HdInstanceSchema`, `HdInstancedBySchema` and
-/// the instancer primvars.
 /// `HdLegacyDisplayStyleSchema` (`displayStyle`), the members the draw
 /// mode standins set.
 pub mod display_style {
@@ -449,6 +447,8 @@ pub mod draw_mode {
     pub const CARD_UV_COORDS: &str = "cardUvCoords";
 }
 
+/// `HdInstancerTopologySchema`, `HdInstanceSchema`, `HdInstancedBySchema` and
+/// the instancer primvars.
 pub mod instancing {
     pub const INSTANCER_TOPOLOGY: &str = "instancerTopology";
     pub const PROTOTYPES: &str = "prototypes";
