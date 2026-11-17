@@ -139,6 +139,8 @@ pub mod mesh {
     pub const CREASE_INDICES: &str = "creaseIndices";
     pub const CREASE_LENGTHS: &str = "creaseLengths";
     pub const CREASE_SHARPNESSES: &str = "creaseSharpnesses";
+
+    pub const RIGHT_HANDED: &str = "rightHanded";
 }
 
 /// `HdPrimvarsSchema` and `HdPrimvarSchema`.
@@ -163,6 +165,13 @@ pub mod primvars {
     pub const CONSTANT: &str = "constant";
     pub const VERTEX: &str = "vertex";
     pub const INSTANCE: &str = "instance";
+
+    pub const DISPLAY_COLOR: &str = "displayColor";
+    pub const DISPLAY_OPACITY: &str = "displayOpacity";
+
+    /// Roles (`HdPrimvarSchemaTokens`).
+    pub const POINT: &str = "point";
+    pub const COLOR: &str = "color";
 }
 
 /// `HdVisibilitySchema`, `HdPurposeSchema` and `HdExtentSchema`.
@@ -187,12 +196,17 @@ pub mod curves {
     pub const NURBS_CURVES: &str = "nurbsCurves";
     pub const TOPOLOGY: &str = "topology";
     pub const CURVE_VERTEX_COUNTS: &str = "curveVertexCounts";
+    pub const CURVE_INDICES: &str = "curveIndices";
     pub const TYPE: &str = "type";
     pub const BASIS: &str = "basis";
     pub const WRAP: &str = "wrap";
     pub const ORDER: &str = "order";
     pub const KNOTS: &str = "knots";
     pub const RANGES: &str = "ranges";
+
+    pub const BEZIER: &str = "bezier";
+    pub const LINEAR: &str = "linear";
+    pub const SEGMENTED: &str = "segmented";
 }
 
 /// `HdGeomSubsetSchema`.
@@ -392,6 +406,49 @@ pub mod geom_model {
 
 /// `HdInstancerTopologySchema`, `HdInstanceSchema`, `HdInstancedBySchema` and
 /// the instancer primvars.
+/// `HdLegacyDisplayStyleSchema` (`displayStyle`), the members the draw
+/// mode standins set.
+pub mod display_style {
+    pub const DISPLAY_STYLE: &str = "displayStyle";
+    pub const CULL_STYLE: &str = "cullStyle";
+    pub const MATERIAL_IS_FINAL: &str = "materialIsFinal";
+    /// `HdCullStyleTokens->back`.
+    pub const BACK: &str = "back";
+}
+
+/// `HdBuiltinMaterialSchema` (`builtinMaterial`).
+pub mod builtin_material {
+    pub const BUILTIN_MATERIAL: &str = "builtinMaterial";
+}
+
+/// The draw modes and card values of `UsdGeomModelAPI` (`UsdGeomTokens`),
+/// and the names of the prims and nodes UsdImaging's draw mode standins
+/// make.
+pub mod draw_mode {
+    pub const DEFAULT: &str = "default";
+    pub const ORIGIN: &str = "origin";
+    pub const BOUNDS: &str = "bounds";
+    pub const CARDS: &str = "cards";
+    pub const INHERITED: &str = "inherited";
+
+    pub const CROSS: &str = "cross";
+    pub const BOX: &str = "box";
+    pub const FROM_TEXTURE: &str = "fromTexture";
+    /// `model:cardVisibility`'s `simple`.
+    pub const SIMPLE: &str = "simple";
+
+    pub const BOUNDS_CURVES: &str = "boundsCurves";
+    pub const ORIGIN_CURVES: &str = "originCurves";
+    pub const CARDS_MESH: &str = "cardsMesh";
+
+    pub const CARDS_UV: &str = "cardsUv";
+    pub const DISPLAY_ROUGHNESS: &str = "displayRoughness";
+
+    pub const CARD_SURFACE: &str = "cardSurface";
+    pub const CARD_TEXTURE: &str = "cardTexture";
+    pub const CARD_UV_COORDS: &str = "cardUvCoords";
+}
+
 pub mod instancing {
     pub const INSTANCER_TOPOLOGY: &str = "instancerTopology";
     pub const PROTOTYPES: &str = "prototypes";

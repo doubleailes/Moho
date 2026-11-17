@@ -3,12 +3,14 @@
 
 pub mod coord_sys_prim;
 pub mod dependency_forwarding;
+pub mod draw_mode;
 pub mod extent_resolving;
 pub mod flattening;
 pub mod instance_proxy_path_translation;
 
 pub use coord_sys_prim::CoordSysPrimSceneIndex;
 pub use dependency_forwarding::DependencyForwardingSceneIndex;
+pub use draw_mode::DrawModeSceneIndex;
 pub use extent_resolving::ExtentResolvingSceneIndex;
 
 pub use flattening::FlatteningSceneIndex;
@@ -33,7 +35,9 @@ pub use prim_type_notice_batching::{PrimTypeNoticeBatchingSceneIndex, PrimTypePr
 pub mod render_settings;
 pub mod rerooting;
 pub mod scene_globals;
+pub mod unloaded_draw_mode;
 
 pub use render_settings::RenderSettingsFlatteningSceneIndex;
 pub use rerooting::RerootingSceneIndex;
 pub use scene_globals::SceneGlobalsSceneIndex;
+pub use unloaded_draw_mode::UnloadedDrawModeSceneIndex;
