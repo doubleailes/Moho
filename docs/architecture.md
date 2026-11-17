@@ -243,7 +243,13 @@ observer (`docs/update-latency.md`), and its `walk` benchmark the cost of
   - `display_unloaded_prims_with_bounds`: the stage index includes
     unloaded prims, and `UnloadedDrawModeSceneIndex` after it gives an
     unloaded prim the `bounds` draw mode (drawn when the draw mode index is
-    on too). Build the chain before setting the stage.
+    on too). Build the chain before setting the stage. As in UsdImaging
+    26.08, loading such a payload leaves its bounds: the stage index
+    re-adds the prim without removing it, and the draw mode index forwards
+    a re-added prim that no longer resolves to a standin without dropping
+    its old one, so its loaded children stay hidden (an upstream candidate
+    in `ROADMAP.md`). The same holds for any model resynced out of a draw
+    mode.
 - **`Flattening`** (`FlatteningSceneIndex`) resolves inherited data: the
   world transform, visibility, purpose, constant primvars, binding
   opinions, `model`, `geomModel`, `__usdUpAxis` and `coordSysBinding`. It runs inside native

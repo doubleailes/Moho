@@ -64,6 +64,15 @@ the steps that land in this repository or depend on it.
 
 ## Upstream candidates (OpenUSD)
 
+- A draw mode standin outlives a resync. `UsdImagingStageSceneIndex`
+  re-adds a resynced prim without removing it, and
+  `UsdImagingDrawModeSceneIndex::_PrimsAdded` forwards a re-added prim that
+  no longer resolves to a standin without `_DeleteSubtree`, so the old
+  standin keeps answering and hides the prim's children. Loading a payload
+  drawn as bounds (`displayUnloadedPrimsWithBounds`) leaves its bounds in
+  place. Moho follows UsdImaging (`crates/moho/tests/draw_mode.rs`,
+  `loading_a_payload_keeps_its_bounds_as_in_usd_imaging`).
+
 - Point instancer prototypes inside native instances. A `PointInstancer`
   whose `prototypes` target an instance proxy (Moana's `isCoral`) draws
   nothing under UsdImaging 2.0: the stage scene index gives an instance
