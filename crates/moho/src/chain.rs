@@ -132,9 +132,10 @@ use std::rc::Rc;
 
 use crate::filter::extent_resolving::{self, ExtentResolvingSceneIndex};
 use crate::filter::{
-    DependencyForwardingSceneIndex, InstanceProxyPathTranslationSceneIndex, LightLinkingSceneIndex,
-    MaterialBindingResolvingSceneIndex, NativeInstancingSceneIndex, PointInstancingSceneIndex,
-    RenderSettingsFlatteningSceneIndex, SceneGlobalsSceneIndex,
+    DependencyForwardingSceneIndex, DrawModeSceneIndex, InstanceProxyPathTranslationSceneIndex,
+    LightLinkingSceneIndex, MaterialBindingResolvingSceneIndex, NativeInstancingSceneIndex,
+    PointInstancingSceneIndex, RenderSettingsFlatteningSceneIndex, SceneGlobalsSceneIndex,
+    UnloadedDrawModeSceneIndex,
 };
 use crate::renderer::{CreateRendererError, CreatedRenderer, RendererPlugin};
 use crate::scene_index::SceneIndexHandle;
@@ -165,10 +166,56 @@ use crate::tokens::material_bindings;
 /// them as [`renderer_filters`]. Nor are the scene globals a host sets
 /// (`sceneGlobals/currentFrame`): the host adds them as a renderer filter
 /// ([`RendererFilter::scene_globals`]).
+///
+/// [`standard_with`] builds it with UsdImaging's options.
 pub fn standard(stage: Rc<StageSceneIndex>) -> SceneIndexHandle {
-    let extents = ExtentResolvingSceneIndex::new(stage, extent_resolving::STANDARD_PURPOSES.iter().copied());
+    standard_with(stage, StandardOptions::default())
+}
+
+/// The options of [`standard_with`], those of
+/// `UsdImagingCreateSceneIndicesInfo` that change the chain. Both are off
+/// by default, as in [`standard`] (UsdImaging's own default adds the draw
+/// mode scene index, as Storm and usdview use it).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct StandardOptions {
+    /// `addDrawModeSceneIndex`: a [`DrawModeSceneIndex`] appended to the
+    /// flattened scene of the stage and of each propagated prototype, so
+    /// that a model with `model:drawMode` `origin`, `bounds` or `cards`
+    /// (and `model:applyDrawMode`) is drawn as its standin.
+    pub add_draw_mode_scene_index: bool,
+    /// `displayUnloadedPrimsWithBounds`: the stage index includes unloaded
+    /// prims ([`StageSceneIndex::set_include_unloaded_prims`]), and an
+    /// [`UnloadedDrawModeSceneIndex`] after it draws each unloaded prim as
+    /// its bounds (through the draw mode scene index, so it needs
+    /// [`add_draw_mode_scene_index`](Self::add_draw_mode_scene_index) too to
+    /// draw anything). As in UsdImaging, build the chain before setting the
+    /// stage.
+    pub display_unloaded_prims_with_bounds: bool,
+}
+
+/// The standard chain over `stage` with `options`: the filters
+/// `UsdImagingCreateSceneIndices` builds with those options, in its order.
+/// With both options off it is [`standard`]. Otherwise:
+///
+/// - `display_unloaded_prims_with_bounds` sets the stage index to include
+///   unloaded prims and inserts the unloaded draw mode scene index before
+///   extent resolving;
+/// - `add_draw_mode_scene_index` gives native instancer propagation the
+///   draw mode scene index as its append callback, applied to the
+///   flattened scene of the stage and of each USD prototype, before
+///   instance aggregation.
+pub fn standard_with(stage: Rc<StageSceneIndex>, options: StandardOptions) -> SceneIndexHandle {
+    let mut input: SceneIndexHandle = stage.clone();
+    if options.display_unloaded_prims_with_bounds {
+        stage.set_include_unloaded_prims(true);
+        input = UnloadedDrawModeSceneIndex::new(input);
+    }
+    let extents = ExtentResolvingSceneIndex::new(input, extent_resolving::STANDARD_PURPOSES.iter().copied());
     let point = PointInstancingSceneIndex::new(extents);
-    let native = NativeInstancingSceneIndex::new(point);
+    let append = options
+        .add_draw_mode_scene_index
+        .then(DrawModeSceneIndex::append_callback);
+    let native = NativeInstancingSceneIndex::with_append_callback(point, append);
     // Bindings may name prims inside native instances.
     let proxies =
         InstanceProxyPathTranslationSceneIndex::new(native, [material_bindings::USD_MATERIAL_BINDINGS]);
