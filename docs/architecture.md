@@ -69,7 +69,8 @@ A Hydra 2.0 renderer consumes Hydra in three steps; Moho offers each.
 1. **The standard chain.** `moho::chain::standard(stage_index)` builds
    exactly the filters `UsdImagingCreateSceneIndices` builds with
    `addDrawModeSceneIndex = false`, `displayUnloadedPrimsWithBounds = false`,
-   no overrides callback and no UsdImaging scene index plugins, in its order:
+   no overrides callback and no UsdImaging scene index plugins, in its order
+   (`chain::standard_with` turns either option on; "Draw mode" below):
 
    ```
    StageSceneIndex --> ExtentResolving --> PointInstancing (propagation)
@@ -218,13 +219,31 @@ observer (`docs/update-latency.md`), and its `walk` benchmark the cost of
 - **`InstanceProxyPathTranslation`** translates a path in
   `usdMaterialBindings` that names a prim inside a native instance to the
   same prim in the instance's propagated prototype.
-- **Draw mode is deferred.** `UsdImagingDrawModeSceneIndex` replaces
-  geometry with standins (bounds, cards, origin) for viewport level of
-  detail. It is optional in Hydra's own API, a render delegate under usdview
-  or Solaris receives it already applied, and its card generation is a
-  sizeable port of its own. The stage index and the flattening carry
-  `geomModel` and native propagation takes the append callback, so adding
-  it later changes no layout.
+- **Draw mode is an option** (`chain::standard_with`, Moho issue #52).
+  `StandardOptions` carries `UsdImagingCreateSceneIndicesInfo`'s two
+  options, both off in `chain::standard` (UsdImaging's own default adds the
+  draw mode index, as Storm and usdview do).
+  - `add_draw_mode_scene_index`: `DrawModeSceneIndex`
+    (`UsdImagingDrawModeSceneIndex`) is native propagation's append
+    callback, so it filters the flattened scene of the stage and of every
+    prototype before instance aggregation. A prim whose `geomModel`
+    applies (`applyDrawMode`, true for a component in a valid model
+    hierarchy) an `origin`, `bounds` or `cards` draw mode (`drawMode`,
+    inherited through the flattening) is replaced, with its subtree, by
+    UsdImaging's standin: the prim itself with no type or data, and
+    `originCurves` or `boundsCurves` (`basisCurves`), or `cardsMesh` (a
+    `mesh` of up to six quads) with, when a face is textured, a
+    `geomSubset` per quad bound to a generated `UsdPreviewSurface`
+    material per textured face. Standin prims take the replaced prim's
+    `xform`, `purpose`, `visibility`, `instancedBy`, `primOrigin` and
+    `extent`, and `displayColor` from `drawModeColor`. A mode change
+    removes and re-adds the prim; an `extent` or colour edit dirties the
+    standin's points or colour; a card attribute edit rebuilds the cards.
+    `fromTexture` cards draw no face: openusd reads no image metadata.
+  - `display_unloaded_prims_with_bounds`: the stage index includes
+    unloaded prims, and `UnloadedDrawModeSceneIndex` after it gives an
+    unloaded prim the `bounds` draw mode (drawn when the draw mode index is
+    on too). Build the chain before setting the stage.
 - **`Flattening`** (`FlatteningSceneIndex`) resolves inherited data: the
   world transform, visibility, purpose, constant primvars, binding
   opinions, `model`, `geomModel`, `__usdUpAxis` and `coordSysBinding`. It runs inside native
