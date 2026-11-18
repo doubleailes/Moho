@@ -5,7 +5,11 @@
 //! A Hydra 2.0 renderer consumes Hydra in three steps, and Moho offers each:
 //!
 //! 1. the application builds UsdImaging's chain ([`standard`]), possibly
-//!    merging several ([`MergingSceneIndex`](crate::filter::MergingSceneIndex));
+//!    merging several ([`MergingSceneIndex`](crate::filter::MergingSceneIndex)),
+//!    and, as `UsdImagingGLEngine` does, puts the display style fallbacks it
+//!    sets over it
+//!    ([`LegacyDisplayStyleOverrideSceneIndex`](crate::filter::LegacyDisplayStyleOverrideSceneIndex):
+//!    the refine level for its complexity, the cull style);
 //! 2. the render index applies the renderer's scene index plugins, ordered
 //!    by `HdSceneIndexPluginRegistry` ([`renderer_filters`]): usdview adds
 //!    the scene globals a host sets at phase 0

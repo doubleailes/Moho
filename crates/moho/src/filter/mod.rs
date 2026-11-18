@@ -7,6 +7,7 @@ pub mod draw_mode;
 pub mod extent_resolving;
 pub mod flattening;
 pub mod instance_proxy_path_translation;
+pub mod legacy_display_style_override;
 
 pub use coord_sys_prim::CoordSysPrimSceneIndex;
 pub use dependency_forwarding::DependencyForwardingSceneIndex;
@@ -15,6 +16,7 @@ pub use extent_resolving::ExtentResolvingSceneIndex;
 
 pub use flattening::FlatteningSceneIndex;
 pub use instance_proxy_path_translation::InstanceProxyPathTranslationSceneIndex;
+pub use legacy_display_style_override::LegacyDisplayStyleOverrideSceneIndex;
 pub mod merging;
 
 pub use merging::MergingSceneIndex;

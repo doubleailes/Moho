@@ -84,6 +84,21 @@ A Hydra 2.0 renderer consumes Hydra in three steps; Moho offers each.
    index (a pass-through until a client enables batching) and the selection
    scene index (nothing until something is selected). Several chains may be
    merged (`MergingSceneIndex`), as a render index merges its inputs.
+
+   A host that sets display style fallbacks, as `UsdImagingGLEngine` does,
+   puts `LegacyDisplayStyleOverrideSceneIndex`
+   (`HdsiLegacyDisplayStyleOverrideSceneIndex`, Moho issue #54) right after
+   the chain, before the renderer filters. It underlays
+   `displayStyle/refineLevel` and `displayStyle/cullStyle` beneath every
+   prim with data (a prim's own opinion wins; an unset fallback answers
+   nothing), and a new fallback dirties every prim of its input, the root
+   first: at `displayStyle/refineLevel` for the refine level, at
+   `displayStyle` for the cull style (Hydra's wider locator). The engine
+   sets the refine level before each render from its complexity:
+   `legacy_display_style_override::refine_level_for_complexity` is its
+   `_GetRefineLevel` (1.0 is 0, each tenth a level, 8 from 1.8; `usdrecord
+   --complexity medium` is 1). It is not a `StandardOptions` switch:
+   `UsdImagingCreateSceneIndicesInfo` has none, the engine adds it.
 2. **Renderer filters.** `moho::chain::renderer_filters(index, &filters)`
    applies a consumer's `RendererFilter { phase, order, build }` list in
    `HdSceneIndexPluginRegistry`'s order: phase, then `AtStart` before
