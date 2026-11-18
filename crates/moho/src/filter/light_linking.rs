@@ -92,7 +92,7 @@ impl Default for LightLinkingPrimTypes {
                 prim_type::GEOM_SUBSET,
                 prim_type::MESH,
                 "tetMesh",
-                "nurbsPatch",
+                prim_type::NURBS_PATCH,
                 prim_type::BASIS_CURVES,
                 prim_type::NURBS_CURVES,
                 "particleField",

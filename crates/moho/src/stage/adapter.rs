@@ -136,6 +136,7 @@ impl AdapterRegistry {
         );
         registry.set_type("BasisCurves", Rc::new(crate::stage::curves::BASIS_CURVES));
         registry.set_type("NurbsCurves", Rc::new(crate::stage::curves::NURBS_CURVES));
+        registry.set_type("NurbsPatch", Rc::new(crate::stage::nurbs_patch::NURBS_PATCH));
         {
             use crate::stage::implicit::*;
             for (usd, adapter) in [
@@ -215,6 +216,7 @@ const USD_TO_HYDRA_TYPES: &[(&str, &str)] = &[
     ("Mesh", prim_type::MESH),
     ("BasisCurves", prim_type::BASIS_CURVES),
     ("NurbsCurves", prim_type::NURBS_CURVES),
+    ("NurbsPatch", prim_type::NURBS_PATCH),
     ("Points", prim_type::POINTS),
     ("Sphere", prim_type::SPHERE),
     ("Cube", prim_type::CUBE),

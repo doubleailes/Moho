@@ -3,7 +3,7 @@
 ## Purpose
 The typed data a scene index exposes for geometry, with Hydra 2.0's schema
 names: transforms, meshes and subdivision, primvars, visibility, purpose,
-extent, basis curves, NURBS curves and implicit shapes.
+extent, basis curves, NURBS curves and patches, and implicit shapes.
 ## Requirements
 ### Requirement: Transform
 A transformable prim SHALL expose `xform` with `matrix`, its local transform
@@ -87,6 +87,24 @@ NURBS curves data source does.
 #### Scenario: Rational NURBS curves
 - **WHEN** a NURBS curves prim authors `pointWeights`
 - **THEN** `primvars/pointWeights/primvarValue` gives them, and `nurbsCurves` has no `pointWeights`
+
+### Requirement: NURBS patches
+A `NurbsPatch` SHALL have type `nurbsPatch` and SHALL expose `nurbsPatch`
+with `uVertexCount`, `vVertexCount`, `uOrder`, `vOrder`, `uKnots`, `vKnots`,
+`uForm`, `vForm`, `uRange`, `vRange`, `orientation`, `doubleSided` and
+`trimCurve` (`counts`, `orders`, `vertexCounts`, `knots`, `ranges` and
+`points`, from the `trimCurve:*` attributes), in sorted order, with
+`pointWeights` as a primvar beside the point-based ones, as UsdImaging's NURBS
+patch data source does. A change to one attribute SHALL dirty its member
+alone. Approximating the patch for drawing is a renderer's, not Moho's.
+
+#### Scenario: A trimmed rational patch
+- **WHEN** a NURBS patch prim authors its patch attributes, `pointWeights` and a trim curve
+- **THEN** its type is `nurbsPatch`, `nurbsPatch` and `nurbsPatch/trimCurve` give those, and `primvars/pointWeights/primvarValue` gives the weights
+
+#### Scenario: Editing a trim curve
+- **WHEN** `trimCurve:orders` changes
+- **THEN** `nurbsPatch/trimCurve/orders` is dirtied and `nurbsPatch/trimCurve/counts` is not
 
 ### Requirement: Points
 A `Points` SHALL have type `points` and SHALL expose the gprim data, with
