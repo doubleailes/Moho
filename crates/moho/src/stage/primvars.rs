@@ -8,7 +8,7 @@
 //! - A gprim names `primvars` whether or not it has any, and a point-based
 //!   or curve prim overlays, under those, the plain attributes Hydra reads
 //!   as primvars (`points`, `velocities`, `accelerations`, `normals`,
-//!   `widths`; a NURBS curve's `pointWeights`): always named, given when
+//!   `widths`; a NURBS curve's or patch's `pointWeights`): always named, given when
 //!   authored.
 //! - Each primvar names `interpolation` and `role` (a custom primvar always
 //!   gives a role, empty when the attribute has none), `colorSpace` for a
@@ -58,6 +58,7 @@ const GPRIM_CUSTOM: &[(&str, &str, &str)] = &[
     (t::WIDTHS, "widths", "Curves"),
     (t::WIDTHS, "widths", "Points"),
     (t::POINT_WEIGHTS, "pointWeights", "NurbsCurves"),
+    (t::POINT_WEIGHTS, "pointWeights", "NurbsPatch"),
 ];
 
 /// A point instancer's instance data, read as primvars: `(primvar,

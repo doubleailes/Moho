@@ -24,6 +24,7 @@ pub mod material;
 pub mod material_binding;
 pub mod mesh;
 pub mod model;
+pub mod nurbs_patch;
 pub mod particle_field;
 pub mod pending;
 pub mod point_instancer;

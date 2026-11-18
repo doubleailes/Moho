@@ -5,6 +5,7 @@ pub mod prim_type {
     pub const MESH: &str = "mesh";
     pub const BASIS_CURVES: &str = "basisCurves";
     pub const NURBS_CURVES: &str = "nurbsCurves";
+    pub const NURBS_PATCH: &str = "nurbsPatch";
     pub const POINTS: &str = "points";
     pub const SPHERE: &str = "sphere";
     pub const CUBE: &str = "cube";
@@ -159,7 +160,7 @@ pub mod primvars {
     pub const VELOCITIES: &str = "velocities";
     pub const ACCELERATIONS: &str = "accelerations";
     pub const WIDTHS: &str = "widths";
-    /// A NURBS curve's `pointWeights`, a primvar in UsdImaging.
+    /// A NURBS curve's or patch's `pointWeights`, a primvar in UsdImaging.
     pub const POINT_WEIGHTS: &str = "pointWeights";
 
     pub const CONSTANT: &str = "constant";
@@ -207,6 +208,32 @@ pub mod curves {
     pub const BEZIER: &str = "bezier";
     pub const LINEAR: &str = "linear";
     pub const SEGMENTED: &str = "segmented";
+}
+
+/// `HdNurbsPatchSchema` and `HdNurbsPatchTrimCurveSchema`.
+pub mod nurbs_patch {
+    pub const NURBS_PATCH: &str = "nurbsPatch";
+    pub const U_VERTEX_COUNT: &str = "uVertexCount";
+    pub const V_VERTEX_COUNT: &str = "vVertexCount";
+    pub const U_ORDER: &str = "uOrder";
+    pub const V_ORDER: &str = "vOrder";
+    pub const U_KNOTS: &str = "uKnots";
+    pub const V_KNOTS: &str = "vKnots";
+    pub const U_FORM: &str = "uForm";
+    pub const V_FORM: &str = "vForm";
+    pub const U_RANGE: &str = "uRange";
+    pub const V_RANGE: &str = "vRange";
+    pub const TRIM_CURVE: &str = "trimCurve";
+    pub const ORIENTATION: &str = "orientation";
+    pub const DOUBLE_SIDED: &str = "doubleSided";
+
+    /// `HdNurbsPatchTrimCurveSchema`.
+    pub const COUNTS: &str = "counts";
+    pub const ORDERS: &str = "orders";
+    pub const VERTEX_COUNTS: &str = "vertexCounts";
+    pub const KNOTS: &str = "knots";
+    pub const RANGES: &str = "ranges";
+    pub const POINTS: &str = "points";
 }
 
 /// `HdGeomSubsetSchema`.
