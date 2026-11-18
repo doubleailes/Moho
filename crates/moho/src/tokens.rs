@@ -405,9 +405,10 @@ pub mod geom_model {
 }
 
 /// `HdLegacyDisplayStyleSchema` (`displayStyle`), the members the draw
-/// mode standins set.
+/// mode standins and the display style override set.
 pub mod display_style {
     pub const DISPLAY_STYLE: &str = "displayStyle";
+    pub const REFINE_LEVEL: &str = "refineLevel";
     pub const CULL_STYLE: &str = "cullStyle";
     pub const MATERIAL_IS_FINAL: &str = "materialIsFinal";
     /// `HdCullStyleTokens->back`.
