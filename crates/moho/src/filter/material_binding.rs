@@ -38,6 +38,7 @@ use openusd::vt::Value;
 use crate::collection::CollectionExpressionEvaluator;
 use crate::data_source::retained::{container, value};
 use crate::data_source::{Container, ContainerHandle, DataSource, Overlay, locate};
+use crate::filter::under_any;
 use crate::locator::Locator;
 use crate::scene_index::{
     Added, Dirtied, Observer, Observers, Prim, Removed, Renamed, SceneIndex, SceneIndexHandle,
@@ -77,11 +78,10 @@ impl MaterialBindingResolvingSceneIndex {
         index
     }
 
-    fn forget_under(&self, root: &sdf::Path) {
-        self.cache.borrow_mut().retain(|p, _| !p.has_prefix(root));
-        self.evaluators
-            .borrow_mut()
-            .retain(|(p, _), _| !p.has_prefix(root));
+    fn forget_under(&self, roots: &[sdf::Path]) {
+        let under = under_any(roots);
+        self.cache.borrow_mut().retain(|p, _| !under(p));
+        self.evaluators.borrow_mut().retain(|(p, _), _| !under(p));
     }
 
     /// The evaluator of the collection `name` on `prim`, as
@@ -282,16 +282,12 @@ impl SceneIndex for MaterialBindingResolvingSceneIndex {
 
 impl Observer for MaterialBindingResolvingSceneIndex {
     fn added(&self, _: &dyn SceneIndex, entries: &[Added]) {
-        for e in entries {
-            self.forget_under(&e.path);
-        }
+        self.forget_under(&entries.iter().map(|e| e.path.clone()).collect::<Vec<_>>());
         self.observers.send_added(self, entries);
     }
 
     fn removed(&self, _: &dyn SceneIndex, entries: &[Removed]) {
-        for e in entries {
-            self.forget_under(&e.path);
-        }
+        self.forget_under(&entries.iter().map(|e| e.path.clone()).collect::<Vec<_>>());
         self.observers.send_removed(self, entries);
     }
 
@@ -326,9 +322,7 @@ impl Observer for MaterialBindingResolvingSceneIndex {
     }
 
     fn renamed(&self, _: &dyn SceneIndex, entries: &[Renamed]) {
-        for e in entries {
-            self.forget_under(&e.old);
-        }
+        self.forget_under(&entries.iter().map(|e| e.old.clone()).collect::<Vec<_>>());
         self.observers.send_renamed(self, entries);
     }
 }

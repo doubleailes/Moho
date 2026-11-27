@@ -992,3 +992,55 @@ fn an_instance_made_of_a_known_prototype_shows_no_prototype() {
         Vec::<sdf::Path>::new()
     );
 }
+
+#[test]
+fn walked_prototype_not_readded() {
+    // The walk composes `/__Prototype_1`, which the stage reports at the
+    // next delivery; the index already holds it, so an unrelated edit adds
+    // nothing, as in UsdImaging.
+    let (_dir, usd) = common::stage(
+        r#"#usda 1.0
+def Xform "world"
+{
+    def Camera "cam"
+    {
+        float focalLength = 35
+    }
+    def Xform "i0" (
+        instanceable = true
+        references = </rock>
+    )
+    {
+    }
+    def Xform "i1" (
+        instanceable = true
+        references = </rock>
+    )
+    {
+    }
+}
+def Xform "rock"
+{
+    def Mesh "geo"
+    {
+    }
+}
+"#,
+    );
+    let index = StageSceneIndex::new();
+    index.set_stage(usd.clone());
+    assert!(walk(index.as_ref(), &sdf::Path::abs_root()).contains(&p("/__Prototype_1")));
+    let recorder = moho::scene_index::testing::RecordingObserver::on(index.as_ref());
+    usd.attribute("/world/cam.focalLength")
+        .unwrap()
+        .set(40.0f32)
+        .unwrap();
+    index.apply_pending_updates();
+    let notices = recorder.take();
+    assert!(
+        notices
+            .iter()
+            .all(|n| matches!(n, moho::scene_index::testing::Notice::Dirtied(_))),
+        "{notices:?}"
+    );
+}

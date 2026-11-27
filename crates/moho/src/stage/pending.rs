@@ -3,6 +3,7 @@
 
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
+use std::mem;
 use std::rc::Weak;
 
 use openusd::sdf;
@@ -26,6 +27,11 @@ pub struct Pending {
     /// them, but the children held for each are forgotten, since a field
     /// such as `primOrder` reorders them.
     pub info_changed: BTreeSet<sdf::Path>,
+    /// The subtrees a `recomposed` notice names: prims a read's loads
+    /// dropped, and the prototypes reads composed, the index's own
+    /// population among them. Each joins [`resynced`](Self::resynced) once
+    /// [`admit_read`](Self::admit_read) has left out what the index holds.
+    pub read_subtrees: BTreeSet<sdf::Path>,
 }
 
 impl Pending {
@@ -66,6 +72,18 @@ impl Pending {
     fn record_resynced(&mut self, resynced: Resynced<'_>) {
         self.record(resynced.subtrees, &[]);
         self.recomposed.extend(resynced.prims.iter().cloned());
+    }
+
+    /// Resyncs each subtree a read reported, but for those `held` answers
+    /// for: a prototype the index populated after the read composed it is
+    /// already current, and UsdImaging, over a stage that composes its
+    /// prototypes up front, is never told of it.
+    pub fn admit_read(&mut self, held: impl Fn(&sdf::Path) -> bool) {
+        for path in mem::take(&mut self.read_subtrees) {
+            if !held(&path) {
+                self.resynced.insert(path);
+            }
+        }
     }
 
     /// Drops the recomposed prims a resync covers, which repopulating it
@@ -127,6 +145,9 @@ impl StageSink for Recorder {
     }
 
     fn recomposed(&self, _stage: &Stage, resynced: Resynced<'_>) {
-        self.record(|pending| pending.record_resynced(resynced));
+        self.record(|pending| {
+            pending.read_subtrees.extend(resynced.subtrees.iter().cloned());
+            pending.recomposed.extend(resynced.prims.iter().cloned());
+        });
     }
 }
