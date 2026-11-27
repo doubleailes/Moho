@@ -365,6 +365,7 @@ impl StageSceneIndex {
         else {
             return;
         };
+        pending.admit_read(|path| self.holds_prototype(path));
         pending.settle();
         // A prim's own field may reorder its children (`primOrder`): the
         // children held for it are read again, without a notice, as they
@@ -491,6 +492,15 @@ impl StageSceneIndex {
         self.observers.send_removed(self, &removed);
         self.observers.send_added(self, &added);
         self.observers.send_dirtied(self, &dirtied);
+    }
+
+    /// Whether `path` is a USD prototype the index has populated.
+    fn holds_prototype(&self, path: &sdf::Path) -> bool {
+        self.populated.borrow().contains(path)
+            && self
+                .stage()
+                .and_then(|stage| stage.prim(path).ok()?.is_prototype().ok())
+                .unwrap_or(false)
     }
 
     /// The nearest ancestor of a `Shader` or `NodeGraph` prim that

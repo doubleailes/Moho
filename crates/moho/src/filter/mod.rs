@@ -1,6 +1,8 @@
 //! Scene indices that take other scene indices as input: flattening,
 //! merging, the resolving filters, and the filters a renderer or host adds.
 
+use openusd::sdf;
+
 pub mod coord_sys_prim;
 pub mod dependency_forwarding;
 pub mod draw_mode;
@@ -43,3 +45,16 @@ pub use render_settings::RenderSettingsFlatteningSceneIndex;
 pub use rerooting::RerootingSceneIndex;
 pub use scene_globals::SceneGlobalsSceneIndex;
 pub use unloaded_draw_mode::UnloadedDrawModeSceneIndex;
+
+/// A test of whether a path lies at or under one of `roots`, built once for
+/// a batch of notices. A few roots are compared with each path; more are
+/// looked up by each path's ancestors, so that dropping what a batch
+/// covers from a cache costs the cache's size times a path's depth.
+fn under_any(roots: &[sdf::Path]) -> impl Fn(&sdf::Path) -> bool + '_ {
+    const FEW: usize = 8;
+    let set: Option<sdf::PathSet> = (roots.len() > FEW).then(|| roots.iter().cloned().collect());
+    move |path| match &set {
+        Some(set) => path.ancestors().any(|a| set.contains(&a)),
+        None => roots.iter().any(|root| path.has_prefix(root)),
+    }
+}

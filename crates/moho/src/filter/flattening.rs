@@ -51,6 +51,7 @@ use openusd::vt::Value;
 use crate::data_source::Overlay;
 use crate::data_source::retained::{RetainedVector, container, value};
 use crate::data_source::{Container, ContainerHandle, DataSource, Sampled, SampledHandle};
+use crate::filter::under_any;
 use crate::locator::{Locator, LocatorSet};
 use crate::scene_index::{
     Added, Dirtied, Observer, Observers, Prim, Removed, Renamed, SceneIndex, SceneIndexHandle,
@@ -211,9 +212,10 @@ impl FlatteningSceneIndex {
         self.flattened(&path.parent()?)
     }
 
-    fn forget_under(&self, root: &sdf::Path) {
-        self.cache.borrow_mut().retain(|p, _| !p.has_prefix(root));
-        self.read.borrow_mut().retain(|p, _| !p.has_prefix(root));
+    fn forget_under(&self, roots: &[sdf::Path]) {
+        let under = under_any(roots);
+        self.cache.borrow_mut().retain(|p, _| !under(p));
+        self.read.borrow_mut().retain(|p, _| !under(p));
     }
 
     /// Records that the flattened data `slot` of `path` was read.
@@ -312,9 +314,14 @@ impl Observer for FlatteningSceneIndex {
         for e in entries {
             self.dirty_hierarchy(&e.path, &all, &locators, &mut dirtied);
         }
-        for e in entries {
-            self.cache.borrow_mut().retain(|p, _| !p.has_prefix(&e.path));
-            self.read.borrow_mut().remove(&e.path);
+        let roots: Vec<sdf::Path> = entries.iter().map(|e| e.path.clone()).collect();
+        let under = under_any(&roots);
+        self.cache.borrow_mut().retain(|p, _| !under(p));
+        {
+            let mut read = self.read.borrow_mut();
+            for e in entries {
+                read.remove(&e.path);
+            }
         }
         self.observers.send_added(self, entries);
         if !dirtied.is_empty() {
@@ -323,9 +330,7 @@ impl Observer for FlatteningSceneIndex {
     }
 
     fn removed(&self, _: &dyn SceneIndex, entries: &[Removed]) {
-        for e in entries {
-            self.forget_under(&e.path);
-        }
+        self.forget_under(&entries.iter().map(|e| e.path.clone()).collect::<Vec<_>>());
         self.observers.send_removed(self, entries);
     }
 
@@ -381,10 +386,11 @@ impl Observer for FlatteningSceneIndex {
     }
 
     fn renamed(&self, _: &dyn SceneIndex, entries: &[Renamed]) {
-        for e in entries {
-            self.forget_under(&e.old);
-            self.forget_under(&e.new);
-        }
+        let roots: Vec<sdf::Path> = entries
+            .iter()
+            .flat_map(|e| [e.old.clone(), e.new.clone()])
+            .collect();
+        self.forget_under(&roots);
         self.observers.send_renamed(self, entries);
     }
 }
