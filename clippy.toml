@@ -1,1 +1,7 @@
 allow-unwrap-in-tests = true
+
+# As openusd's own `clippy.toml`: a `Stage` and a `LayerHandle` hash and
+# compare by handle identity, never by the state their cells guard, and a
+# `Path` hashes and compares by its text, never by the element count it
+# caches, so each is a sound map key.
+ignore-interior-mutability = ["openusd::usd::Stage", "openusd::sdf::LayerHandle", "openusd::sdf::Path"]

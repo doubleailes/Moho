@@ -6,6 +6,28 @@ before every bump, and add any API Moho starts relying on. Sections written
 before the bump to `d7d2a29` (doubleailes/openusd, upstream `0a4bb1b` plus
 mxpv/openusd#175) were read at `68a867a`.
 
+## Bump to `9ba0611`
+
+mxpv/openusd main: back on upstream, which now holds mxpv/openusd#213 and
+#215, the `ts` module for splines, the notice and schema parity changes of
+mxpv/openusd#203 (#223, #224) and an `sdf::Path` that caches its element
+count. The crates are at 0.9.0.
+
+- Setting a value on an attribute without a spec sends a resync then a
+  value change, as C++ `UsdStage` does, so UsdImaging's two dirties of the
+  prim come out of the stage index (`light.rs`, `volume.rs`).
+- An edit's notice names the prototypes it composes (#223), so the stage
+  index no longer looks up the prototype of each instance it repopulates.
+  A load notice still names only the loaded subtrees (a `LoadNone` stage
+  loading a payload that holds two instances names `/world/a`, not
+  `/__Prototype_1`), so the stage-wide check after a load stays.
+- `sdf::Path::make_relative` (C++ `SdfPath::MakeRelativePath`) builds
+  `primOrigin/scenePath`.
+- `sdf::Path` holds a cell, so `clippy.toml` lists it (with `usd::Stage` and
+  `sdf::LayerHandle`) in `ignore-interior-mutability`, as openusd's does.
+- `model:cardVisibility` has its fallback, and `XformCommonAPI::xform_vectors`
+  reads each op as the type C++ `GetXformVectors` reads.
+
 ## Bump to `ca53e71`
 
 doubleailes/openusd's `feat/mtlx-format-plugin`, one commit over `bac9080`:
@@ -632,14 +654,6 @@ Read at `d7d2a29`.
 - Prototype discovery is not incremental: any structural edit makes the
   next `Stage::prototypes()` walk the whole stage, where C++'s
   `Usd_InstanceCache` is updated from the change set.
-- Splines (`Ts`): a `.spline` block only round-trips as a dictionary. There
-  are no typed knots, evaluation, authoring or usdc encoding.
-- No layer eviction: unloading a payload leaves its layers resident
-  (`Stage::find_loadable`'s documentation says so). In the S0 spike, RSS on
-  one `LoadNone` stage only grew across Moana's 22 load/unload rounds
-  (0.73 to 4.81 GiB), and the final unload freed nothing measurable
-  (mxpv/openusd#173).
-
 - `CollectionEvaluator::build` is `pub(super)`. No longer a gap for Moho:
   since `hydra-parity-chain` nothing reads USD collection membership
   (light linking judges collections over the scene index, as Hydra).

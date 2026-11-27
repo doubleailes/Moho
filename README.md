@@ -20,39 +20,47 @@ already fits on the boundary: it depends on `openusd` and `openusd-schemas`
 only, names no consumer, follows Hydra and UsdImaging quirk for quirk, and
 shares openusd's license, edition and MSRV. What it still needs:
 
-1. **openusd changes merged. Done.** Moho pins mxpv/openusd's main at the
-   `openusd-imaging` placeholder (`26c81d8`), which holds the reorder
-   resync, the asset path walk's plain data probe and the one-lookup
-   prototype root Moho's fork pin carried.
-2. **Ports moved into openusd. Done for mxpv/openusd#195.** Its eight pull
-   requests (#187 to #194) deleted Moho's copies: the memoized `is_a`,
-   sorted authored properties, the collection membership path expression,
-   `TfHash::Combine`'s hashing, a single-path `Value::Path`, `ColorSpaceAPI`
-   and `GfColorSpace`, the `typeName` resync, and the prototype resyncs.
-   What remains (`SdfPath::MakeRelativePath` in `stage/prim_origin.rs`,
-   among others) is under "Upstream candidates" in `ROADMAP.md`.
-3. **A scope discussion.** openusd now carries an `openusd-imaging`
-   placeholder crate. Agree the design, the layout and the parity results
-   with its maintainer before any large pull request.
-4. **A C++ layout.** Split Moho the way the C++ libraries are split: Hd
-   (`scene_index`, `data_source`, `locator`, `schema`, `tokens`), Hdsi
-   (`filter`) and UsdImaging (`stage`, `chain::standard`), as modules or
-   crates agreed in that discussion.
+1. **openusd changes merged. Done.** Moho pins mxpv/openusd's main
+   (`9ba0611`), which holds every change Moho needed, the `.mtlx` format
+   included.
+2. **Ports moved into openusd.** The eight pull requests of
+   mxpv/openusd#195 (#187 to #194) deleted Moho's copies, and
+   `sdf::Path::make_relative` builds `primOrigin`. `TfHash::Combine` over
+   strings and over a sorted map (`tf_hash.rs`) moves into openusd's `tf`
+   as public API, the first pull request. The rest is under "Upstream
+   candidates" in `ROADMAP.md`.
+3. **Scope agreed** in [mxpv/openusd#200](https://github.com/mxpv/openusd/issues/200):
+   imaging is in scope, as one `openusd-imaging` crate, with a committed
+   C++ dump and a regenerating test as its compliance test. The plan is in
+   [the comment](https://github.com/mxpv/openusd/issues/200#issuecomment-7213936329)
+   that follows; whether the test may normalize the three ordering
+   differences below is open.
+4. **A C++ layout.** Modules `hd` (`scene_index`, `data_source`,
+   `locator`, `schema`, `tokens`, merging, flattening, dependency
+   forwarding, the renderer plugin), `hdsi` (the other filters) and
+   `usd_imaging` (`stage`, instancing propagation, `chain::standard`),
+   landed as one pull request each in that order.
 5. **Parity as a compliance test.** The Hydra comparison in
-   `docs/hydra-parity-check.md` runs from a harness outside the repository.
-   Commit the C++ scene index dumps, with the edits and notices applied to
-   them, and a test that regenerates them, as openusd does for composition.
-6. **The generic attribute data.** `__usdAttributes` and
-   `__usdRelationships` are Moho's one addition to Hydra; be ready to make
-   them opt-in or keep them downstream.
-7. **openusd's conventions.** Its lint table (mostly `doc_markdown`, fixed by
-   adding `UsdImaging` to `doc-valid-idents`), `max_width = 120`, comments
-   free of planning steps and change names, and `TODO(rayon)` markers where
-   the `Rc`-based scene indices could run in parallel. `moho-spike` stays
-   here.
-8. **Downstream policy split off.** The `moho::openusd` and
-   `moho::openusd_schemas` re-exports and feature forwarding move to a thin
-   downstream crate for the stack's single pin.
+   `docs/hydra-parity-check.md` runs from a harness outside the repository
+   and predates the bump to `9ba0611`: re-run it first. Then commit the
+   C++ dumper with its USD reference, the scene index dumps with the edits
+   and notices applied, and a test that regenerates them, over Moho's
+   fixtures and openusd's `vendor/usd-wg-assets`. Prototype numbering,
+   category ids and the text of collection path expressions differ in
+   order only, and would be normalized.
+6. **Moho's additions to Hydra.** `__usdAttributes`, `__usdRelationships`
+   and `__usdMetersPerUnit` stay downstream, or come behind an opt-in if
+   openusd's maintainer prefers.
+7. **openusd's conventions.** Under its lint table Moho has 14 clippy
+   findings; it also needs `max_width = 120`, terse test names (most are
+   longer than four words), comments free of planning steps and change
+   names, `TODO(rayon)` markers where the `Rc`-based scene indices could
+   run in parallel, and a home for `scene_index::testing`.
+8. **Downstream policy split off.** The `moho::openusd`,
+   `moho::openusd_schemas` and `moho::openusd_mtlx` re-exports and the
+   feature forwarding move to a thin downstream crate for the stack's single
+   pin, and the host gives the stage builder its formats (`.mtlx`).
+   `moho-spike`, `moho-render` and `moho-render-wgpu` stay here.
 
 ## License
 
