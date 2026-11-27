@@ -91,7 +91,6 @@ the steps that land in this repository or depend on it.
 
 ## Upstream candidates (openusd)
 
-- Splines (`Ts`): typed knots, evaluation, authoring, usdc encoding.
 - Image metadata (C++ `HioImage`'s `GetMetadata`). A `fromTexture` draw
   mode card reads its textures' `worldtoscreen` matrix; openusd reads no
   image, so such a card draws no face, as UsdImaging when the image does
@@ -112,25 +111,13 @@ the steps that land in this repository or depend on it.
   UsdImaging, so every invalidation that walks from the root pays it: about
   20 ms of a linked light's 25 ms on the 10 000 mesh fixture
   (`docs/update-latency.md`).
-- Prototypes a change composes, in its notice. `after_commit` (a prim made
-  the first instance of its prototype) and `load_rules_changed` (a payload
-  loaded whose instances need a new prototype), like the other `Resynced`
-  notices, name the prototypes composed before the change, not the new
-  ones, where C++ `UsdStage` resyncs every prototype; the stage index
-  resyncs the unpopulated prototype of each instance it repopulates, and
-  after a load every prototype it has not populated
+- Prototypes a load composes, in its notice. An edit's `after_commit` names
+  the prototypes it composes (mxpv/openusd#223), but `load_rules_changed`
+  names only the loaded subtrees: a `LoadNone` stage loading a payload that
+  holds two instances names `/world/a`, not `/__Prototype_1`, where C++
+  `UsdStage` resyncs every prototype. After a load, the stage index
+  resyncs every prototype it has not populated
   (`crates/moho/src/stage/mod.rs`, `apply_pending_updates`).
-  [mxpv/openusd#201](https://github.com/mxpv/openusd/issues/201).
-- Prototypes of instances a load does not touch. Loading one payload on
-  ALab moves an unloaded instance elsewhere
-  (`decor_sheets_projector01_0001`) to a new prototype and retires two,
-  where C++ `Usd_InstanceCache` keeps every other instance's prototype;
-  the stage index's stage-wide prototype check after a load is there for
-  it. [mxpv/openusd#202](https://github.com/mxpv/openusd/issues/202).
-- Unloading a payload does not free what composing it took (no layer
-  eviction). On Moana, RSS under one stage only grew across 22 load/unload
-  rounds. This is what rules out single-stage streaming (S0).
-  [mxpv/openusd#173](https://github.com/mxpv/openusd/issues/173).
 - Resolved-asset-path resyncs in `StageSink::after_commit` (C++
   `UsdNotice::ObjectsChanged::GetResolvedAssetPathsResyncedPaths`), so an
   index can re-read asset-path-dependent data when resolution changes, as
@@ -146,27 +133,10 @@ the steps that land in this repository or depend on it.
   `apiSchemas`, `kind`, ...) as resyncs; Moho ignores every other
   prim-level info-only change, and misses the plugin-field resyncs
   (`crates/moho/src/stage/pending.rs`).
-- Authoring notices as USD's (found by `docs/hydra-parity-check.md`).
-  Setting a value on an attribute without a spec is one resync where USD
-  sends a resync then an info change (UsdImaging dirties the prim twice); a
-  write of the value already held notifies nothing where USD notifies; and
-  the `over` specs created to author through a reference are resynced where
-  USD reports them info-only, so the stage index re-adds that subtree.
-  [mxpv/openusd#203](https://github.com/mxpv/openusd/issues/203).
-- openusd-schemas' UsdGeom schema predates `model:cardVisibility` (fallback
-  `inherited`), so `geomModel/cardVisibility` has no fallback.
-  [mxpv/openusd#203](https://github.com/mxpv/openusd/issues/203).
-- A value read as another type than authored. C++ `UsdAttribute::Get<T>`
-  fails when the authored value type is not `T`, and UsdImaging answers its
-  default: `GetXformVectors` reads a `float3` translate or a `double3`
-  rotate or scale as the identity (`geomXformVectors`), and an `extentsHint`
-  authored `vector3d[]` (ALab) gives no hint and an empty extent. openusd
-  lets a schema's declared type win and casts the value
-  (`XformCommonAPI::xform_vectors`, `Attribute::type_name`), so Moho
-  answers the values. [mxpv/openusd#203](https://github.com/mxpv/openusd/issues/203).
-- `SdfPath::MakeRelativePath`. Moho builds a prototype-relative prim origin
-  from the path's text meanwhile (`crates/moho/src/stage/prim_origin.rs`).
-  [mxpv/openusd#203](https://github.com/mxpv/openusd/issues/203).
+- An `extentsHint` read as another type than authored. C++
+  `UsdAttribute::Get<T>` fails when the authored value type is not `T`, so
+  an `extentsHint` authored `vector3d[]` (ALab) gives UsdImaging no hint
+  and an empty extent; openusd casts it, and Moho answers the values.
 - A shader registry (Sdr, C++ `SdrRegistry`), so that a shader outside
   `id` mode resolves a node identifier from its source asset or code as
   UsdImaging's material data source does. Moho leaves it empty meanwhile

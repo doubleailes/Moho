@@ -376,17 +376,12 @@ impl StageSceneIndex {
             }
         }
         let mut roots = pending.resync_roots();
-        // Workaround, an upstream candidate in `ROADMAP.md`: openusd's
-        // notice names the prototypes that were composed before the change,
-        // not those it composes; USD names every prototype. A prototype the
-        // index has not populated is resynced, so that it is added and the
-        // prototype pruning hides it: after a load (or an unload, a layer
-        // muted, a load retried), each one the stage holds, since openusd's
-        // load can also give an unloaded instance outside the payload a new
-        // prototype (ALab, another upstream candidate); after any resync,
-        // below, the prototype of each instance it repopulates (a prim made
-        // the first instance of its prototype), which is one lookup per
-        // prim where the stage's list walks the stage after an edit.
+        // Workaround, an upstream candidate in `ROADMAP.md`: openusd's load
+        // notice names the loaded subtrees, not the prototypes the load
+        // composes; USD names every prototype. After a load (or an unload, a
+        // layer muted, a load retried), each prototype the stage holds that
+        // the index has not populated is resynced, so that it is added and
+        // the prototype pruning hides it.
         if pending.composition_changed {
             for prototype in self.unpopulated_stage_prototypes() {
                 if !roots.iter().any(|r| prototype.has_prefix(r)) {
@@ -401,15 +396,11 @@ impl StageSceneIndex {
         // (below), as `UsdImagingStageSceneIndex::_ApplyPendingResyncs` does
         // for a `RepresentedByAncestor` prim. Any other prim under one is
         // repopulated, its subtree added though population never reached it.
-        let mut represented: Vec<Option<(usd::Prim, usd::Prim)>> = roots
+        let represented: Vec<Option<(usd::Prim, usd::Prim)>> = roots
             .iter()
             .map(|root| self.representing_ancestor(root))
             .collect();
-        // A worklist: the prototypes the repopulated instances need join it.
-        let mut next = 0;
-        while let Some((root, represented_by)) = roots.get(next).cloned().zip(represented.get(next)) {
-            next += 1;
-            let root = &root;
+        for (root, represented_by) in roots.iter().zip(&represented) {
             self.forget_under(root);
             self.globals.forget_under(root);
             if represented_by.is_some() {
@@ -432,14 +423,6 @@ impl StageSceneIndex {
                     .filter(|p| !again.contains(p))
                     .map(|path| Removed { path }),
             );
-            // The unpopulated prototypes of the instances repopulated (see
-            // above), whose own instances are seen in turn.
-            for prototype in self.unpopulated_prototypes(&now) {
-                if !roots.iter().any(|r| prototype.has_prefix(r)) {
-                    roots.push(prototype);
-                    represented.push(None);
-                }
-            }
             added.extend(now);
         }
         // A prim recomposed in place, with nothing beneath it implied (the
@@ -533,20 +516,6 @@ impl StageSceneIndex {
             .prototypes()
             .unwrap_or_default()
             .into_iter()
-            .filter(|p| !populated.contains(p))
-            .collect()
-    }
-
-    /// The prototypes of the instances among `added` that the index has not
-    /// populated.
-    fn unpopulated_prototypes(&self, added: &[Added]) -> BTreeSet<sdf::Path> {
-        let Some(stage) = self.stage() else {
-            return BTreeSet::new();
-        };
-        let populated = self.populated.borrow();
-        added
-            .iter()
-            .filter_map(|a| stage.prim(&a.path).ok()?.prototype().ok()?)
             .filter(|p| !populated.contains(p))
             .collect()
     }

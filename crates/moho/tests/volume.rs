@@ -150,5 +150,7 @@ def Volume "smoke"
             .collect()
     };
     assert_eq!(dirty("/smoke"), ["volumeFieldBinding"]);
-    assert_eq!(dirty("/smoke/heat"), ["volumeField"]);
+    // `heat` authors no `fieldClass`: the set creates its spec, a resync
+    // then an update of the property, each dirtying the field.
+    assert_eq!(dirty("/smoke/heat"), ["volumeField", "volumeField"]);
 }

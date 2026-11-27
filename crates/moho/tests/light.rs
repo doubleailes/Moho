@@ -335,8 +335,10 @@ fn light_property_edits() {
         index.apply_pending_updates();
         recorder.take()
     };
+    // The first value set on an unauthored attribute creates its spec: a
+    // resync then an update of the property, each dirtying the light.
     let notices = set("/lights/sphere.light:shaderId", Value::Token(Token::from("Mine")));
-    assert_eq!(dirtied(&notices, "/lights/sphere"), ["light"]);
+    assert_eq!(dirtied(&notices, "/lights/sphere"), ["light", "light"]);
     // UsdImaging's quirks: a render context's shader id and a plain
     // attribute dirty nothing.
     let notices = set(

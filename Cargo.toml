@@ -16,14 +16,11 @@ repository = "https://github.com/doubleailes/moho"
 # depends on this git source at the same `rev`, crust-render patches its
 # crates.io `openusd` to it. Bump in order: Moho, then crust-render, then Mantle.
 #
-# Pinned to doubleailes/openusd's `feat/mtlx-format-plugin` (ca53e71):
-# mxpv/openusd main (900ea31) plus file formats added at run time
-# (mxpv/openusd#215) and the `.mtlx` format (mxpv/openusd#213). Back to
-# mxpv/openusd main once both are merged.
-openusd = { git = "https://github.com/doubleailes/openusd", rev = "ca53e71b6a3d7949918e3adb7a9a61e4f4ddd172" }
-openusd-schemas = { git = "https://github.com/doubleailes/openusd", rev = "ca53e71b6a3d7949918e3adb7a9a61e4f4ddd172" }
+# Pinned to mxpv/openusd main (9ba0611).
+openusd = { git = "https://github.com/mxpv/openusd", rev = "9ba06114fdb6a43e33f534cc0f8fa4aa1292ee2c" }
+openusd-schemas = { git = "https://github.com/mxpv/openusd", rev = "9ba06114fdb6a43e33f534cc0f8fa4aa1292ee2c" }
 # The `.mtlx` file format, from the same openusd revision.
-openusd-mtlx = { git = "https://github.com/doubleailes/openusd", rev = "ca53e71b6a3d7949918e3adb7a9a61e4f4ddd172" }
+openusd-mtlx = { git = "https://github.com/mxpv/openusd", rev = "9ba06114fdb6a43e33f534cc0f8fa4aa1292ee2c" }
 
 # The stack's one wgpu, named only by `moho-render-wgpu` and re-exported by
 # it (`moho_render_wgpu::wgpu`): bumping it is bumping Moho in each consumer.

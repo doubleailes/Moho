@@ -20,10 +20,7 @@ pub struct PrimOriginAdapter;
 /// The prim's path, relative to its prototype root when it lies inside a
 /// USD prototype (`/__Prototype_1/MyXform/MySphere` gives
 /// `MyXform/MySphere`, the root itself `.`), as UsdImaging's
-/// `_ComputePrototypeRelativePath` does.
-///
-/// Workaround, an upstream candidate in `ROADMAP.md`: openusd has no
-/// `SdfPath::MakeRelativePath`, so the relative path is built from the text.
+/// `_ComputePrototypeRelativePath` does with `SdfPath::MakeRelativePath`.
 pub fn scene_path(ctx: &PrimContext) -> sdf::Path {
     let path = ctx.path.clone();
     let Some(root) = path.ancestors_below_root().last() else {
@@ -38,13 +35,7 @@ pub fn scene_path(ctx: &PrimContext) -> sdf::Path {
     if !is_prototype {
         return path;
     }
-    let rest = path
-        .as_str()
-        .strip_prefix(root.as_str())
-        .map(|r| r.trim_start_matches('/'))
-        .unwrap_or_default();
-    let relative = if rest.is_empty() { "." } else { rest };
-    sdf::Path::new(relative).unwrap_or(path)
+    path.make_relative(&root)
 }
 
 impl Adapter for PrimOriginAdapter {
