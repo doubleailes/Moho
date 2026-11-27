@@ -26,10 +26,6 @@ pub struct Pending {
     /// them, but the children held for each are forgotten, since a field
     /// such as `primOrder` reorders them.
     pub info_changed: BTreeSet<sdf::Path>,
-    /// Whether a load, an unload, a layer (un)muted or a load retried
-    /// recomposed the stage: it may have composed prototypes its notice
-    /// does not name.
-    pub composition_changed: bool,
 }
 
 impl Pending {
@@ -68,7 +64,6 @@ impl Pending {
 
     /// A notice's subtree resyncs and the prims it recomposed in place.
     fn record_resynced(&mut self, resynced: Resynced<'_>) {
-        self.composition_changed = true;
         self.record(resynced.subtrees, &[]);
         self.recomposed.extend(resynced.prims.iter().cloned());
     }
@@ -106,6 +101,12 @@ impl Recorder {
 }
 
 impl StageSink for Recorder {
+    /// UsdImaging resyncs every prototype a change creates, which C++
+    /// `UsdStage` names in its notice.
+    fn complete_prototypes(&self) -> bool {
+        true
+    }
+
     fn after_commit(&self, _stage: &Stage, change: &CommittedChange<'_>) {
         self.record(|pending| {
             pending.record(change.resynced, change.changed_info_only);

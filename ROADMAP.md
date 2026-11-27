@@ -111,13 +111,6 @@ the steps that land in this repository or depend on it.
   UsdImaging, so every invalidation that walks from the root pays it: about
   20 ms of a linked light's 25 ms on the 10 000 mesh fixture
   (`docs/update-latency.md`).
-- Prototypes a load composes, in its notice. An edit's `after_commit` names
-  the prototypes it composes (mxpv/openusd#223), but `load_rules_changed`
-  names only the loaded subtrees: a `LoadNone` stage loading a payload that
-  holds two instances names `/world/a`, not `/__Prototype_1`, where C++
-  `UsdStage` resyncs every prototype. After a load, the stage index
-  resyncs every prototype it has not populated
-  (`crates/moho/src/stage/mod.rs`, `apply_pending_updates`).
 - Resolved-asset-path resyncs in `StageSink::after_commit` (C++
   `UsdNotice::ObjectsChanged::GetResolvedAssetPathsResyncedPaths`), so an
   index can re-read asset-path-dependent data when resolution changes, as

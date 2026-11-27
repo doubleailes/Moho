@@ -16,11 +16,12 @@ count. The crates are at 0.9.0.
 - Setting a value on an attribute without a spec sends a resync then a
   value change, as C++ `UsdStage` does, so UsdImaging's two dirties of the
   prim come out of the stage index (`light.rs`, `volume.rs`).
-- An edit's notice names the prototypes it composes (#223), so the stage
-  index no longer looks up the prototype of each instance it repopulates.
-  A load notice still names only the loaded subtrees (a `LoadNone` stage
-  loading a payload that holds two instances names `/world/a`, not
-  `/__Prototype_1`), so the stage-wide check after a load stays.
+- Each notice names the prototypes its change composes (#223). The stage
+  index's sink returns `true` from `StageSink::complete_prototypes`, so the
+  stage composes each resynced subtree whole before the notice and names
+  every prototype a load, an unload, a muting or an edit creates there, as
+  C++ `UsdStage` does. A resync of `/` then composes the whole populated
+  stage. The stage index no longer looks prototypes up itself.
 - `sdf::Path::make_relative` (C++ `SdfPath::MakeRelativePath`) builds
   `primOrigin/scenePath`.
 - `sdf::Path` holds a cell, so `clippy.toml` lists it (with `usd::Stage` and
