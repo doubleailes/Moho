@@ -38,7 +38,8 @@ edit at a time on one stage: a transform, visibility, purpose, a
 light's intensity, a light link and then `includeRoot`, point instancer
 positions, a prim defined, an instance made non-instanceable, a prim
 removed, and a time change. An attribute the scene does not author is set
-twice, so that the second set is a plain value change. 1 791 edits in all.
+twice, so that the second set is a plain value change. 1 788 edits in all,
+each applied on both sides.
 
 ## Results
 
@@ -46,15 +47,15 @@ twice, so that the second set is a plain value change. 1 791 edits in all.
 |---|---|
 | Prims and types | The same on both sides in all 168 scenes, before and after the edits |
 | Static data | No unexplained difference, before or after the edits |
-| Notices, nothing read | 1 763 of 1 791 edits identical |
-| Notices, everything read | 1 761 of 1 791 edits identical |
+| Notices, nothing read | 1 760 of 1 788 edits identical |
+| Notices, everything read | 1 758 of 1 788 edits identical |
 
 Every edit not identical is one of the three cases under "Real
 divergences". The scenes where any edit differs:
 
 | Scene | Prims (Hydra / Moho) | Notices identical, nothing read | Notices identical, all read |
 |---|---|---|---|
-| alab | 17 681 / 17 681 | 17/18 | 16/18 |
+| alab | 17 681 / 17 681 | 16/17 | 15/17 |
 | crust_instancing | 26 / 26 | 18/19 | 18/19 |
 | crust_nested_instancing | 40 / 40 | 18/19 | 18/19 |
 | crust_purpose_bindings | 24 / 24 | 15/16 | 15/16 |
@@ -72,7 +73,7 @@ divergences". The scenes where any edit differs:
 | fx_prim_info_1 | 8 / 8 | 3/5 | 3/5 |
 | fx_rerooting_0 | 26 / 26 | 12/14 | 12/14 |
 | fx_stage_5 | 10 / 10 | 10/12 | 10/12 |
-| iscoral | 27 769 / 27 769 | 14/15 | 14/15 |
+| iscoral | 27 769 / 27 769 | 13/14 | 13/14 |
 | kitchen_set_instanced | 2 565 / 2 565 | 3/4 | 3/4 |
 
 The other 148 scenes are identical in every edit, among them

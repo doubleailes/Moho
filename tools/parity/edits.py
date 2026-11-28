@@ -4,7 +4,8 @@
 
 Run with the reference build's Python (run.sh does). Each edit is chosen
 from the scene's own data, among the prims a default traversal reaches; an
-edit with nothing to apply to is left out. An attribute the scene does not
+edit with nothing to apply to is left out. A value is written as usda text
+(a token quoted). An attribute the scene does not
 author is set twice, so that the second set is a plain value change.
 """
 
@@ -60,8 +61,8 @@ def main(scene):
         script.set(prim, "xformOp:translate", type_name, "(1, 2, 3)")
     if gprims:
         gprim = gprims[0]
-        script.set(gprim, "visibility", "token", "invisible")
-        script.set(gprim, "purpose", "token", "proxy")
+        script.set(gprim, "visibility", "token", '"invisible"')
+        script.set(gprim, "purpose", "token", '"proxy"')
         script.set(gprim, "primvars:displayColor", "color3f[]", "[(1, 0, 0)]")
     for shader in shaders:
         inputs = [i for i in UsdShade.Shader(shader).GetInputs()
@@ -97,8 +98,11 @@ def main(scene):
         script.lines.append(f"define {roots[0].GetPath()}/parity_new Mesh")
     if instanceable:
         script.lines.append(f"instanceable {instanceable[0].GetPath()} false")
-    if gprims:
-        script.lines.append(f"remove {gprims[-1].GetPath()}")
+    # A prim the root layer defines, which `RemovePrim` can remove.
+    root_layer = stage.GetRootLayer()
+    removable = [p for p in gprims if root_layer.GetPrimAtPath(p.GetPath())]
+    if removable:
+        script.lines.append(f"remove {removable[-1].GetPath()}")
     script.lines.append("time 2")
     print("\n".join(script.lines))
 

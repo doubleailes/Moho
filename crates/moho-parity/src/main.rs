@@ -193,11 +193,16 @@ fn apply(stage: &Stage, index: &StageSceneIndex, line: &str) -> Result<()> {
             let value = parse_value(ty, &text)?;
             let path = sdf::path(target)?;
             let (prim, name) = path.split_property().ok_or("set needs a property path")?;
-            // An attribute nothing declares is created first, as C++
-            // `UsdPrim::CreateAttribute` before `Set`.
-            if !matches!(stage.attribute(target).map(|a| a.set(value.clone())), Ok(Ok(_))) {
-                stage.prim(&prim)?.create_attribute(name, ty)?.set(value)?;
-            }
+            // As C++: `UsdPrim::GetAttribute`, created first by
+            // `UsdPrim::CreateAttribute` when nothing defines it, then `Set`.
+            let prim = stage.prim(&prim)?;
+            let attribute = prim.attribute(name);
+            let attribute = if attribute.is_defined()? {
+                attribute
+            } else {
+                prim.create_attribute(name, ty)?
+            };
+            attribute.set(value)?;
         }
         "define" => {
             let ty = words.next().ok_or("define needs a type")?;

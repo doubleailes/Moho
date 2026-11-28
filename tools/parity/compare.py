@@ -4,9 +4,10 @@
 
 Prints one Markdown row per scene: prims on each side, the static
 differences no class below accounts for (before and after the edits), and
-the edits whose notices are identical, with nothing read and with
-everything read; then the totals, with the differences each class
-accounts for. Writes each scene's differences to OUT_DIR/<scene>/diff.txt,
+the edits whose notices are identical, out of those both sides applied,
+with nothing read and with everything read; then the totals, with the
+edits a side rejected and the differences each class accounts for. A
+scene whose edit script or a dumper failed is reported, not compared. Writes each scene's differences to OUT_DIR/<scene>/diff.txt,
 each static one with its class.
 
 What the comparison normalizes:
@@ -52,6 +53,7 @@ has the reasons):
 """
 
 import collections
+import math
 import pathlib
 import re
 import sys
@@ -63,6 +65,7 @@ PROTOTYPE = re.compile(r"/__Prototype_\d+")
 GROUP = re.compile(r"/UsdNiPropagatedPrototypes/([^/\s\],]+)")
 HELD = re.compile(r"/UsdNiPropagatedPrototypes/([^/\s\],]+)/__Prototype\[([^\]]*)\]")
 CATEGORY = re.compile(r"\bgroup_\d+\b")
+INTEGER = re.compile(r"-?\d+")
 NUMBER = re.compile(r"-?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?|-?inf|nan")
 LONG = 2000
 ELEMENTS = 25
@@ -206,14 +209,20 @@ def close(a, b):
             return len(ea) == len(eb) and all(close(x, y) for x, y in zip(ea[:ELEMENTS], eb[:ELEMENTS]))
     if NUMBER.sub("#", a) != NUMBER.sub("#", b):
         return False
-    for x, y in zip(NUMBER.findall(a), NUMBER.findall(b)):
-        try:
-            fx, fy = float(x), float(y)
-        except ValueError:
-            return False
-        if fx != fy and abs(fx - fy) > 1e-5 * max(1.0, abs(fx), abs(fy)):
-            return False
-    return True
+    return all(same_number(x, y) for x, y in zip(NUMBER.findall(a), NUMBER.findall(b)))
+
+
+def same_number(x, y):
+    """Whether two numbers' texts agree: integers exactly, a non-finite
+    value only with itself, any other to 1e-5 relative."""
+    if x == y:
+        return True
+    if INTEGER.fullmatch(x) and INTEGER.fullmatch(y):
+        return int(x) == int(y)
+    fx, fy = float(x), float(y)
+    if not (math.isfinite(fx) and math.isfinite(fy)):
+        return False
+    return abs(fx - fy) <= 1e-5 * max(1.0, abs(fx), abs(fy))
 
 
 def classify(path, locator, values, mtlx):
@@ -230,6 +239,17 @@ def classify(path, locator, values, mtlx):
     if path.endswith("/UsdNiInstancer") and locator in PLACEHOLDER and not values[1]:
         return "placeholder"
     return "unexplained"
+
+
+def stale(path, data, moho):
+    """Whether Hydra's own topology puts the instance at `path` at the
+    index Moho answers (Hydra's instance data being the stale one)."""
+    instancer = data.get((path, "instance/instancer"), "").removeprefix("= ")
+    locations = data.get((instancer, "instancerTopology/instanceLocations"))
+    if not locations or not moho:
+        return False
+    paths = elements(path_list(locations).removeprefix("= ")) or []
+    return path in paths and str(paths.index(path)) == moho.removeprefix("= ")
 
 
 def compare_static(name, hydra, moho, mtlx, report):
@@ -249,7 +269,7 @@ def compare_static(name, hydra, moho, mtlx, report):
             continue
         if a is None or b is None or not close(a, b):
             cls = classify(key[0], key[1], (a or "", b or ""), mtlx)
-            if name == "final" and key[1] == "instance/instanceIndex":
+            if name == "final" and key[1] == "instance/instanceIndex" and stale(key[0], hd, b):
                 cls = "stale"
             classes[cls] += 1
             report.append(f"{name} [{cls}]: data {key[0]} {key[1]} Hydra {a!r} Moho {b!r}")
@@ -257,13 +277,29 @@ def compare_static(name, hydra, moho, mtlx, report):
 
 
 def compare_notices(mode, hydra, moho, names_h, names_m, report):
-    identical = 0
-    for e_h, e_m in zip(hydra.edits, moho.edits):
+    """The edits whose notices are identical, the edits compared, and the
+    edits not exercised: rejected by a side, or missing from one."""
+    identical = compared = 0
+    rejected = collections.Counter()
+    for n in range(max(len(hydra.edits), len(moho.edits))):
+        e_h = hydra.edits[n] if n < len(hydra.edits) else None
+        e_m = moho.edits[n] if n < len(moho.edits) else None
+        if e_h is None or e_m is None or e_h["line"] != e_m["line"]:
+            report.append(f"{mode}: edit {n} missing or out of step: Hydra "
+                          f"{e_h and e_h['line']!r} Moho {e_m and e_m['line']!r}")
+            rejected["missing"] += 1
+            continue
         names_h.protos.update(e_h["protos"])
         names_m.protos.update(e_m["protos"])
+        if "error" in e_h or "error" in e_m:
+            report.append(f"{mode}: edit {e_h['line']} not exercised: Hydra "
+                          f"{e_h.get('error')!r} Moho {e_m.get('error')!r}")
+            rejected["both" if "error" in e_h and "error" in e_m else "one"] += 1
+            continue
+        compared += 1
         a = collections.Counter(map(names_h, e_h["notices"]))
         b = collections.Counter(map(names_m, e_m["notices"]))
-        if a == b and ("error" in e_h) == ("error" in e_m):
+        if a == b:
             identical += 1
             continue
         report.append(f"{mode}: edit {e_h['line']}")
@@ -271,9 +307,7 @@ def compare_notices(mode, hydra, moho, names_h, names_m, report):
             report.append(f"  Hydra only: {k}")
         for k in sorted((b - a).elements()):
             report.append(f"  Moho only: {k}")
-        if ("error" in e_h) != ("error" in e_m):
-            report.append(f"  edit error: Hydra {e_h.get('error')!r} Moho {e_m.get('error')!r}")
-    return identical, max(len(hydra.edits), len(moho.edits))
+    return identical, compared, rejected
 
 
 def names_for(dump):
@@ -286,11 +320,19 @@ def names_for(dump):
 
 def scene(dir):
     report = []
-    files = {k: dir / f"{k}.txt" for k in ("cpp.none", "cpp.read", "rs.none", "rs.read")}
-    if not all(f.exists() and f.stat().st_size for f in files.values()):
-        return None, ["missing dump"]
-    dumps = {k: Dump(f) for k, f in files.items()}
-    broken = [k for k, d in dumps.items() if not d.complete]
+    if (dir / "edits.failed").exists():
+        return None, ["edit generation failed"]
+    runs = ("cpp.none", "cpp.read", "rs.none", "rs.read")
+    failed = []
+    for run in runs:
+        status = dir / f"{run}.status"
+        code = status.read_text().strip() if status.exists() else "?"
+        if code != "0":
+            failed.append(f"{run} exited {code}")
+    if failed:
+        return None, ["dumper failed: " + ", ".join(failed)]
+    dumps = {k: Dump(dir / f"{k}.txt") for k in runs}
+    broken = [k for k, d in dumps.items() if not d.complete or d.errors or "static" not in d.sections]
     if broken:
         return None, [f"incomplete: {', '.join(broken)}"] + [e for d in dumps.values() for e in d.errors]
     err = dir / "cpp.read.err"
@@ -319,26 +361,34 @@ def main(out, only):
     print("|---|---|---|---|---|---|")
     totals = collections.Counter()
     explained = collections.Counter()
+    explained_after = collections.Counter()
+    failed = []
     for d in dirs:
         row, report = scene(d)
         (d / "diff.txt").write_text("\n".join(report) + "\n", encoding="utf-8")
         if row is None:
+            failed.append(d.name)
             print(f"| {d.name} | {report[0]} | - | - | - | - |")
             continue
         sections, notices = row
         h, m, static = sections["static"]
         _, _, after = sections["final"]
-        (ni, nt), (ri, rt) = notices["none"], notices["read"]
+        (ni, nt, nr), (ri, rt, rr) = notices["none"], notices["read"]
         explained.update(static)
+        explained_after.update(after)
         totals.update(scenes=1, static=static["unexplained"], after=after["unexplained"],
                       ni=ni, nt=nt, ri=ri, rt=rt)
+        totals.update({f"none {k}": v for k, v in nr.items()})
+        totals.update({f"read {k}": v for k, v in rr.items()})
         print(f"| {d.name} | {h} / {m} | {static['unexplained']} | {after['unexplained']} "
               f"| {ni}/{nt} | {ri}/{rt} |")
     t = totals
-    classes = ", ".join(f"{k} {v}" for k, v in sorted(explained.items()) if k != "unexplained")
-    print(f"\nTotal: {t['scenes']} scenes, {t['static']} unexplained static differences "
-          f"({t['after']} after edits), notices identical {t['ni']}/{t['nt']} nothing read, "
-          f"{t['ri']}/{t['rt']} all read. Static differences by class: {classes}.")
+    by_class = lambda counts: ", ".join(f"{k} {v}" for k, v in sorted(counts.items()) if k != "unexplained")
+    not_run = ", ".join(f"{k} {v}" for k, v in sorted(t.items()) if k.startswith(("none ", "read "))) or "none"
+    print(f"\nTotal: {t['scenes']} scenes compared, {len(failed)} not ({', '.join(failed) or 'none'}); "
+          f"{t['static']} unexplained static differences ({t['after']} after edits); notices identical "
+          f"{t['ni']}/{t['nt']} nothing read, {t['ri']}/{t['rt']} all read; edits not exercised: {not_run}. "
+          f"Static differences by class: {by_class(explained)}; after the edits: {by_class(explained_after)}.")
 
 
 if __name__ == "__main__":

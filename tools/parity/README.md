@@ -64,5 +64,8 @@ python3 tools/parity/compare.py "$OUT"
 `scenes.txt` is the corpus: Moho's test fixtures (`fixtures.py` writes
 every usda literal of `crates/moho/tests`), crust-render's samples, Kitchen
 Set, the MaterialX teapot and lion, ALab and Moana's `isCoral` element.
-`compare.py` prints a Markdown row per scene and writes each scene's
+`run.sh` records each dumper's exit status beside its dump, and marks a
+scene whose edit script could not be generated; `compare.py` reports such a
+scene instead of comparing it, and counts an edit either side rejected as
+not exercised. It prints a Markdown row per scene and writes each scene's
 differences to `diff.txt`; its docstring lists what it normalizes.
