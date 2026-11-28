@@ -40,14 +40,12 @@ shares openusd's license, edition and MSRV. What it still needs:
    forwarding, the renderer plugin), `hdsi` (the other filters) and
    `usd_imaging` (`stage`, instancing propagation, `chain::standard`),
    landed as one pull request each in that order.
-5. **Parity as a compliance test.** The Hydra comparison in
-   `docs/hydra-parity-check.md` runs from a harness outside the repository
-   and predates the bump to `9ba0611`: re-run it first. Then commit the
-   C++ dumper with its USD reference, the scene index dumps with the edits
-   and notices applied, and a test that regenerates them, over Moho's
-   fixtures and openusd's `vendor/usd-wg-assets`. Prototype numbering,
-   category ids and the text of collection path expressions differ in
-   order only, and would be normalized.
+5. **Parity as a compliance test.** The Hydra comparison runs from
+   `tools/parity/` (both dumpers, the edit generator and the comparator),
+   and `docs/hydra-parity-check.md` has its results on `9ba0611`. What
+   remains is the test openusd asked for: commit the scene index dumps,
+   with the edits and notices applied, and a test that regenerates them,
+   over Moho's fixtures and openusd's `vendor/usd-wg-assets`.
 6. **Moho's additions to Hydra.** `__usdAttributes`, `__usdRelationships`
    and `__usdMetersPerUnit` stay downstream, or come behind an opt-in if
    openusd's maintainer prefers.
