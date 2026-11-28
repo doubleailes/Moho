@@ -522,6 +522,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "moho-parity"
+version = "0.1.0"
+dependencies = [
+ "moho",
+]
+
+[[package]]
 name = "moho-render"
 version = "0.1.0"
 dependencies = [

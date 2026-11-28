@@ -1,0 +1,15 @@
+[package]
+name = "moho-parity"
+description = "The Rust side of the Hydra parity check: dumps Moho's standard chain over a stage, and its notices under an edit script"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+moho = { path = "../moho" }
+
+[lints]
+workspace = true

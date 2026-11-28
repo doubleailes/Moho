@@ -27,6 +27,8 @@ crates/moho        the scene index: locator, data_source, scene_index, schema,
                    streaming, tokens
 crates/moho-spike  S0 streaming spike harness (unpublished; S2 benchmark),
                    strategy (D) reading through Moho
+crates/moho-parity the Hydra parity check's Rust dumper (unpublished;
+                   tools/parity/README.md)
 crates/moho-render render control over a terminal index (a controlled
                    renderer, frames, the output scene index, settings
                    overrides), drafted ahead of Hydra's HdRenderer and
@@ -38,6 +40,8 @@ crates/moho-render-wgpu  render control's wgpu backend (the host's device
                    `moho_render_wgpu::wgpu`
 docs/              architecture.md, openusd-notes.md, streaming-spike.md
 scripts/           streaming-spike.sh (runs the spike's strategies on a scene)
+tools/parity/      the Hydra parity check: the C++ dumper, the edit generator,
+                   the comparator and the corpus (docs/hydra-parity-check.md)
 openspec/          OpenSpec changes and specs for this repository
 ```
 
